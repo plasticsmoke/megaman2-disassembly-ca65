@@ -16,20 +16,20 @@
 
 zp_temp_02           := $0002
 zp_F4           := $00F4
-L0604           := $0604
-L0660           := $0660
-L1501           := $1501
-L1F05           := $1F05
-L2260           := $2260
-L606C           := $606C
-L608A           := $608A
-L6868           := $6868
-L6A60           := $6A60
-L6A6C           := $6A6C
-L6D80           := $6D80
-L6F6C           := $6F6C
-L7171           := $7171
-LED06           := $ED06
+data_ref_0604           := $0604
+data_ref_0660           := $0660
+data_ref_1501           := $1501
+data_ref_1F05           := $1F05
+data_ref_2260           := $2260
+data_ref_606C           := $606C
+data_ref_608A           := $608A
+data_ref_6868           := $6868
+data_ref_6A60           := $6A60
+data_ref_6A6C           := $6A6C
+data_ref_6D80           := $6D80
+data_ref_6F6C           := $6F6C
+data_ref_7171           := $7171
+data_ref_ED06           := $ED06
         jmp     hud_update_main
 
         .byte   $C9,$FC,$D0,$03,$4C,$29,$81
@@ -37,6 +37,10 @@ LED06           := $ED06
         bne     weapon_dispatch_check_fd
         jmp     password_mode_init
 
+
+; =============================================================================
+; weapon_dispatch_check_fd — Weapon Dispatch — route weapon/UI commands by code ($FC/$FD/$FE/$FF) ($8003)
+; =============================================================================
 weapon_dispatch_check_fd:  cmp     #$FE
         bne     weapon_dispatch_check_ff
         lda     #$01
@@ -68,15 +72,15 @@ weapon_select_handler:  asl     a       ; Handle weapon selection (A = weapon in
         lda     ($E2),y
         tax
         and     #$0F
-        beq     L80BB
+        beq     weapon_select_high_nybble
         lda     $E0
         and     #$0F
         sta     $E5
         cpx     $E5
-        bcs     L804F
+        bcs     weapon_select_store_type
         rts
 
-L804F:  stx     $E5
+weapon_select_store_type:  stx     $E5   ; store weapon type in temp
         lda     $E0
         and     #$F0
         ora     $E5
@@ -91,7 +95,7 @@ L804F:  stx     $E5
         lda     #$04
         sta     $E5
         lda     #$01
-chr_ram_data_transfer:  clc
+chr_ram_data_transfer:  clc              ; advance pointer to next tile data
         adc     $E2
         sta     $E2
         lda     #$00
@@ -104,42 +108,42 @@ chr_ram_tile_copy:  lda     ($E2),y     ; Copy tile data to CHR-RAM shadow at $0
         inx
         iny
         cpy     #$02
-L8085:  bne     chr_ram_tile_copy
+chr_ram_tile_copy_end:  bne     chr_ram_tile_copy
         .byte   $A0
-L8088:  asl     a:$A9
-L808B:  sta     $0500,x
+chr_ram_padding_fill:  asl     a:$A9     ; fill padding bytes in CHR shadow
+chr_ram_padding_byte:  sta     $0500,x
         inx
-L808F:  dey
-        bne     L808B
+chr_ram_padding_loop:  dey
+        bne     chr_ram_padding_byte
         lda     $E1
         lsr     a
-        bcs     L809A
+        bcs     weapon_select_advance_slot
         jsr     draw_energy_bar_template
-L809A:  jsr     display_offset_next_slot
-L809D:  dec     $E5
-        beq     L80A6
+weapon_select_advance_slot:  jsr     display_offset_next_slot
+weapon_select_dec_count:  dec     $E5
+        beq     weapon_select_store_palette
         lda     #$02
         jmp     chr_ram_data_transfer
 
-L80A6:  ldy     #$02
+weapon_select_store_palette:  ldy     #$02
         lda     ($E2),y
         sta     $057C
         iny
         lda     ($E2),y
         sta     $057D
-        jsr     L8219
+        jsr     weapon_shift_e1_right4
         lda     #$00
         sta     $E4
         rts
 
-L80BB:  lda     $E0
+weapon_select_high_nybble:  lda     $E0  ; check high nybble path
         and     #$F0
         sta     $E5
         cpx     $E5
-        bcs     L80C6
+        bcs     weapon_select_high_store
         rts
 
-L80C6:  stx     $E5
+weapon_select_high_store:  stx     $E5   ; store high nybble weapon type
         lda     $E0
         and     #$0F
         ora     $E5
@@ -169,23 +173,23 @@ L80C6:  stx     $E5
         sta     $E5
         lda     #$02
         sta     $E6
-L80FE:  pla
+weapon_select_bit_loop:  pla
         lsr     a
         pha
-        bcc     L810E
+        bcc     weapon_bit_advance_slot
         jsr     draw_energy_bar_template
         lda     $E1
         lsr     a
-        bcs     L810E
-        jsr     L816C
-L810E:  jsr     display_offset_next_slot
+        bcs     weapon_bit_advance_slot
+        jsr     weapon_check_sound_slot
+weapon_bit_advance_slot:  jsr     display_offset_next_slot
         lda     #$04
         clc
         adc     $E6
         sta     $E6
         dec     $E5
-        bne     L80FE
-        jsr     L8219
+        bne     weapon_select_bit_loop
+        jsr     weapon_shift_e1_right4
         lda     $E1
         sta     $EF
         pla
@@ -209,6 +213,10 @@ password_mode_init:  sty     $E8        ; Enter password screen mode
         sta     $EA
         rts
 
+
+; =============================================================================
+; weapon_secondary_init — Weapon Secondary Init — initialize weapon slots without CHR-RAM upload ($8128)
+; =============================================================================
 weapon_secondary_init:  lda     $E0
         and     #$0F
         sta     $E0
@@ -216,18 +224,18 @@ weapon_secondary_init:  lda     $E0
         sta     $E5
         lda     #$02
         sta     $E6
-L8148:  lda     $E1
+weapon_secondary_loop:  lda     $E1
         lsr     a
-        bcc     L8153
+        bcc     weapon_secondary_advance
         jsr     draw_energy_bar_template
-        jsr     L816C
-L8153:  jsr     display_offset_next_slot
+        jsr     weapon_check_sound_slot
+weapon_secondary_advance:  jsr     display_offset_next_slot
         lda     #$04
         clc
         adc     $E6
         sta     $E6
         dec     $E5
-        bne     L8148
+        bne     weapon_secondary_loop
         lda     #$00
         sta     $E1
         sta     $EF
@@ -235,23 +243,31 @@ L8153:  jsr     display_offset_next_slot
         sta     $E4
         rts
 
-L816C:  lda     $EC
+
+; =============================================================================
+; weapon_check_sound_slot — Weapon Sound Slot Check — verify APU channel availability for weapon ($816C)
+; =============================================================================
+weapon_check_sound_slot:  lda     $EC
         clc
         adc     #$0A
         tax
         lda     $0500,x
         ora     $0501,x
-        bne     L81C4
+        bne     weapon_sound_copy_data
         ldy     $E5
         ldx     $E6
         jsr     apu_sound_control
         ldx     $EC
         lda     $0500,x
         ora     $0501,x
-        bne     L81C4
+        bne     weapon_sound_copy_data
         rts
 
-weapon_clear_display:  lda     $E0
+
+; =============================================================================
+; weapon_clear_display — Weapon Clear Display — zero out all 4 weapon CHR-RAM slots ($8190)
+; =============================================================================
+weapon_clear_display:  lda     $E0       ; clear weapon display slots
         and     #$F0
         sta     $E0
         lda     #$00
@@ -259,30 +275,38 @@ weapon_clear_display:  lda     $E0
         sta     $E8
         lda     #$04
         sta     $E5
-L819C:  lda     #$00
+weapon_clear_loop:  lda     #$00
         ldx     $EC
         sta     $0500,x
         sta     $0501,x
-        jsr     L8211
+        jsr     display_offset_skip
         dec     $E5
-        bne     L819C
+        bne     weapon_clear_loop
         lda     #$00
         sta     $E4
         rts
 
+
+; =============================================================================
+; draw_energy_bar_template — Draw Energy Bar Template — fill 16 tiles with blank energy bar pattern ($81B3)
+; =============================================================================
 draw_energy_bar_template:  ldy     #$0F ; Draw empty 16-tile energy bar
         lda     #$10
         clc
         adc     $EC
         tax
         lda     #$00
-L81BC:  sta     $0500,x
+energy_bar_clear_loop:  sta     $0500,x
         inx
         dey
-        bne     L81BC
+        bne     energy_bar_clear_loop
         rts
 
-L81C4:  lda     $E5
+
+; =============================================================================
+; weapon_sound_copy_data — Weapon Sound Data Copy — copy 4 bytes of instrument data to CHR buffer ($81C4)
+; =============================================================================
+weapon_sound_copy_data:  lda     $E5
         pha
         lda     $E6
         pha
@@ -296,20 +320,20 @@ L81C4:  lda     $E5
         tax
         lda     $0500,x
         and     #$1F
-        beq     L81EA
+        beq     weapon_sound_calc_done
         tay
         lda     #$00
-L81E4:  clc
+weapon_sound_calc_offset:  clc
         adc     #$04
         dey
-        bne     L81E4
-L81EA:  tay
+        bne     weapon_sound_calc_offset
+weapon_sound_calc_done:  tay
         txa
         clc
         adc     #$0E
         tax
         lda     #$04
-L81F2:  pha
+weapon_sound_copy_loop:  pha
         lda     ($E5),y
         sta     $0500,x
         iny
@@ -317,38 +341,46 @@ L81F2:  pha
         pla
         sec
         sbc     #$01
-        bne     L81F2
+        bne     weapon_sound_copy_loop
         pla
         sta     $E6
         pla
         sta     $E5
         rts
 
+
+; =============================================================================
+; display_offset_next_slot — Display Offset Next Slot — advance $EC by $1F to next weapon display slot ($8207)
+; =============================================================================
 display_offset_next_slot:  lsr     $E1
-        bcc     L8211
+        bcc     display_offset_skip
         lda     $E1
         ora     #$80
         sta     $E1
-L8211:  lda     #$1F
+display_offset_skip:  lda     #$1F
         clc
         adc     $EC
         sta     $EC
         rts
 
-L8219:  lsr     $E1
+weapon_shift_e1_right4:  lsr     $E1
         lsr     $E1
         lsr     $E1
         lsr     $E1
         rts
 
-apu_sound_control:  cpy     #$01
-        beq     L822F
+
+; =============================================================================
+; apu_sound_control — APU Sound Control — silence or enable APU channel pair ($8222)
+; =============================================================================
+apu_sound_control:  cpy     #$01         ; Y=1: enable channels, else silence
+        beq     apu_enable_channels
         lda     #$00
         sta     $4000,x
         sta     $4001,x
         rts
 
-L822F:  lda     #$07
+apu_enable_channels:  lda     #$07       ; enable pulse 1+2 + triangle
         sta     $4015
         rts
 
@@ -359,10 +391,10 @@ L822F:  lda     #$07
 ; =============================================================================
 hud_update_main:  inc     $EA           ; Main HUD update (energy bars, lives)
         lda     $E4
-        beq     L823C
+        beq     hud_init_slot_vars
         rts
 
-L823C:  ldx     #$00
+hud_init_slot_vars:  ldx     #$00        ; initialize 4 HUD slot variables
         ldy     #$05
         stx     $EC
         sty     $ED
@@ -382,40 +414,40 @@ hud_slot_loop:  lda     #$01
         sta     ($EC),y
         lda     $EF
         lsr     a
-        bcc     L8266
-        jsr     L856D
-L8266:  lda     $41
+        bcc     hud_check_pause_flag
+        jsr     sound_stream_check
+hud_check_pause_flag:  lda     $41
         lsr     a
-        bcc     L826E
-        jmp     L8286
+        bcc     hud_check_slot_active
+        jmp     hud_slot_silent_check
 
-L826E:  ldy     #$00
+hud_check_slot_active:  ldy     #$00
         lda     ($EC),y
         iny
         ora     ($EC),y
-        beq     L8286
+        beq     hud_slot_silent_check
         lda     #$01
         ldy     #$0E
         clc
         adc     ($EC),y
         sta     ($EC),y
-        jsr     L86B4
-        jmp     L8294
+        jsr     sound_note_process
+        jmp     hud_shift_ef_flag
 
-L8286:  lda     $EF
+hud_slot_silent_check:  lda     $EF
         lsr     a
-        bcs     L8294
+        bcs     hud_shift_ef_flag
         ldx     $EB
         inx
         inx
         ldy     $EE
         jsr     apu_sound_control
-L8294:  lsr     $EF
-        bcc     L829E
+hud_shift_ef_flag:  lsr     $EF
+        bcc     hud_next_slot
         lda     $EF
         ora     #$80
         sta     $EF
-L829E:  dec     $EE
+hud_next_slot:  dec     $EE
         beq     hud_lives_display
         lda     #$04
         clc
@@ -430,85 +462,89 @@ L829E:  dec     $EE
         sta     $ED
         jmp     hud_slot_loop
 
-hud_lives_display:  lda     $E8
+hud_lives_display:  lda     $E8          ; check lives counter display flag
         and     #$7F
-        beq     L82DD
+        beq     hud_check_refill_timer
         cmp     $EA
-        bne     L82DD
+        bne     hud_check_refill_timer
         lda     $EA
         and     #$01
         sta     $EA
         inc     $E9
         lda     #$10
         cmp     $E9
-        bne     L82DD
+        bne     hud_check_refill_timer
         lda     $E8
-        bmi     L82D9
+        bmi     hud_lives_reset_timer
         lda     #$00
         sta     $E8
-L82D9:  lda     #$0F
+hud_lives_reset_timer:  lda     #$0F
         sta     $E9
-L82DD:  lda     $F2
-        beq     L82E3
+hud_check_refill_timer:  lda     $F2     ; check refill animation timer
+        beq     hud_final_shift_ef
         dec     $F2
-L82E3:  lsr     $EF
+hud_final_shift_ef:  lsr     $EF
         lsr     $EF
         lsr     $EF
         lsr     $EF
         rts
 
-L82EC:  ldy     #$0C
+
+; =============================================================================
+; hud_energy_bar_update — HUD Energy Bar Update — per-tick energy bar drain/fill animation ($82EC)
+; =============================================================================
+hud_energy_bar_update:  ldy     #$0C
         lda     ($EC),y
         ldy     #$02
         cpy     $EE
-        beq     L82F8
+        beq     hud_energy_store_f4
         and     #$0F
-L82F8:  sta     zp_F4
+hud_energy_store_f4:  sta     zp_F4
         lda     $E8
         and     #$7F
-        beq     L832B
+        beq     hud_energy_clamp_check
         lda     $E9
         ldy     #$02
         cpy     $EE
-        bne     L8310
+        bne     hud_energy_check_drain
         ldx     #$0C
-L830A:  clc
+hud_energy_timer_add:  clc
         adc     $E9
         dex
-        bne     L830A
-L8310:  tay
+        bne     hud_energy_timer_add
+hud_energy_check_drain:  tay
         lda     $E8
-        bmi     L8324
+        bmi     hud_energy_refill_loop
         ldx     #$FF
-L8317:  inx
+hud_energy_drain_loop:  inx
         cpx     zp_F4
-        beq     L832B
+        beq     hud_energy_clamp_check
         dey
-        bne     L8317
+        bne     hud_energy_drain_loop
         stx     zp_F4
-        jmp     L832B
+        jmp     hud_energy_clamp_check
 
-L8324:  dec     zp_F4
-        beq     L832B
+hud_energy_refill_loop:  dec     zp_F4
+        beq     hud_energy_clamp_check
         dey
-        bne     L8324
-L832B:  lda     #$02
+        bne     hud_energy_refill_loop
+hud_energy_clamp_check:  lda     #$02
         cmp     $EE
-        beq     L837C
+        beq     hud_energy_check_sweep
         ldy     #$0D
         lda     ($EC),y
         tax
         and     #$7F
-        beq     L837C
+        beq     hud_energy_check_sweep
         iny
         cmp     ($EC),y
-        beq     L8347
+        beq     hud_energy_reset_counter
         iny
         lda     ($EC),y
         and     #$0F
-        jmp     L836C
+        jmp     hud_energy_clamp_max
 
-L8347:  lda     #$00
+hud_energy_reset_counter:  lda     #$00
         sta     ($EC),y
         iny
         lda     ($EC),y
@@ -518,78 +554,82 @@ L8347:  lda     #$00
         lsr     a
         sta     $F5
         txa
-        bpl     L835E
+        bpl     hud_energy_delta_read
         lda     #$00
         sec
         sbc     $F5
         sta     $F5
-L835E:  lda     ($EC),y
+hud_energy_delta_read:  lda     ($EC),y
         and     #$0F
         clc
         adc     $F5
-        bpl     L836C
+        bpl     hud_energy_clamp_max
         lda     #$00
-        jmp     L8372
+        jmp     hud_energy_store_result
 
-L836C:  cmp     zp_F4
-        bcc     L8372
+hud_energy_clamp_max:  cmp     zp_F4
+        bcc     hud_energy_store_result
         lda     zp_F4
-L8372:  sta     zp_F4
+hud_energy_store_result:  sta     zp_F4
         lda     ($EC),y
         and     #$F0
         ora     zp_F4
         sta     ($EC),y
-L837C:  lda     $EF
+hud_energy_check_sweep:  lda     $EF
         lsr     a
-        bcs     L8388
+        bcs     hud_sound_sweep_init
         lda     #$0C
         sta     $F5
-        jmp     L838F
+        jmp     hud_sound_sweep_check
 
-L8388:  lda     #$09
+hud_sound_sweep_init:  lda     #$09
         sta     $F5
-        jmp     L83FE
+        jmp     hud_sound_envelope_run
 
-L838F:  ldy     #$16
+
+; =============================================================================
+; hud_sound_sweep_check — Sound Sweep Engine — process pitch sweep and envelope for active channel ($838F)
+; =============================================================================
+hud_sound_sweep_check:  ldy     #$16
         lda     ($EC),y
         and     #$7F
-        beq     L83D5
+        beq     hud_sweep_compare_slot
         ldy     #$1D
         cmp     ($EC),y
-        beq     L83A0
-        jmp     L83CB
+        beq     hud_sweep_reset_counter
+        jmp     hud_sweep_read_current
 
-L83A0:  lda     #$00
+hud_sweep_reset_counter:  lda     #$00
         sta     ($EC),y
         ldy     #$17
         lda     ($EC),y
         ldy     #$1E
         clc
         adc     ($EC),y
-        beq     L83B1
-        bpl     L83B8
-L83B1:  lda     #$01
+        beq     hud_sweep_clamp_low
+        bpl     hud_sweep_store_value
+hud_sweep_clamp_low:  lda     #$01
         sta     ($EC),y
-        jmp     L83C2
+        jmp     hud_sweep_negate_delta
 
-L83B8:  sta     ($EC),y
+hud_sweep_store_value:  sta     ($EC),y
         cmp     #$10
-        bcc     L83CB
+        bcc     hud_sweep_read_current
         lda     #$0F
         sta     ($EC),y
-L83C2:  lda     #$00
+hud_sweep_negate_delta:  lda     #$00
         ldy     #$17
         sec
         sbc     ($EC),y
         sta     ($EC),y
-L83CB:  ldy     #$1E
+hud_sweep_read_current:  ldy     #$1E
         lda     ($EC),y
         cmp     zp_F4
-        bcs     L83D5
+        bcs     hud_sweep_compare_slot
         sta     zp_F4
-L83D5:  ldy     #$02
+hud_sweep_compare_slot:  ldy     #$02
         cpy     $EE
-        beq     L83E8
+        beq     hud_sound_write_volume
         lda     $F5
         and     #$7F
         tay
@@ -597,26 +637,26 @@ L83D5:  ldy     #$02
         and     #$F0
         ora     zp_F4
         sta     zp_F4
-L83E8:  ldx     $EB
+hud_sound_write_volume:  ldx     $EB
         lda     zp_F4
         sta     $4000,x
         lda     $F5
-        bpl     L83FA
+        bpl     hud_sound_sweep_mode_b
         lda     #$90
         sta     $F5
-        jmp     L83FE
+        jmp     hud_sound_envelope_run
 
-L83FA:  lda     #$09
+hud_sound_sweep_mode_b:  lda     #$09
         sta     $F5
-L83FE:  lda     $F5
+hud_sound_envelope_run:  lda     $F5
         and     #$7F
         tay
         ldx     #$00
         lda     ($EC),y
-        beq     L8418
-        bpl     L840C
+        beq     hud_envelope_check_mode
+        bpl     hud_envelope_add_delta
         dex
-L840C:  iny
+hud_envelope_add_delta:  iny
         clc
         adc     ($EC),y
         sta     ($EC),y
@@ -624,25 +664,25 @@ L840C:  iny
         iny
         adc     ($EC),y
         sta     ($EC),y
-L8418:  lda     $F5
-        bmi     L8422
+hud_envelope_check_mode:  lda     $F5
+        bmi     hud_vibrato_check
         lda     $EF
         lsr     a
-        bcc     L8422
+        bcc     hud_vibrato_check
         rts
 
-L8422:  ldy     #$14
+hud_vibrato_check:  ldy     #$14
         lda     ($EC),y
         and     #$7F
-        bne     L842D
-        jmp     L84A9
+        bne     hud_vibrato_timer_cmp
+        jmp     hud_frequency_calc
 
-L842D:  ldy     #$18
+hud_vibrato_timer_cmp:  ldy     #$18
         cmp     ($EC),y
-        beq     L8436
-        jmp     L84A9
+        beq     hud_vibrato_reset
+        jmp     hud_frequency_calc
 
-L8436:  lda     #$00
+hud_vibrato_reset:  lda     #$00
         sta     ($EC),y
         tax
         ldy     #$15
@@ -656,13 +696,13 @@ L8436:  lda     #$00
         ldy     #$19
         lda     ($EC),y
         asl     a
-        bcc     L8456
+        bcc     hud_vibrato_apply_delta
         lda     #$00
         sec
         sbc     zp_F4
         sta     zp_F4
         dex
-L8456:  lda     zp_F4
+hud_vibrato_apply_delta:  lda     zp_F4
         clc
         ldy     #$1A
         adc     ($EC),y
@@ -682,32 +722,36 @@ L8456:  lda     zp_F4
         sta     ($EC),y
         and     #$7F
         cmp     zp_F4
-        bne     L84A9
+        bne     hud_frequency_calc
         lda     ($EC),y
         and     #$80
         sta     ($EC),y
         ldy     #$14
         lda     ($EC),y
         asl     a
-        bcs     L84A3
+        bcs     hud_vibrato_toggle_dir
         lda     ($EC),y
         ora     #$80
         sta     ($EC),y
         ldy     #$19
         lda     ($EC),y
-        bpl     L849C
+        bpl     hud_vibrato_set_dir_neg
         and     #$7F
         sta     ($EC),y
-        jmp     L84A9
+        jmp     hud_frequency_calc
 
-L849C:  ora     #$80
+hud_vibrato_set_dir_neg:  ora     #$80
         sta     ($EC),y
-        jmp     L84A9
+        jmp     hud_frequency_calc
 
-L84A3:  lda     ($EC),y
+hud_vibrato_toggle_dir:  lda     ($EC),y
         and     #$7F
         sta     ($EC),y
-L84A9:  lda     $F5
+
+; =============================================================================
+; hud_frequency_calc — Sound Frequency Calculator — compute and write APU frequency registers ($84A9)
+; =============================================================================
+hud_frequency_calc:  lda     $F5
         and     #$7F
         sta     $F5
         inc     $F5
@@ -725,7 +769,7 @@ L84A9:  lda     $F5
         tay
         lda     #$01
         cmp     $EE
-        bne     L84E5
+        bne     hud_frequency_write
         lda     #$0F
         sta     $4015
         txa
@@ -740,7 +784,7 @@ L84A9:  lda     $F5
         ora     zp_F4
         tax
         ldy     #$00
-L84E5:  txa
+hud_frequency_write:  txa
         ldx     $EB
         inx
         inx
@@ -748,22 +792,26 @@ L84E5:  txa
         tya
         ldy     #$1C
         cmp     ($EC),y
-        bne     L84F5
+        bne     hud_frequency_update_hi
         rts
 
-L84F5:  sta     ($EC),y
+hud_frequency_update_hi:  sta     ($EC),y
         ora     #$08
         sta     $4001,x
         rts
 
-L84FD:  ldy     #$01
+
+; =============================================================================
+; hud_sound_channel_off — Sound Channel Off — disable APU channel if not noise channel ($84FD)
+; =============================================================================
+hud_sound_channel_off:  ldy     #$01
         cpy     $EE
-        bne     L8509
+        bne     hud_sound_silence_pair
         lda     #$07
         sta     $4015
         rts
 
-L8509:  lda     #$00
+hud_sound_silence_pair:  lda     #$00
         ldx     $EB
         inx
         inx
@@ -771,44 +819,52 @@ L8509:  lda     #$00
         sta     $4001,x
         rts
 
-L8516:  ldy     #$14
+
+; =============================================================================
+; sound_state_init_slot — Sound State Init Slot — reset envelope/sweep state for sound slot ($8516)
+; =============================================================================
+sound_state_init_slot:  ldy     #$14
         lda     ($EC),y
         and     #$7F
         sta     ($EC),y
         ldy     #$16
         lda     ($EC),y
         asl     a
-        bcc     L8535
+        bcc     sound_state_clear_regs
         ldy     zp_F4
         lda     ($EC),y
         ldx     #$02
         cpx     $EE
-        beq     L8531
+        beq     sound_state_store_value
         and     #$0F
-L8531:  ldy     #$1E
+sound_state_store_value:  ldy     #$1E
         sta     ($EC),y
-L8535:  ldx     #$06
+sound_state_clear_regs:  ldx     #$06
         lda     #$00
         ldy     #$18
-L853B:  sta     ($EC),y
+sound_state_clear_loop:  sta     ($EC),y
         iny
         dex
-        bne     L853B
+        bne     sound_state_clear_loop
         lda     #$FF
         ldy     #$1C
         sta     ($EC),y
         rts
 
-L8548:  ldy     #$1C
+sound_state_save_restore:  ldy     #$1C
         lda     ($EC),y
         pha
-        jsr     L8516
+        jsr     sound_state_init_slot
         pla
         ldy     #$1C
         sta     ($EC),y
         rts
 
-L8556:  txa
+
+; =============================================================================
+; sound_dispatch_table — Sound Dispatch Table — indirect jump via inline pointer table ($8556)
+; =============================================================================
+sound_dispatch_table:  txa
         asl     a
         tay
         iny
@@ -824,43 +880,47 @@ L8556:  txa
         stx     zp_F4
         jmp     (zp_F4)
 
-L856D:  lda     $F2
-        bne     L8574
-        jmp     L8592
 
-L8574:  ldy     #$11
+; =============================================================================
+; sound_stream_check — Sound Data Stream Interpreter — fetch and execute sound stream commands ($856D)
+; =============================================================================
+sound_stream_check:  lda     $F2
+        bne     sound_stream_refill_check
+        jmp     sound_stream_fetch
+
+sound_stream_refill_check:  ldy     #$11
         lda     ($EC),y
         iny
         ora     ($EC),y
-        bne     L857E
+        bne     sound_stream_refill_read
         rts
 
-L857E:  iny
+sound_stream_refill_read:  iny
         lda     ($EC),y
         ldy     #$02
         cpy     $EE
-        beq     L8589
+        beq     sound_stream_set_mode
         and     #$0F
-L8589:  sta     zp_F4
+sound_stream_set_mode:  sta     zp_F4
         lda     #$93
         sta     $F5
-        jmp     L838F
+        jmp     hud_sound_sweep_check
 
-L8592:  jsr     L86A0
+sound_stream_fetch:  jsr     sound_data_read_byte ; fetch next sound command byte
         asl     a
-        bcs     L859B
-        jmp     L85C2
+        bcs     sound_stream_cmd_check
+        jmp     sound_stream_dispatch
 
-L859B:  txa
+sound_stream_cmd_check:  txa             ; check for special command ($xF)
         and     #$0F
         cmp     #$0F
-        bne     L85A8
-        jsr     L86A0
-        jmp     L8548
+        bne     sound_stream_new_note
+        jsr     sound_data_read_byte
+        jmp     sound_state_save_restore
 
-L85A8:  and     #$07
+sound_stream_new_note:  and     #$07     ; extract note duration bits
         sta     zp_F4
-        jsr     L86A0
+        jsr     sound_data_read_byte
         ldy     #$11
         sta     ($EC),y
         iny
@@ -868,10 +928,10 @@ L85A8:  and     #$07
         sta     ($EC),y
         lda     #$13
         sta     zp_F4
-        jsr     L8516
-        jmp     L84FD
+        jsr     sound_state_init_slot
+        jmp     hud_sound_channel_off
 
-L85C2:  jsr     L8556
+sound_stream_dispatch:  jsr     sound_dispatch_table
         .byte   $D3,$85,$DB,$85,$E5,$85,$F5,$85
         .byte   $0F
         stx     $40
@@ -879,10 +939,10 @@ L85C2:  jsr     L8556
         stx     $20
         ldy     #$86
         sta     $F2
-        jmp     L8592
+        jmp     sound_stream_fetch
 
         .byte   $20,$A0,$86,$A0,$10,$91
-        cpx     L924C
+        cpx     snd_data_924C
         sta     $20
         ldy     #$86
         sta     zp_F4
@@ -890,30 +950,30 @@ L85C2:  jsr     L8556
         lda     ($EC),y
         and     #$3F
         ora     zp_F4
-        jmp     L8608
+        jmp     sound_cmd_store_param
 
-        jsr     L86A0
+        jsr     sound_data_read_byte
         ldy     #$02
         cpy     $EE
-        beq     L8608
+        beq     sound_cmd_store_param
         sta     zp_F4
         ldy     #$13
         lda     ($EC),y
         and     #$C0
         ora     zp_F4
-L8608:  ldy     #$13
+sound_cmd_store_param:  ldy     #$13
         sta     ($EC),y
-        jmp     L8592
+        jmp     sound_stream_fetch
 
         .byte   $20,$A0,$86,$8A,$F0,$06,$E4,$F3
         .byte   $F0,$13,$E6,$F3
-        jsr     L86A0
+        jsr     sound_data_read_byte
         sta     zp_F4
-        jsr     L86A0
+        jsr     sound_data_read_byte
         sta     $F1
         lda     zp_F4
         sta     $F0
-        jmp     L8592
+        jmp     sound_stream_fetch
 
         lda     #$00
         sta     $F3
@@ -924,17 +984,17 @@ L8608:  ldy     #$13
         lda     #$00
         adc     $F1
         sta     $F1
-        jmp     L8592
+        jmp     sound_stream_fetch
 
         .byte   $A9,$14,$85,$F4
-L8644:  jsr     L86A0
+sound_cmd_load_regs:  jsr     sound_data_read_byte
         ldy     zp_F4
         sta     ($EC),y
         inc     zp_F4
         ldy     zp_F4
         cpy     #$18
-        bne     L8644
-        jmp     L8592
+        bne     sound_cmd_load_regs
+        jmp     sound_stream_fetch
 
         .byte   $A5,$F0,$38,$E9,$01,$85,$F0,$A5
         .byte   $F1,$E9,$00,$85,$F1,$A5,$E0,$29
@@ -948,19 +1008,23 @@ L8644:  jsr     L86A0
         lda     ($EC),y
         iny
         ora     ($EC),y
-        bne     L868F
+        bne     sound_cmd_load_instrument
         rts
 
-L868F:  ldy     #$06
+sound_cmd_load_instrument:  ldy     #$06
         lda     ($EC),y
         and     #$1F
         tax
-        jsr     L88E1
+        jsr     sound_instrument_load
         lda     #$0C
         sta     zp_F4
-        jmp     L8516
+        jmp     sound_state_init_slot
 
-L86A0:  ldy     #$00
+
+; =============================================================================
+; sound_data_read_byte — Sound Data Read Byte — read next byte from ($F0) stream pointer ($86A0)
+; =============================================================================
+sound_data_read_byte:  ldy     #$00      ; read byte and advance pointer
         lda     ($F0),y
         tax
         lda     #$01
@@ -973,29 +1037,33 @@ L86A0:  ldy     #$00
         txa
         rts
 
-L86B4:  lda     $E7
-        beq     L86C3
-L86B8:  pha
-        jsr     L86C3
+
+; =============================================================================
+; sound_note_process — Sound Note Processing — advance note timing and trigger bar updates ($86B4)
+; =============================================================================
+sound_note_process:  lda     $E7         ; process note with repeat count
+        beq     sound_note_tick
+sound_note_repeat_loop:  pha
+        jsr     sound_note_tick
         pla
         sec
         sbc     #$01
-        bne     L86B8
+        bne     sound_note_repeat_loop
         rts
 
-L86C3:  ldy     #$05
+sound_note_tick:  ldy     #$05           ; tick note timer, handle double-speed
         lda     ($EC),y
         asl     a
-        bcc     L86D3
+        bcc     sound_note_check_active
         lda     $EA
         and     #$01
-        beq     L86D3
-        jsr     L86D3
-L86D3:  ldy     #$02
+        beq     sound_note_check_active
+        jsr     sound_note_check_active
+sound_note_check_active:  ldy     #$02
         lda     ($EC),y
         iny
         ora     ($EC),y
-        beq     L86FE
+        beq     sound_note_done
         ldx     #$FF
         dey
         lda     ($EC),y
@@ -1008,39 +1076,47 @@ L86D3:  ldy     #$02
         sta     ($EC),y
         dey
         ora     ($EC),y
-        beq     L86FE
+        beq     sound_note_done
         ldy     #$0A
         lda     ($EC),y
         iny
         ora     ($EC),y
-        bne     L86FB
+        bne     sound_note_goto_bar_update
         rts
 
-L86FB:  jmp     L82EC
+sound_note_goto_bar_update:  jmp     hud_energy_bar_update
 
-L86FE:  ldy     #$05
+
+; =============================================================================
+; sound_note_done — Sound Note Done — instrument/pattern fetch after note completes ($86FE)
+; =============================================================================
+sound_note_done:  ldy     #$05           ; end of note — fetch instrument data
         lda     ($EC),y
         and     #$7F
         sta     ($EC),y
-L8706:  jsr     L8935
-        and     #$F0
-        bne     L8710
-        jmp     L87C0
 
-L8710:  cmp     #$20
-        bne     L871F
+; =============================================================================
+; sound_pattern_fetch — Sound Pattern Fetch — read and dispatch instrument pattern commands ($8706)
+; =============================================================================
+sound_pattern_fetch:  jsr     sound_stream_read_next ; fetch pattern byte from stream
+        and     #$F0
+        bne     sound_pattern_cmd_20
+        jmp     sound_cmd_dispatch
+
+sound_pattern_cmd_20:  cmp     #$20
+        bne     sound_pattern_cmd_30
         txa
         and     #$07
         pha
-        jsr     L8706
+        jsr     sound_pattern_fetch
         pla
-        jmp     L87A2
+        jmp     sound_pattern_set_vol_env
 
-L871F:  cmp     #$30
-        bne     L8726
-        jmp     L87B5
+sound_pattern_cmd_30:  cmp     #$30
+        bne     sound_pattern_set_duty
+        jmp     sound_pattern_set_loop
 
-L8726:  txa
+sound_pattern_set_duty:  txa
         rol     a
         rol     a
         rol     a
@@ -1048,11 +1124,11 @@ L8726:  txa
         and     #$07
         tay
         lda     weapon_shift_table_1,y
-        jsr     L8954
-L8734:  ldy     #$06
+        jsr     sound_freq_multiply
+sound_pattern_volume_dec:  ldy     #$06
         lda     ($EC),y
         and     #$E0
-        beq     L8752
+        beq     sound_pattern_lookup_freq
         sec
         sbc     #$20
         sta     zp_F4
@@ -1062,24 +1138,24 @@ L8734:  ldy     #$06
         sta     ($EC),y
         lda     $EF
         lsr     a
-        bcc     L874F
+        bcc     sound_pattern_goto_save
         rts
 
-L874F:  jmp     L8548
+sound_pattern_goto_save:  jmp     sound_state_save_restore
 
-L8752:  txa
+sound_pattern_lookup_freq:  txa
         and     #$1F
-        bne     L875B
+        bne     sound_pattern_noise_check
         tax
-        jmp     L877D
+        jmp     sound_pattern_store_freq
 
-L875B:  ldy     #$01
+sound_pattern_noise_check:  ldy     #$01
         cpy     $EE
-        bne     L8766
+        bne     sound_pattern_freq_table
         ldx     #$00
-        jmp     L877D
+        jmp     sound_pattern_store_freq
 
-L8766:  asl     a
+sound_pattern_freq_table:  asl     a
         ldy     #$07
         clc
         adc     ($EC),y
@@ -1093,7 +1169,7 @@ L8766:  asl     a
         tax
         dey
         lda     (zp_F4),y
-L877D:  ldy     #$0A
+sound_pattern_store_freq:  ldy     #$0A
         sta     ($EC),y
         iny
         txa
@@ -1102,19 +1178,19 @@ L877D:  ldy     #$0A
         lda     ($EC),y
         sta     zp_F4
         and     #$7F
-        beq     L8792
-        jsr     L88A9
-L8792:  lda     $EF
+        beq     sound_pattern_check_sweep
+        jsr     sound_portamento_init
+sound_pattern_check_sweep:  lda     $EF
         lsr     a
-        bcc     L8798
+        bcc     sound_pattern_init_state
         rts
 
-L8798:  lda     #$0C
+sound_pattern_init_state:  lda     #$0C
         sta     zp_F4
-        jsr     L8516
-        jmp     L84FD
+        jsr     sound_state_init_slot
+        jmp     hud_sound_channel_off
 
-L87A2:  ror     a
+sound_pattern_set_vol_env:  ror     a
         ror     a
         ror     a
         ror     a
@@ -1127,13 +1203,17 @@ L87A2:  ror     a
         sta     ($EC),y
         rts
 
-L87B5:  lda     #$80
+sound_pattern_set_loop:  lda     #$80
         ldy     #$05
         ora     ($EC),y
         sta     ($EC),y
-        jmp     L8706
+        jmp     sound_pattern_fetch
 
-L87C0:  jsr     L8556
+
+; =============================================================================
+; sound_cmd_dispatch — Sound Command Dispatch — execute pattern sub-commands via jump table ($87C0)
+; =============================================================================
+sound_cmd_dispatch:  jsr     sound_dispatch_table
         .byte   $D7,$87,$E1,$87,$EB,$87,$FB,$87
         .byte   $15,$88,$5D,$88,$7A,$88,$8D,$88
         .byte   $C7,$88,$17,$89,$20,$35,$89,$A0
@@ -1143,39 +1223,39 @@ L87C0:  jsr     L8556
         .byte   $EC,$29,$3F,$05,$F4,$4C,$0E,$88
         .byte   $20,$35,$89,$A0,$02
         cpy     $EE
-        beq     L880E
+        beq     sound_cmd_store_duty
         sta     zp_F4
         ldy     #$0C
         lda     ($EC),y
         and     #$C0
         ora     zp_F4
-L880E:  ldy     #$0C
+sound_cmd_store_duty:  ldy     #$0C
         sta     ($EC),y
-        jmp     L8706
+        jmp     sound_pattern_fetch
 
         .byte   $20,$35,$89,$8A,$F0,$16,$A0,$05
         .byte   $B1,$EC
         and     #$7F
         sta     zp_F4
         cpx     zp_F4
-        beq     L8844
+        beq     sound_cmd_skip_note
         inc     zp_F4
         lda     ($EC),y
         and     #$80
         ora     zp_F4
         sta     ($EC),y
-        jsr     L8935
+        jsr     sound_stream_read_next
         pha
-        jsr     L8935
+        jsr     sound_stream_read_next
         pla
         ldy     #$00
         sta     ($EC),y
         iny
         txa
         sta     ($EC),y
-        jmp     L8706
+        jmp     sound_pattern_fetch
 
-L8844:  lda     ($EC),y
+sound_cmd_skip_note:  lda     ($EC),y
         and     #$80
         sta     ($EC),y
         ldy     #$00
@@ -1187,7 +1267,7 @@ L8844:  lda     ($EC),y
         lda     #$00
         adc     ($EC),y
         sta     ($EC),y
-        jmp     L8706
+        jmp     sound_pattern_fetch
 
         .byte   $20,$35,$89
         ldx     #$85
@@ -1203,43 +1283,43 @@ L8844:  lda     ($EC),y
         adc     $F5
         iny
         sta     ($EC),y
-        jmp     L8706
+        jmp     sound_pattern_fetch
 
         .byte   $20,$35,$89,$2A,$2A,$2A
-L8880:  rol     a
+sound_cmd_set_detune:  rol     a
         and     #$07
         tay
         .byte   $B9
-L8885:  adc     $2089,x
+sound_cmd_detune_table_ref:  adc     $2089,x
         .byte   $54
         .byte   $89
-L888A:  .byte   $4C
+sound_cmd_jump_pattern:  .byte   $4C
         .byte   $34
-L888C:  .byte   $87
-L888D:  jsr     L8935
+sound_cmd_jump_target:  .byte   $87
+sound_cmd_set_portamento:  jsr     sound_stream_read_next
         ldy     #$0D
         sta     ($EC),y
         pha
-        jsr     L8935
+        jsr     sound_stream_read_next
         ldy     #$0F
         sta     ($EC),y
         pla
         sta     zp_F4
         and     #$7F
-        beq     L88A6
-        jsr     L88A9
-L88A6:  jmp     L8706
+        beq     sound_cmd_portamento_done
+        jsr     sound_portamento_init
+sound_cmd_portamento_done:  jmp     sound_pattern_fetch
 
-L88A9:  lda     #$00
+sound_portamento_init:  lda     #$00
         ldy     #$0E
         sta     ($EC),y
         lda     zp_F4
-        bpl     L88B8
+        bpl     sound_portamento_dir_up
         lda     #$0F
-        jmp     L88BA
+        jmp     sound_portamento_store
 
-L88B8:  lda     #$00
-L88BA:  sta     zp_F4
+sound_portamento_dir_up:  lda     #$00
+sound_portamento_store:  sta     zp_F4
         ldy     #$0F
         lda     ($EC),y
         and     #$F0
@@ -1257,18 +1337,22 @@ L88BA:  sta     zp_F4
         sta     ($EC),y
         lda     $EF
         lsr     a
-        bcs     L88DE
-        jsr     L88E1
-L88DE:  jmp     L8706
+        bcs     sound_cmd_volume_done
+        jsr     sound_instrument_load
+sound_cmd_volume_done:  jmp     sound_pattern_fetch
 
-L88E1:  txa
-        beq     L88EC
+
+; =============================================================================
+; sound_instrument_load — Sound Instrument Load — load 4-byte instrument data from pointer table ($88E1)
+; =============================================================================
+sound_instrument_load:  txa              ; X = instrument index
+        beq     sound_instrument_copy
         lda     #$00
-L88E6:  clc
+sound_instrument_offset:  clc
         adc     #$04
         dex
-        bne     L88E6
-L88EC:  clc
+        bne     sound_instrument_offset
+sound_instrument_copy:  clc
         adc     $057C
         sta     zp_F4
         lda     #$00
@@ -1276,21 +1360,21 @@ L88EC:  clc
         sta     $F5
         ldx     #$00
         ldy     #$14
-L88FD:  lda     (zp_F4,x)
+sound_instrument_byte:  lda     (zp_F4,x)
         sta     ($EC),y
         iny
         cpy     #$18
-        bne     L8907
+        bne     sound_instrument_next
         rts
 
-L8907:  lda     #$01
+sound_instrument_next:  lda     #$01
         clc
         adc     zp_F4
         sta     zp_F4
         lda     #$00
         adc     $F5
         sta     $F5
-        jmp     L88FD
+        jmp     sound_instrument_byte
 
         .byte   $A0,$00,$A9,$00,$91,$EC,$C8,$91
         .byte   $EC,$A5,$E0,$29,$F0,$85,$E0,$A5
@@ -1301,7 +1385,11 @@ L8907:  lda     #$01
         ldy     $EE
         jmp     apu_sound_control
 
-L8935:  ldy     #$00
+
+; =============================================================================
+; sound_stream_read_next — Sound Stream Read Next — read byte from current sound stream pointer ($8935)
+; =============================================================================
+sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
         lda     ($EC),y
         sta     zp_F4
         iny
@@ -1321,19 +1409,23 @@ L8935:  ldy     #$00
         txa
         rts
 
-L8954:  sta     zp_F4
+
+; =============================================================================
+; sound_freq_multiply — Sound Frequency Multiply — multiply frequency by duty cycle period ($8954)
+; =============================================================================
+sound_freq_multiply:  sta     zp_F4      ; multiply freq by period count
         lda     #$00
         sta     $F5
         ldy     #$04
         lda     ($EC),y
         tay
         lda     #$00
-L8961:  clc
+sound_freq_mult_loop:  clc
         adc     zp_F4
-        bcc     L8968
+        bcc     sound_freq_mult_dec
         inc     $F5
-L8968:  dey
-        bne     L8961
+sound_freq_mult_dec:  dey
+        bne     sound_freq_mult_loop
         ldy     #$02
         sta     ($EC),y
         iny
@@ -1341,6 +1433,10 @@ L8968:  dey
         sta     ($EC),y
         rts
 
+
+; =============================================================================
+; weapon_shift_table_1 — Sound/Weapon Data Tables — frequency tables, weapon data pointers ($8978)
+; =============================================================================
 weapon_shift_table_1:  .byte   $00,$00,$02,$04,$08,$10,$20,$40
 weapon_shift_table_2:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
         .byte   $00,$00,$00,$00
@@ -1368,7 +1464,7 @@ weapon_shift_table_2:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
         .byte   $F0,$00,$E2,$00
         cmp     $00,x
         cmp     #$00
-        ldx     LB300,y
+        ldx     snd_data_B300,y
         brk
         .byte   $A9,$00,$A0,$00,$97,$00,$8E,$00
         .byte   $86,$00,$7F,$00,$78,$00,$71,$00
@@ -1383,6 +1479,10 @@ weapon_shift_table_2:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
         .byte   $10,$00,$0F,$00,$0F,$00,$0E,$00
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF
+
+; =============================================================================
+; weapon_data_ptr_lo — Weapon Data Pointer Table — low/high bytes for each weapon's CHR data ($8AD6)
+; =============================================================================
 weapon_data_ptr_lo:  .byte   $D6
 weapon_data_ptr_hi:  .byte   $8A,$1D,$8E,$C8,$90,$87,$94,$98
         .byte   $96,$42,$9A,$48,$9E,$91,$A1,$A8
@@ -1390,22 +1490,26 @@ weapon_data_ptr_hi:  .byte   $8A,$1D,$8E,$C8,$90,$87,$94,$98
         .byte   $AE,$F4,$AE,$B4,$B1,$57,$B3,$D5
         .byte   $B3,$A6,$B4,$53,$B5,$8E,$B5,$DC
         .byte   $B6,$EA,$B9,$52,$BA,$ED,$BA
-L8A80:  .byte   $57,$B3,$57,$B3,$57,$B3,$57,$B3
+
+; =============================================================================
+; weapon_data_unused_1 — Music/Sound Pattern Data — encoded music sequences for all stages ($8A80)
+; =============================================================================
+weapon_data_unused_1:  .byte   $57,$B3,$57,$B3,$57,$B3,$57,$B3
         .byte   $57,$B3
-L8A8A:  .byte   $57,$B3
-L8A8C:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
+weapon_data_unused_2:  .byte   $57,$B3
+weapon_data_unused_3:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
         .byte   $5B,$BB,$8E,$BB,$B6,$BB,$C8,$BB
         .byte   $D5,$BB,$03,$BC
         and     $4CBC
-        ldy     LBC62,x
+        ldy     snd_data_BC62,x
         .byte   $9B,$BC,$B5,$BC,$F1,$BC,$00,$BD
         .byte   $25,$BD,$3D,$BD,$5D,$BD,$78,$BD
         .byte   $8F,$BD,$98,$BD,$B7,$BD,$CC,$BD
         .byte   $E1,$BD,$F6,$BD,$15,$BE,$35
-        ldx     LBE88,y
+        ldx     snd_data_BE88,y
         ldy     $BE
         ldy     $F3BE,x
-        ldx     LBF2A,y
+        ldx     snd_data_BF2A,y
         .byte   $3B,$BF,$48,$BF,$8F,$BF,$0F,$E1
         .byte   $8A,$F1,$8B,$A9,$8C,$83,$8D,$15
         .byte   $8E,$00,$06,$03,$3D,$07,$86,$10
@@ -1460,7 +1564,7 @@ L8A8C:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
         .byte   $A5,$68
         rts
 
-        jmp     (L0660)
+        jmp     (data_ref_0660)
 
         .byte   $8F,$06,$8E
         txa
@@ -1487,27 +1591,27 @@ L8A8C:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
         .byte   $68,$60,$68,$6A,$68,$67,$68,$60
         .byte   $67,$60,$67,$68,$67,$63,$65,$60
         .byte   $65,$60,$63
-L8C76:  sta     $63
+snd_data_8C76:  sta     $63
         adc     $60
         adc     $60
         .byte   $63,$85,$04,$03
-L8C80:  lsr     $028C,x
+snd_data_8C80:  lsr     $028C,x
         cpy     #$03
         .byte   $3A,$07,$A2
-        bpl     L8C76
-L8C8A:  .byte   $CB,$CA,$07
-L8C8D:  .byte   $86
-L8C8E:  .byte   $10,$02
+        bpl     snd_data_8C76
+snd_data_8C8A:  .byte   $CB,$CA,$07
+snd_data_8C8D:  .byte   $86
+snd_data_8C8E:  .byte   $10,$02
         brk
         .byte   $80
         dey
         txa
         dey
-        sty     L8088
+        sty     chr_ram_padding_fill
         dey
         txa
         dey
-        sty     L8088
+        sty     chr_ram_padding_fill
         dey
         .byte   $87,$88,$04,$01,$82,$8C,$04,$00
         .byte   $5C
@@ -1534,8 +1638,8 @@ L8C8E:  .byte   $10,$02
 
         sta     $63
         .byte   $63
-L8D06:  .byte   $60,$63,$60,$63,$60,$63,$65,$01
-L8D0E:  bpl     L8D88
+snd_data_8D06:  .byte   $60,$63,$60,$63,$60,$63,$65,$01
+snd_data_8D0E:  bpl     snd_data_8D88
         sei
         .byte   $67,$66,$65,$64,$63,$05,$23,$03
         .byte   $30,$01,$00
@@ -1556,32 +1660,32 @@ L8D0E:  bpl     L8D88
         .byte   $88,$67,$60,$87,$67,$60,$87,$66
         .byte   $60,$86,$66,$60,$86,$80,$85,$87
         .byte   $85,$88
-L8D6D:  sta     $80
+snd_data_8D6D:  sta     $80
         sta     $01
-        bpl     L8D0E
+        bpl     snd_data_8D0E
         .byte   $9B,$8B,$8B,$7D,$7D,$8B,$8A,$8A
         .byte   $04,$01,$4C,$8D,$04
-L8D80:  .byte   $00,$16,$8D,$00,$06,$07,$84,$A0
-L8D88:  .byte   $03,$3F
+snd_data_8D80:  .byte   $00,$16,$8D,$00,$06,$07,$84,$A0
+snd_data_8D88:  .byte   $03,$3F
         ora     ($05,x)
-L8D8C:  .byte   $66
-L8D8D:  ora     ($00,x)
+snd_data_8D8C:  .byte   $66
+snd_data_8D8D:  ora     ($00,x)
         .byte   $07,$82,$60,$03
         rol     $64,x
         .byte   $64,$64,$04,$3B,$85,$8D,$07,$81
-        bpl     L8DA2
+        bpl     snd_data_8DA2
         and     $1201,y
-L8DA2:  ror     $66
+snd_data_8DA2:  ror     $66
         rts
 
         .byte   $66,$60,$66,$60,$66,$63,$63,$64
         .byte   $64,$65
-L8DAF:  .byte   $65
-L8DB0:  .byte   $66
-L8DB1:  ror     $03
+snd_data_8DAF:  .byte   $65
+snd_data_8DB0:  .byte   $66
+snd_data_8DB1:  ror     $03
         rol     $1001,x
         .byte   $07,$82,$A0,$A4,$07,$84,$60
-L8DBD:  .byte   $06,$8D,$07,$82,$A0,$64,$64,$64
+snd_data_8DBD:  .byte   $06,$8D,$07,$82,$A0,$64,$64,$64
         .byte   $84,$07,$84,$60,$AD,$04,$07,$B2
         sta     display_offset_next_slot
         ldy     #$84
@@ -1601,7 +1705,7 @@ L8DBD:  .byte   $06,$8D,$07,$82,$A0,$64,$64,$64
         ora     $03
         and     $1905,x
         .byte   $02,$80
-L8E30:  .byte   $07,$84,$70,$01,$30,$AB,$AB,$8B
+snd_data_8E30:  .byte   $07,$84,$70,$01,$30,$AB,$AB,$8B
         .byte   $8D,$AB,$8B,$8B,$80,$AB,$8B,$AB
         .byte   $04,$01,$35,$8E,$01,$00,$02,$C0
         .byte   $07,$88,$10,$77,$76,$75,$74,$73
@@ -1611,7 +1715,7 @@ L8E30:  .byte   $07,$84,$70,$01,$30,$AB,$AB,$8B
         .byte   $07,$90,$10,$A8,$08,$01,$A8,$08
         .byte   $00,$88,$87,$80,$88,$80,$85,$80
         .byte   $85,$88,$80
-        ldy     LAA21
+        ldy     snd_data_AA21
         php
         ora     ($AA,x)
         php
@@ -1650,7 +1754,7 @@ L8E30:  .byte   $07,$84,$70,$01,$30,$AB,$AB,$8B
         .byte   $D2,$92,$91,$06,$D2,$80,$92,$06
         .byte   $B3,$B3,$AC,$AC,$C0,$93,$94,$93
         .byte   $93
-L8F46:  .byte   $80,$93,$A0,$93,$80,$93,$04,$01
+snd_data_8F46:  .byte   $80,$93,$A0,$93,$80,$93,$04,$01
         .byte   $19,$8F,$80,$05,$25,$03,$38,$02
         .byte   $80,$07,$92,$10,$08,$01,$21,$88
         .byte   $C8,$88,$87,$80,$88,$80,$85,$80
@@ -1658,13 +1762,13 @@ L8F46:  .byte   $80,$93,$A0,$93,$80,$93,$04,$01
         .byte   $A3,$A5,$A7,$AA,$CB,$8B,$8A,$80
         .byte   $8B,$80,$8B,$8B,$80,$A8,$8B,$08
         .byte   $00,$07
-L8F80:  dey
-        bpl     L8F86
+snd_data_8F80:  dey
+        bpl     snd_data_8F86
         .byte   $3A,$73,$72
-L8F86:  adc     ($70),y
+snd_data_8F86:  adc     ($70),y
         .byte   $6F,$6E,$6D,$6C
-L8F8C:  .byte   $6B
-L8F8D:  ror     a
+snd_data_8F8C:  .byte   $6B
+snd_data_8F8D:  ror     a
         adc     #$68
         .byte   $67
         ror     $87
@@ -1674,12 +1778,12 @@ L8F8D:  ror     a
         ora     $03
         ora     $05,x
         and     ($01),y
-        bpl     L8F46
+        bpl     snd_data_8F46
         .byte   $A7
         .byte   $04,$05,$A5,$8F,$91
         adc     ($71),y
-        stx     L8C8E
-        sty     L8A8A
+        stx     snd_data_8C8E
+        sty     weapon_data_unused_2
         ora     ($00,x)
         ora     $25
         adc     ($70),y
@@ -1697,7 +1801,7 @@ L8F8D:  ror     a
         .byte   $64,$64,$04,$03,$F0,$8F,$80,$85
         .byte   $87,$85,$88,$85,$80,$83,$80,$83
         .byte   $80,$63,$63,$83,$80
-L9006:  .byte   $83
+snd_data_9006:  .byte   $83
         and     ($85,x)
         sta     $65
         adc     $04
@@ -1707,7 +1811,7 @@ L9006:  .byte   $83
         .byte   $83,$83,$63,$63,$04,$02,$1A,$90
         .byte   $83,$21,$84,$84,$64,$64,$04,$03
         .byte   $24,$90,$80,$85,$87,$85,$88
-L9030:  sta     $80
+snd_data_9030:  sta     $80
         .byte   $83,$80,$83,$80,$63,$63,$83,$80
         .byte   $83,$21,$81,$81,$61,$61,$81,$81
         .byte   $04,$03,$3D,$90,$83,$63,$63,$83
@@ -1720,7 +1824,7 @@ L9030:  sta     $80
         .byte   $9D,$9D,$01,$00,$21,$85,$04,$00
         .byte   $D5,$8F,$00,$05,$01,$10,$07,$83
         .byte   $60,$03,$3D,$A0
-L9083:  .byte   $AC,$04,$07,$82,$90,$07,$83,$60
+snd_data_9083:  .byte   $AC,$04,$07,$82,$90,$07,$83,$60
         .byte   $01
         sbc     $0465,x
         .byte   $03
@@ -1732,8 +1836,8 @@ L9083:  .byte   $AC,$04,$07,$82,$90,$07,$83,$60
         .byte   $07,$82,$A0,$64,$64,$04,$2B,$A9
         .byte   $90,$04,$00
         dey
-        bcc     L90C1
-L90C1:  brk
+        bcc     snd_data_90C1
+snd_data_90C1:  brk
         .byte   $80,$00,$02,$41,$80,$00,$0F,$D3
         .byte   $90,$70,$92,$91,$93,$30,$94,$7F
         .byte   $94,$00,$06,$03,$3C,$07,$8A,$10
@@ -1764,7 +1868,7 @@ L90C1:  brk
         .byte   $74,$60,$04,$04,$21,$91,$60,$74
         .byte   $76,$77,$76,$74,$07
         dey
-        bpl     L91A2
+        bpl     snd_data_91A2
         ldy     #$60
         .byte   $6F,$60,$B2,$91,$60,$6F,$60,$6F
         .byte   $6F,$60,$6F,$60,$6F,$60,$B2,$91
@@ -1779,18 +1883,18 @@ L90C1:  brk
         ldy     #$88
         txa
         dey
-        sty     L8C80
+        sty     snd_data_8C80
         rts
 
         .byte   $6C,$8D,$8C,$80,$22,$AF,$08,$01
         .byte   $AF,$01,$06
-L9188:  .byte   $AF,$01,$00,$08,$00,$74,$60
-L918F:  ldy     $8F,x
+snd_data_9188:  .byte   $AF,$01,$00,$08,$00,$74,$60
+snd_data_918F:  ldy     $8F,x
         .byte   $80,$8F,$60,$6F,$6F,$60,$6F,$60
         .byte   $6F,$6D,$6C,$06,$8D,$AC,$A0
         .byte   $8C
         .byte   $8D
-L91A2:  sty     L808F
+snd_data_91A2:  sty     chr_ram_padding_loop
         .byte   $8F,$60,$6F,$91,$8F,$80,$22,$B2
         .byte   $08,$01,$B2,$01,$06,$B2,$01,$00
         .byte   $08,$00,$74,$60,$B4,$94,$80,$94
@@ -1808,7 +1912,7 @@ L91A2:  sty     L808F
         dey
         txa
         dey
-        sty     L8C80
+        sty     snd_data_8C80
         rts
 
         .byte   $6C,$8D,$8C,$80,$22,$AF,$08,$01
@@ -1822,7 +1926,7 @@ L91A2:  sty     L808F
         .byte   $74,$60,$B4,$04,$01,$15,$92,$B1
         .byte   $91,$60,$71,$91,$AD,$91,$21,$AF
         .byte   $08
-L924C:  .byte   $01,$AF,$08,$00,$6D,$60,$6D,$60
+snd_data_924C:  .byte   $01,$AF,$08,$00,$6D,$60,$6D,$60
         .byte   $6D,$8F,$6F,$04,$02,$42,$92,$B1
         .byte   $91,$60,$71,$91,$B4,$91,$6F,$6F
         .byte   $60,$74,$74,$60,$78,$78,$C0,$04
@@ -1870,8 +1974,8 @@ L924C:  .byte   $01,$AF,$08,$00,$6D,$60,$6D,$60
 
         .byte   $6A,$8C,$6C,$04,$02,$67,$93,$AD
         .byte   $8D,$60,$6D
-        sta     L8DB1
-        jmp     (L606C)
+        sta     snd_data_8DB1
+        jmp     (data_ref_606C)
 
         .byte   $6F,$6F,$60,$74,$74,$C0,$04,$00
         cpy     $0992
@@ -1916,7 +2020,7 @@ L924C:  .byte   $01,$AF,$08,$00,$6D,$60,$6D,$60
         .byte   $85,$A5,$04,$07,$48,$94,$A0,$A5
         .byte   $A0,$A5,$A0,$A5,$85,$85,$65,$65
         .byte   $60
-L9468:  .byte   $65,$04,$02,$5D,$94,$A0,$A5,$A0
+snd_data_9468:  .byte   $65,$04,$02,$5D,$94,$A0,$A5,$A0
         .byte   $A5,$63,$63,$60,$64,$64,$60,$65
         .byte   $65,$A0,$A5,$04,$00,$48,$94,$00
         .byte   $00,$80,$00,$01,$62,$80,$00,$0F
@@ -1926,7 +2030,7 @@ L9468:  .byte   $65,$04,$02,$5D,$94,$A0,$A5,$A0
         asl     zp_temp_02
         brk
         .byte   $03,$38
-L9498:  ora     $15
+snd_data_9498:  ora     $15
         .byte   $07
         sty     $60
         adc     $65
@@ -1938,7 +2042,7 @@ L9498:  ora     $15
         .byte   $65,$65,$71,$65,$6F,$70,$65,$71
         .byte   $65,$6C,$65,$6B,$65,$6A,$69,$68
         .byte   $6F,$6F,$60
-        jmp     (L7171)
+        jmp     (data_ref_7171)
 
         .byte   $60,$6C,$6C,$6F,$6C,$71,$A0,$03
         .byte   $3A,$07,$02,$A0,$05,$21,$02,$40
@@ -1959,7 +2063,7 @@ L9498:  ora     $15
         ror     a
         rts
 
-        jmp     (L6A60)
+        jmp     (data_ref_6A60)
 
         .byte   $67,$60,$88,$02,$80,$65,$68,$6C
         .byte   $71,$60,$6C,$60,$6A,$6C,$60,$6A
@@ -2003,16 +2107,16 @@ L9498:  ora     $15
         .byte   $65,$6B,$65,$6A,$69,$68,$6F,$6F
         .byte   $60,$6C,$71
         adc     ($60),y
-        jmp     (L6F6C)
+        jmp     (data_ref_6F6C)
 
         .byte   $6C,$71,$01,$10,$60,$7D,$7A,$01
         .byte   $00,$21
         adc     $03
-        bmi     L9672
+        bmi     snd_data_9672
         brk
         .byte   $22,$96
         brk
-L9672:  asl     $03
+snd_data_9672:  asl     $03
         .byte   $3F,$07,$83,$A0,$62,$03,$3A,$07
         .byte   $82,$A0,$62,$62,$62,$04,$1B,$73
         .byte   $96,$07,$83
@@ -2032,11 +2136,11 @@ L9672:  asl     $03
         .byte   $97,$F0,$98,$17,$9A,$3A,$9A,$00
         .byte   $05,$03,$3C,$02,$00,$05,$1D,$07
         .byte   $92,$10,$AC,$8F,$AE,$AD
-        ldy     LAEAF
+        ldy     snd_data_AEAF
         lda     $2180
         ldy     $0108
         ldy     a:$08
-        sty     L888A
+        sty     sound_cmd_jump_pattern
         .byte   $A7,$88,$8A,$A3
         sta     $87
         sta     $A0
@@ -2045,13 +2149,13 @@ L9672:  asl     $03
         .byte   $8A,$88,$A7,$88,$8A,$A3,$85,$87
         .byte   $85,$02,$80,$07,$84,$10,$80,$85
         .byte   $87,$85
-L96EB:  dey
+snd_data_96EB:  dey
         sta     $8A
         sta     $07
-        bcc     L9702
+        bcc     snd_data_9702
         .byte   $02,$C0,$05,$29,$87,$87,$87,$87
         .byte   $87,$87,$80,$05,$1D,$07,$92,$10
-L9702:  and     ($B1,x)
+snd_data_9702:  and     ($B1,x)
         php
         ora     ($B1,x)
         php
@@ -2059,9 +2163,9 @@ L9702:  and     ($B1,x)
         .byte   $8C,$8F,$91,$80,$91,$80,$B1,$8C
         .byte   $AF,$B0,$06,$B1,$AF,$06,$B1,$D8
         .byte   $91
-        bcs     L96EB
+        bcs     snd_data_96EB
         txa
-        sty     L808F
+        sty     chr_ram_padding_loop
         .byte   $8F,$80,$8F,$8D,$8F,$80,$93,$91
         .byte   $8F,$06,$AF,$AA,$06,$AC,$80,$8F
         .byte   $AF,$8F,$90,$80,$B1,$8F,$8C,$91
@@ -2094,23 +2198,23 @@ L9702:  and     ($B1,x)
         .byte   $80,$C8,$88,$87,$85,$A3
         sta     $87
         ora     $11
-        ldy     L8F8C
+        ldy     snd_data_8F8C
         sty     $1D05
         .byte   $03,$38,$02,$80,$07,$84,$10,$60
         .byte   $80,$85,$87
-L9815:  sta     $88
+snd_data_9815:  sta     $88
         sta     $8A
         adc     $07
-        bcc     L982D
+        bcc     snd_data_982D
         .byte   $02,$C0,$03,$3C,$05,$29,$83,$83
         .byte   $83,$83,$83,$84,$80,$05,$1D,$07
-L982D:  .byte   $92,$10,$03,$38,$80,$D1
-        sty     L918F
+snd_data_982D:  .byte   $92,$10,$03,$38,$80,$D1
+        sty     snd_data_918F
         .byte   $80,$91,$80,$B1,$8C,$AF,$B0,$06
         .byte   $B1,$AF,$06,$B1,$D8,$91
-        bcs     L9815
+        bcs     snd_data_9815
         txa
-        sty     L808F
+        sty     chr_ram_padding_loop
         .byte   $8F,$80,$8F,$8D,$8F,$80,$93,$91
         .byte   $8F,$06,$AF,$AA,$06,$AC,$80,$8F
         .byte   $8F,$93,$93,$80,$B4,$80,$8F,$8C
@@ -2128,29 +2232,29 @@ L982D:  .byte   $92,$10,$03,$38,$80,$D1
         sty     $93,x
         .byte   $07,$92,$10,$02,$80,$8D,$80,$8D
         .byte   $8D,$8C,$AD,$A0
-        sta     L8D80
-        sty     L8F8D
+        sta     snd_data_8D80
+        sty     snd_data_8F8D
         .byte   $80,$94,$80,$02,$00,$80,$93,$93
         .byte   $93,$B4,$80
-L98C7:  .byte   $02,$80,$06,$80,$BB,$B9,$06,$98
+snd_data_98C7:  .byte   $02,$80,$06,$80,$BB,$B9,$06,$98
         .byte   $8D,$80,$8D,$8D,$8C,$AD,$A0,$8D
         .byte   $80
-        sta     L8D8C
+        sta     snd_data_8D8C
         .byte   $8F,$80,$94,$80,$93,$93,$93,$80
         .byte   $96,$93,$80,$D8,$03,$3E,$87,$A5
         .byte   $87,$04,$00,$D1,$97,$00,$05,$03
         .byte   $31,$05,$1D,$91,$80,$01,$10,$9D
         .byte   $01,$00,$8C
-L98FE:  .byte   $8F,$91,$01,$10,$9D,$01,$00,$91
+snd_data_98FE:  .byte   $8F,$91,$01,$10,$9D,$01,$00,$91
         .byte   $80,$91,$01,$10,$9D,$01,$00,$8C
         .byte   $83,$8F,$01,$10,$9D,$01,$00,$91
         .byte   $8D,$80,$01,$10,$9D,$01
-L991C:  .byte   $00,$8D
+snd_data_991C:  .byte   $00,$8D
         dey
         sta     $1001
         sta     a:$01,x
         ldy     $018C
-        bpl     L98C7
+        bpl     snd_data_98C7
         ora     ($00,x)
         .byte   $AF,$8F,$01,$10
         sta     a:$01,x
@@ -2164,45 +2268,45 @@ L991C:  .byte   $00,$8D
         sta     ($81,x)
         clv
         ora     ($00,x)
-        sta     L8D8D
-        sta     L8F8D
+        sta     snd_data_8D8D
+        sta     snd_data_8F8D
         .byte   $80,$21,$91,$91,$80,$01,$10,$9D
         .byte   $01,$00,$8C,$8F,$91
-L9956:  ora     ($10,x)
+snd_data_9956:  ora     ($10,x)
         sta     a:$01,x
         sta     ($80),y
         sta     ($01),y
-        bpl     L98FE
+        bpl     snd_data_98FE
         ora     ($00,x)
-        sty     L9083
+        sty     snd_data_9083
         ora     ($10,x)
         sta     a:$01,x
-        bcc     L98FE
+        bcc     snd_data_98FE
         .byte   $80,$01,$10,$9D,$01,$00,$8C,$8F
         .byte   $91,$01,$10,$9D,$01,$00,$91,$80
         .byte   $91,$01,$10,$9D
         ora     ($00,x)
-        sty     L9083
+        sty     snd_data_9083
         ora     ($10,x)
         sta     a:$01,x
-        bcc     L991C
+        bcc     snd_data_991C
         .byte   $80,$01,$10,$9D,$01,$00,$8A,$8D
         .byte   $8F
-L9996:  ora     ($10,x)
+snd_data_9996:  ora     ($10,x)
         .byte   $9D
-L9999:  ora     ($00,x)
+snd_data_9999:  ora     ($00,x)
         .byte   $8F,$80,$8F,$01,$10
         sta     a:$01,x
         txa
         sta     ($8D,x)
         ora     ($10,x)
         sta     a:$01,x
-        stx     L808F
+        stx     chr_ram_padding_loop
         ora     ($10,x)
         sta     a:$01,x
         txa
         sta     $018F
-        bpl     L9956
+        bpl     snd_data_9956
         ora     ($00,x)
         .byte   $8F,$80,$8F,$01,$10,$9D,$01,$00
         .byte   $8A,$01,$10,$9D,$BD,$9D,$01,$00
@@ -2316,7 +2420,7 @@ L9999:  ora     ($00,x)
         .byte   $8F,$8D,$A0,$8D,$8F,$60,$6F,$8F
         .byte   $8F,$71,$60,$71,$60,$8F,$6F
         adc     ($01),y
-        bpl     L9D34
+        bpl     snd_data_9D34
         .byte   $7A,$7A,$7A,$78,$78,$76,$76,$01
         .byte   $00,$05,$29,$6A,$6A
         pla
@@ -2338,7 +2442,7 @@ L9999:  ora     ($00,x)
         .byte   $60,$6A,$60,$68,$6A,$60,$6A,$8A
         .byte   $8A,$68,$67,$68,$60,$68,$60,$68
         .byte   $67,$60,$67,$88,$60,$68
-L9D34:  txa
+snd_data_9D34:  txa
         sty     $6A6A
         pla
         rts
@@ -2356,9 +2460,9 @@ L9D34:  txa
         .byte   $07,$84,$50,$01,$FF,$8D,$01,$00
         .byte   $07,$82,$90,$63,$63,$04,$06,$5A
         .byte   $9D,$07,$84,$50,$01,$FF
-        sta     L8D80
+        sta     snd_data_8D80
         .byte   $80,$6D,$60,$6D,$60
-L9D8D:  lda     a:$01
+snd_data_9D8D:  lda     a:$01
         .byte   $07,$82,$90,$83,$83,$07,$84,$50
         .byte   $01,$FF,$8D,$01,$00,$07,$82,$90
         .byte   $63,$63,$63,$63,$83,$07,$84,$50
@@ -2382,7 +2486,7 @@ L9D8D:  lda     a:$01
         .byte   $01,$FF,$8D,$01,$00,$07,$82,$90
         .byte   $63,$63,$04,$02,$06,$9E,$07,$84
         .byte   $50,$01,$FF,$60,$6D,$8D,$6D,$60
-        adc     LAD60
+        adc     snd_data_AD60
         ldy     #$01
         brk
         .byte   $04,$00,$5A,$9D,$00,$00,$80,$00
@@ -2391,7 +2495,7 @@ L9D8D:  lda     a:$01
         .byte   $06,$03,$3C,$02
         cpy     #$07
         txa
-        jsr     L1F05
+        jsr     data_ref_1F05
         sty     $6871
         rts
 
@@ -2400,7 +2504,7 @@ L9D8D:  lda     a:$01
         .byte   $60,$6F,$60,$63,$60,$6F,$60,$6A
         .byte   $87,$8F,$04,$01,$6F,$9E,$8C,$71
         .byte   $68,$60,$71,$60,$65,$60,$71,$60
-        jmp     (L9188)
+        jmp     (snd_data_9188)
 
         .byte   $04,$01,$80,$9E,$8A,$6F,$67,$60
         .byte   $6F,$60,$63,$60,$6F,$60,$6A,$87
@@ -2466,12 +2570,12 @@ L9D8D:  lda     a:$01
         .byte   $3A,$C8,$06
         dey
         asl     $8A
-        sty     LA7C7
+        sty     snd_data_A7C7
         ldy     $06CC
-        sty     L9006
+        sty     snd_data_9006
         .byte   $93,$D1,$91,$60,$93,$91,$6F,$CA
         .byte   $8A,$88,$A6
-        cpy     L8A8C
+        cpy     weapon_data_unused_3
         tay
         adc     $6D71
         ror     a
@@ -2548,10 +2652,10 @@ L9D8D:  lda     a:$01
         rts
 
         .byte   $6F
-        jmp     (L9468)
+        jmp     (snd_data_9468)
 
         .byte   $6F
-        jmp     (L608A)
+        jmp     (data_ref_608A)
 
         .byte   $6A,$8D,$71,$6D,$60,$71,$6D,$6A
         .byte   $96,$71,$6D,$AA,$8A,$60,$6A,$60
@@ -2687,7 +2791,7 @@ L9D8D:  lda     a:$01
         .byte   $96,$88,$98,$94,$88,$98,$91,$94
         .byte   $8D,$98,$94,$88,$94,$98,$88,$94
         .byte   $98,$87,$96,$93,$87
-LA3E1:  stx     $8F,y
+snd_data_A3E1:  stx     $8F,y
         .byte   $93,$8C,$96,$93,$87,$93,$01,$10
         .byte   $7D,$7D,$7D,$7D,$7A,$7A,$77,$77
         .byte   $01,$00,$88
@@ -2695,7 +2799,7 @@ LA3E1:  stx     $8F,y
         sty     $88,x
         tya
         sta     ($94),y
-        sta     L9498
+        sta     snd_data_9498
         dey
         sty     $98,x
         dey
@@ -2704,7 +2808,7 @@ LA3E1:  stx     $8F,y
         .byte   $96,$93,$87,$93,$96,$87,$93,$96
         .byte   $04,$03,$F5,$A3,$91,$94,$93,$91
         .byte   $AF,$80
-        sta     L8F80
+        sta     snd_data_8F80
         .byte   $AF,$80,$8D,$91,$93,$8D,$04,$07
         .byte   $27,$A4,$90,$04,$07,$2C,$A4,$91
         .byte   $94,$93,$91,$AF,$80,$8D,$80,$8F
@@ -2713,7 +2817,7 @@ LA3E1:  stx     $8F,y
         .byte   $93,$8C,$90,$93,$98,$04,$00,$F5
         .byte   $A3,$00,$05,$07,$88,$10,$03,$38
         .byte   $07,$82
-        bvs     LA3E1
+        bvs     snd_data_A3E1
         .byte   $04,$17,$5A,$A4,$07,$84,$40,$01
         .byte   $FF,$8B,$8B,$A0,$8B,$8B,$A0,$01
         .byte   $00,$07,$82,$70,$83,$04,$17,$6F
@@ -2734,7 +2838,7 @@ LA3E1:  stx     $8F,y
         .byte   $85,$80,$8C,$80,$8A,$80,$88,$80
         .byte   $8A,$A0,$80,$6A,$6A,$8A,$6A,$6A
         .byte   $8A,$87,$80
-        sty     L8A80
+        sty     weapon_data_unused_1
         .byte   $80,$88,$80,$87,$80,$85,$80,$85
         .byte   $8C,$8F,$06,$AE,$85,$80,$85,$8C
         .byte   $8F,$8E,$80,$93,$94,$80
@@ -2751,20 +2855,20 @@ LA3E1:  stx     $8F,y
         pla
         dey
         sta     $80
-        sty     L8C8A
+        sty     snd_data_8C8A
         .byte   $80,$68,$68,$88,$68,$68,$88,$85
         .byte   $80
-        sty     L8A80
+        sty     weapon_data_unused_1
         .byte   $80,$88,$80,$8A,$A0,$80,$6A,$6A
         .byte   $8A,$6A,$6A,$8A,$87,$80,$8C,$80
         .byte   $8A,$80,$88,$80,$87,$80,$85,$80
         .byte   $85,$8C,$8F,$06
-        ldx     L8085
+        ldx     chr_ram_tile_copy_end
         sta     $8C
         .byte   $8F,$8E,$80,$8F,$07,$90,$10,$02
         .byte   $80,$22,$91,$B1,$D1,$8F,$B4,$B1
         .byte   $AF,$B1,$80,$CF,$8F,$06,$B1
-        sty     L8C8D
+        sty     snd_data_8C8D
         dey
         .byte   $80,$88,$8C,$8F,$06,$D1,$8F,$B4
         .byte   $B1,$AF,$B1,$21,$8F,$CF,$8F,$8C
@@ -2787,7 +2891,7 @@ LA3E1:  stx     $8F,y
         .byte   $8E,$80,$8F,$08,$00,$02,$80,$22
         .byte   $91,$B1,$D1,$8F,$B4,$B1,$AF,$B1
         .byte   $80,$CF,$8F,$06,$B1,$8C
-        sta     L888C
+        sta     sound_cmd_jump_target
         .byte   $80,$88,$8C,$8F,$06,$D1,$8F,$B4
         .byte   $B1,$AF,$B1,$21,$8F,$CF,$8F,$8C
         .byte   $8F,$90,$80,$90,$90,$93,$06,$B8
@@ -2837,7 +2941,7 @@ LA3E1:  stx     $8F,y
         pla
         dey
         sta     $80
-        sty     L8C8A
+        sty     snd_data_8C8A
         .byte   $80,$68,$68,$88,$68,$68,$88,$85
         .byte   $80,$8C,$80,$8A,$80,$88,$80,$8A
         .byte   $A0,$80,$6A,$6A,$8A,$6A,$6A,$8A
@@ -2858,7 +2962,7 @@ LA3E1:  stx     $8F,y
         .byte   $B6,$B4,$B3,$80,$8F,$91,$8F,$21
         .byte   $8C,$CC,$E0,$08,$00,$04,$00,$43
         .byte   $A6,$00,$05,$03,$41,$05,$2C,$85
-LA7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
+snd_data_A7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         .byte   $61,$04,$07,$CD,$A7,$83,$63,$63
         .byte   $04,$07,$D4,$A7,$85,$65,$65,$04
         .byte   $06,$DB,$A7,$83,$21,$85,$85,$65
@@ -2907,7 +3011,7 @@ LA7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         adc     $85
         adc     $65
         sta     $6C
-        jmp     (L6868)
+        jmp     (data_ref_6868)
 
         .byte   $8F,$80,$65,$65,$88,$65,$65,$8F
         .byte   $68,$68,$8C,$65,$65,$86,$66,$66
@@ -2974,14 +3078,14 @@ LA7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         php
         brk
         .byte   $21
-        bne     LA9F6
+        bne     snd_data_A9F6
         ora     ($D0,x)
         php
         brk
         .byte   $21,$CB
         php
         .byte   $01
-LA9F6:  .byte   $CB
+snd_data_A9F6:  .byte   $CB
         php
         brk
         and     ($CC,x)
@@ -2991,7 +3095,7 @@ LA9F6:  .byte   $CB
         php
         brk
         .byte   $04,$01,$76,$A9
-LAA06:  ora     $22
+snd_data_AA06:  ora     $22
         and     ($CF,x)
         php
         ora     ($CF,x)
@@ -3000,7 +3104,7 @@ LAA06:  ora     $22
         .byte   $21,$D6,$08,$01,$D6,$08,$00,$21
         .byte   $D1,$08,$01,$D1,$08,$00,$21,$D2
         .byte   $08,$01
-LAA21:  .byte   $D2,$08,$00,$21,$D0,$08,$01,$D0
+snd_data_AA21:  .byte   $D2,$08,$00,$21,$D0,$08,$01,$D0
         .byte   $08,$00,$21,$D7,$08,$01,$D7,$08
         .byte   $00,$21,$D2,$08,$01,$D2,$08,$00
         .byte   $D3,$08,$01,$01,$05,$D3,$01,$00
@@ -3029,7 +3133,7 @@ LAA21:  .byte   $D2,$08,$00,$21,$D0,$08,$01,$D0
         .byte   $66,$66,$64,$66,$66,$80,$86,$89
         sta     $0304
         .byte   $BF,$AA
-LAACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
+snd_data_AACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         .byte   $80,$87,$8A,$8E,$04,$03,$CF,$AA
         .byte   $68,$68,$60
         pla
@@ -3048,8 +3152,8 @@ LAACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         .byte   $6D
         adc     $6D60
         adc     $6D6B
-        adc     L8D80
-        bcc     LAACF
+        adc     snd_data_8D80
+        bcc     snd_data_AACF
         .byte   $04,$03,$2F,$AB,$6E,$6E,$60,$6E
         .byte   $6E,$6C,$6E,$6E,$80,$8E,$91,$95
         .byte   $04,$03,$3F,$AB,$6F,$6F,$60,$6F
@@ -3084,7 +3188,7 @@ LAACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         .byte   $03,$3A,$05,$17,$07,$02,$A0,$70
         .byte   $70,$70,$60,$70,$8F,$21,$70,$D0
         .byte   $72,$72,$72,$60,$72
-        bcc     LAC29
+        bcc     snd_data_AC29
         .byte   $72,$D2,$74,$74,$60,$74,$A0,$76
         .byte   $76,$60,$76,$A0,$60,$78,$60,$75
         .byte   $75,$74,$75,$75,$08,$01,$DB,$09
@@ -3092,7 +3196,7 @@ LAACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         asl     $03
         sta     ($05,x)
         .byte   $23,$CD,$60,$6D
-LAC29:  adc     $6D6D
+snd_data_AC29:  adc     $6D6D
         asl     $8C
         .byte   $CB,$60,$6B,$6B,$6B,$6B,$06,$8A
         .byte   $69,$69,$60,$69
@@ -3114,7 +3218,7 @@ LAC29:  adc     $6D6D
         adc     ($74),y
         adc     ($74),y
         .byte   $77,$08,$00,$07,$86
-        jsr     L1F05
+        jsr     data_ref_1F05
         .byte   $02,$C0,$71,$71,$60,$71,$60
         adc     ($71),y
         .byte   $80
@@ -3154,26 +3258,26 @@ LAC29:  adc     $6D6D
         .byte   $6A,$6A,$80,$6A,$6A,$60,$6A,$60
         .byte   $6A,$6A,$07,$83,$20,$8A,$60,$6A
         .byte   $A0,$94,$60
-LAD60:  .byte   $74,$93,$94,$07,$86,$20,$67,$67
+snd_data_AD60:  .byte   $74,$93,$94,$07,$86,$20,$67,$67
         .byte   $60,$67,$60,$67,$67,$80,$67,$67
         .byte   $60,$67,$60,$67
-LAD74:  .byte   $67,$08,$01,$A7,$AC,$B0,$B3,$08
+snd_data_AD74:  .byte   $67,$08,$01,$A7,$AC,$B0,$B3,$08
         .byte   $00,$04,$00,$1D,$AD,$00,$06,$03
         .byte   $30,$05,$1F,$71,$71,$71,$6F,$04
         .byte   $0D,$87,$AD,$03
-        jsr     L1501
-        jmp     (L6A6C)
+        jsr     data_ref_1501
+        jmp     (data_ref_6A6C)
 
         .byte   $6A,$68,$68,$66,$66,$03,$50,$01
         .byte   $00,$03,$40,$71,$71,$60,$71,$94
         .byte   $76,$71,$60,$6F,$71,$70,$8A,$6B
-        jmp     (L0604)
+        jmp     (data_ref_0604)
 
         .byte   $9F,$AD,$6C,$6C,$78,$60,$76,$78
         .byte   $60,$6C,$60,$6C,$78,$60,$76,$78
         .byte   $74,$73,$04,$00,$9F,$AD,$00,$06
         .byte   $07,$88,$10,$03,$3F,$07,$82
-        beq     LAD74
+        beq     snd_data_AD74
         ldx     #$A2
         .byte   $07,$84,$10,$A7,$04,$01,$CE,$AD
         .byte   $07,$82,$A0,$83,$83,$07,$84,$40
@@ -3193,12 +3297,12 @@ LAD74:  .byte   $67,$08,$01,$A7,$AC,$B0,$B3,$08
         .byte   $1D,$01,$00,$03,$3B,$07,$86,$10
         .byte   $02,$00,$85,$88,$8C,$85,$88,$8F
         .byte   $85,$88
-        stx     L8885
-        sta     L8885
+        stx     sound_cmd_detune_table_ref
+        sta     sound_cmd_detune_table_ref
         .byte   $8B,$8C,$02,$40,$85,$88,$8C,$85
         .byte   $88,$8F,$85,$88,$8E,$85
         dey
-        sta     L8885
+        sta     sound_cmd_detune_table_ref
         .byte   $8B,$8C,$04,$00,$3B,$AE,$00,$05
         .byte   $05,$1D,$E0,$07,$86,$10,$03,$37
         .byte   $02,$00,$80,$85,$88,$8C,$85,$88
@@ -3209,10 +3313,10 @@ LAD74:  .byte   $67,$08,$01,$A7,$AC,$B0,$B3,$08
         .byte   $70,$AE,$00,$05,$03,$30,$05,$1D
         .byte   $01,$0F,$9D,$9A,$80,$97,$80,$74
         .byte   $74,$94
-        bcc     LAEB1
+        bcc     snd_data_AEB1
         .byte   $31
-LAEAF:  sta     $83
-LAEB1:  ora     ($10,x)
+snd_data_AEAF:  sta     $83
+snd_data_AEB1:  ora     ($10,x)
         txs
         ora     ($00,x)
         sta     $80
@@ -3246,7 +3350,7 @@ LAEB1:  ora     ($10,x)
         .byte   $89,$8B,$A0
         sta     $6D6D
         sta     $6D6D
-        sta     L808F
+        sta     chr_ram_padding_loop
         and     ($CB,x)
         php
         ora     ($CB,x)
@@ -3258,15 +3362,15 @@ LAEB1:  ora     ($10,x)
         ora     ($CD,x)
         php
         brk
-LAF46:  .byte   $02,$80,$07,$83,$70,$05,$2F,$74
+snd_data_AF46:  .byte   $02,$80,$07,$83,$70,$05,$2F,$74
         .byte   $72,$70,$72
-        bvs     LAFC2
+        bvs     snd_data_AFC2
         ror     $046D
         ora     ($01,x)
         .byte   $AF,$07,$84,$10,$05,$23,$02,$C0
-        sta     L888D
+        sta     sound_cmd_set_portamento
         sta     $91
-        sta     LB488
+        sta     snd_data_B488
         .byte   $92,$91,$8F,$91,$AD,$80,$8B,$8B
         .byte   $8A,$86,$AF,$8B,$88,$6B,$6B,$66
         .byte   $6F,$6B,$72,$6F,$77,$92,$AB,$80
@@ -3283,13 +3387,13 @@ LAF46:  .byte   $02,$80,$07,$83,$70,$05,$2F,$74
         .byte   $80,$30,$81,$30,$84,$30,$89,$30
         .byte   $84,$30,$89,$30,$8D,$30,$89,$30
         .byte   $8D,$30,$90,$30
-        sta     L9030
-        bmi     LAF46
+        sta     snd_data_9030
+        bmi     snd_data_AF46
         .byte   $89,$89,$89,$89,$80,$AB,$80,$07
         .byte   $9A,$10,$02,$00,$8D
-        adc     L8D6D
+        adc     snd_data_8D6D
         .byte   $6D
-LAFC2:  adc     L8F8D
+snd_data_AFC2:  adc     snd_data_8F8D
         .byte   $80
         and     ($CB,x)
         php
@@ -3322,20 +3426,20 @@ LAFC2:  adc     L8F8D
         dey
         dey
         .byte   $80
-LB025:  inc     $88
+snd_data_B025:  inc     $88
         ldy     $84
         stx     $80
-LB02B:  stx     $80
+snd_data_B02B:  stx     $80
         and     ($88,x)
-LB02F:  iny
-LB030:  .byte   $02,$80,$03,$36
-LB034:  ora     $2F
+snd_data_B02F:  iny
+snd_data_B030:  .byte   $02,$80,$03,$36
+snd_data_B034:  ora     $2F
         .byte   $07,$83
-LB038:  bvs     LB09A
+snd_data_B038:  bvs     snd_data_B09A
         .byte   $74
-LB03B:  .byte   $72,$70,$72,$70
-LB03F:  .byte   $6F,$6E,$04,$01,$FB,$AF
-LB045:  .byte   $07,$84,$10,$05,$23,$03,$3C,$02
+snd_data_B03B:  .byte   $72,$70,$72,$70
+snd_data_B03F:  .byte   $6F,$6E,$04,$01,$FB,$AF
+snd_data_B045:  .byte   $07,$84,$10,$05,$23,$03,$3C,$02
         .byte   $C0,$88,$03,$37,$80,$8D,$88,$85
         .byte   $91,$8D,$88,$B4,$92,$91,$8F,$03
         .byte   $3C,$A8,$80,$86,$03,$37,$80,$8B
@@ -3344,18 +3448,18 @@ LB045:  .byte   $07,$84,$10,$05,$23,$03,$3C,$02
         .byte   $80,$85,$03,$37,$60,$6A,$6D,$6A
         .byte   $65,$81,$04,$01,$7A,$B0,$6A,$6D
         .byte   $75,$76
-LB087:  .byte   $75,$76,$75,$76,$71,$6D,$60,$03
+snd_data_B087:  .byte   $75,$76,$75,$76,$71,$6D,$60,$03
         .byte   $3C,$02,$C0,$A5,$80,$30,$84,$30
         .byte   $89,$30,$8D
-LB09A:  bmi     LB025
-        bmi     LB02B
-        bmi     LB030
-        bmi     LB02F
-        bmi     LB034
-        bmi     LB03B
-        bmi     LB038
-        bmi     LB03F
-        bmi     LB045
+snd_data_B09A:  bmi     snd_data_B025
+        bmi     snd_data_B02B
+        bmi     snd_data_B030
+        bmi     snd_data_B02F
+        bmi     snd_data_B034
+        bmi     snd_data_B03B
+        bmi     snd_data_B038
+        bmi     snd_data_B03F
+        bmi     snd_data_B045
         sty     $84
         sty     $84
         .byte   $80
@@ -3377,20 +3481,20 @@ LB09A:  bmi     LB025
         .byte   $05,$23,$8D,$6D
         adc     $1D04
         .byte   $F2
-        bcs     LB087
+        bcs     snd_data_B087
         dey
         txa
         sta     $6D8D
         adc     $1D04
-        sbc     L8DB0,x
+        sbc     snd_data_8DB0,x
         dey
         txa
         sta     $3003
         lda     $01
         .byte   $14
-        sta     L8D80,x
-        sta     L809D
-        sta     L9D8D
+        sta     snd_data_8D80,x
+        sta     weapon_select_dec_count
+        sta     snd_data_9D8D
         sta     $0180
         brk
         sta     $01
@@ -3406,7 +3510,7 @@ LB09A:  bmi     LB025
         .byte   $7D,$7D,$9D,$7B,$7B,$9B,$79,$79
         .byte   $99,$7D,$7D,$7B,$78,$01,$00,$8D
         .byte   $6D,$6D,$04,$17,$68,$B1,$8D
-        sta     L918F
+        sta     snd_data_918F
         .byte   $80,$8D,$8F,$91,$80,$8D,$8F,$91
         .byte   $80,$8D,$8F,$91,$09,$00,$05,$07
         .byte   $82,$A0,$03,$3F,$82,$62,$62,$07
@@ -3419,7 +3523,7 @@ LB09A:  bmi     LB025
         ora     #$00
         brk
         .byte   $80,$00,$02,$62,$80,$00,$0F
-LB1B5:  .byte   $BF,$B1,$3D,$B2,$B9,$B2,$1D,$B3
+snd_data_B1B5:  .byte   $BF,$B1,$3D,$B2,$B9,$B2,$1D,$B3
         .byte   $53,$B3,$00,$08,$05,$20,$02,$80
         .byte   $03,$3E,$07,$DF,$40,$08,$00,$21
         .byte   $AE,$06,$CE,$21,$CF,$8F,$06,$B1
@@ -3427,12 +3531,12 @@ LB1B5:  .byte   $BF,$B1,$3D,$B2,$B9,$B2,$1D,$B3
         .byte   $96,$A0,$80,$96,$95,$93,$91,$93
         .byte   $80,$8E,$8C,$8A,$80,$8A,$89,$8A
         .byte   $21,$B1,$06,$D1,$06,$B3,$06
-LB1F4:  lda     ($AF),y
+snd_data_B1F4:  lda     ($AF),y
         asl     $B5
         asl     $B3
         lda     ($06),y
         .byte   $B5
-LB1FD:  asl     $B3
+snd_data_B1FD:  asl     $B3
         .byte   $B2,$06,$B6,$06,$B5,$B3,$00,$07
         .byte   $D6,$02,$C0,$80,$8D,$8F,$91,$21
         .byte   $B2,$B2,$92,$B1,$92,$22,$AF,$8F
@@ -3440,7 +3544,7 @@ LB1FD:  asl     $B3
         .byte   $00
         asl     $B0
         .byte   $80
-        bcc     LB1B5
+        bcc     snd_data_B1B5
         .byte   $AF,$90,$AD,$80,$8D,$8D,$AF,$90
         .byte   $F2,$05,$38,$01,$01,$02,$00,$03
         .byte   $3F,$07,$AF,$10,$21,$F9,$F9,$09
@@ -3451,8 +3555,8 @@ LB1FD:  asl     $B3
         sta     ($95),y
         tya
         .byte   $93,$8E,$93,$96,$91,$8C,$91,$96
-        bcc     LB1F4
-        bcc     LB1FD
+        bcc     snd_data_B1F4
+        bcc     snd_data_B1FD
         .byte   $04,$01,$66,$B2,$D1,$91,$06,$B0
         .byte   $8F,$8A,$8F,$91,$D3,$91,$8C,$91
         .byte   $93,$D5,$92,$8E,$92,$93,$D5,$93
@@ -3480,7 +3584,7 @@ LB1FD:  asl     $B3
         .byte   $88,$88,$80,$88,$88,$83,$88,$8C
         .byte   $04,$01,$EB,$B2,$00,$06,$89,$89
         .byte   $80,$89,$89,$84,$89
-LB300:  sta     $0104
+snd_data_B300:  sta     $0104
         sbc     $01B2,y
         ora     $30,x
         sta     $0204,x
@@ -3504,35 +3608,35 @@ LB300:  sta     $0104
         rti
 
         .byte   $05,$27,$03,$3F,$07,$AF,$10,$69
-LB38C:  adc     #$60
-LB38E:  adc     #$60
-LB390:  adc     #$60
+snd_data_B38C:  adc     #$60
+snd_data_B38E:  adc     #$60
+snd_data_B390:  adc     #$60
         adc     #$A0
-LB394:  ror     a
-        jmp     (L2260)
+snd_data_B394:  ror     a
+        jmp     (data_ref_2260)
 
         ror     $08AE
         brk
         .byte   $CE,$09
         brk
-LB39F:  asl     $03
-        bmi     LB3A8
+snd_data_B39F:  asl     $03
+        bmi     snd_data_B3A8
         .byte   $27,$65,$65,$60
         .byte   $65
-LB3A8:  rts
+snd_data_B3A8:  rts
 
         adc     $60
         sta     $01
         .byte   $10
-LB3AE:  adc     $0198,x
+snd_data_B3AE:  adc     $0198,x
         brk
-LB3B2:  ror     $88
+snd_data_B3B2:  ror     $88
         .byte   $03,$7F,$21,$6A
-LB3B8:  and     ($8A,x)
+snd_data_B3B8:  and     ($8A,x)
         tax
         .byte   $03,$30
-LB3BD:  ora     ($10,x)
-        adc     LB77B,x
+snd_data_B3BD:  ora     ($10,x)
+        adc     snd_data_B77B,x
         ora     #$00
         asl     $07
         .byte   $83,$F0,$03,$3F,$80,$60,$82,$82
@@ -3547,26 +3651,26 @@ LB3BD:  ora     ($10,x)
         .byte   $07,$01,$70,$B1,$B1,$30,$AF,$AF
         .byte   $30,$8F,$30,$AF,$30,$8F,$30,$A0
         .byte   $08,$01,$AD,$08,$00
-        bmi     LB38C
-        bmi     LB38E
-        bmi     LB390
-        bmi     LB394
+        bmi     snd_data_B38C
+        bmi     snd_data_B38E
+        bmi     snd_data_B390
+        bmi     snd_data_B394
         lda     ($B1),y
-        bmi     LB3B8
+        bmi     snd_data_B3B8
         .byte   $AF,$30,$8F
-LB40C:  bmi     LB3BD
-LB40E:  bmi     LB39F
-LB410:  bmi     LB3B2
+snd_data_B40C:  bmi     snd_data_B3BD
+snd_data_B40E:  bmi     snd_data_B39F
+snd_data_B410:  bmi     snd_data_B3B2
         php
         ora     ($AE,x)
         php
         brk
         .byte   $30,$8E,$30
-LB41A:  stx     L8E30
-        bmi     LB3AE
+snd_data_B41A:  stx     snd_data_8E30
+        bmi     snd_data_B3AE
         .byte   $04,$00,$E2,$B3,$00,$06,$02,$40
         .byte   $05,$27,$07,$01,$80
-LB42C:  .byte   $03,$3A,$07,$01,$80,$AA,$AA,$30
+snd_data_B42C:  .byte   $03,$3A,$07,$01,$80,$AA,$AA,$30
         .byte   $A9,$A9,$30,$89,$30,$A8,$30,$88
         .byte   $30
         ldy     #$08
@@ -3584,12 +3688,12 @@ LB42C:  .byte   $03,$3A,$07,$01,$80,$AA,$AA,$30
         ldy     $00,x
         asl     $03
         .byte   $3F,$07,$82,$80
-LB488:  bmi     LB40C
-        bmi     LB40E
-        bmi     LB410
+snd_data_B488:  bmi     snd_data_B40C
+        bmi     snd_data_B40E
+        bmi     snd_data_B410
         .byte   $07
         sta     $40
-        bmi     LB41A
+        bmi     snd_data_B41A
         .byte   $07,$82,$80,$30,$82,$30,$82,$04
         .byte   $00,$88,$B4,$00,$00,$80,$00,$01
         .byte   $62,$80,$00,$0F,$B1
@@ -3644,13 +3748,13 @@ LB488:  bmi     LB40C
         .byte   $08,$05,$20,$02,$C0,$03,$3A,$07
         .byte   $DF,$40,$08,$00,$21,$CC,$8C,$85
         dey
-        sty     L8DAF
-        ldy     LAA06
+        sty     snd_data_8DAF
+        ldy     snd_data_AA06
         .byte   $04,$03,$A6,$B5,$02,$40
-        cmp     L8D06
+        cmp     snd_data_8D06
         asl     $8F
         sta     ($06),y
-        ldy     L8D8C
+        ldy     snd_data_8D8C
         asl     $AF
         .byte   $D4,$94,$92,$91,$8F,$06,$AE,$8E
         .byte   $8F,$06,$B1,$8D,$8C,$8D,$8F,$A0
@@ -3662,9 +3766,9 @@ LB488:  bmi     LB40C
         .byte   $8D,$AF,$91,$06,$AA,$8A,$8C,$06
         .byte   $AD,$05,$14
         stx     $92,y
-        sta     L9996
+        sta     snd_data_9996
         sty     $B8,x
-        ldx     LBB9D,y
+        ldx     snd_data_BB9D,y
         .byte   $07,$01,$40,$05,$20,$22,$ED,$CD
         .byte   $8D,$90,$8F,$21
         sta     $0104
@@ -3682,7 +3786,7 @@ LB488:  bmi     LB40C
         .byte   $06,$A8,$88,$C8,$06,$A1,$81,$C1
         .byte   $06,$AA,$8A,$CA,$06,$A6,$86,$C6
         .byte   $04,$01,$76,$B6,$06
-LB67F:  .byte   $A3,$83,$C3,$06,$A8,$88,$88,$06
+snd_data_B67F:  .byte   $A3,$83,$C3,$06,$A8,$88,$88,$06
         .byte   $A9,$06,$AA,$8A,$CA,$06,$A9,$89
         .byte   $C9,$06,$A8,$88,$C8
         asl     $A7
@@ -3698,7 +3802,7 @@ LB67F:  .byte   $A3,$83,$C3,$06,$A8,$88,$88,$06
         .byte   $D0,$A8,$04,$19,$CB
         ldx     $00,y
         ora     #$06
-        bne     LB67F
+        bne     snd_data_B67F
         ora     #$02
         .byte   $22,$80,$00,$0F,$E7,$B6,$E5,$B7
         .byte   $DE,$B8,$B6,$B9,$E2,$B9,$00,$05
@@ -3723,7 +3827,7 @@ LB67F:  .byte   $A3,$83,$C3,$06,$A8,$88,$88,$06
         .byte   $70,$75,$D0,$CB,$8B,$8F,$80,$06
         .byte   $B7,$B5,$B4,$B2,$C9,$89,$8D,$80
         .byte   $8D,$70,$6D,$69,$6D
-LB77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
+snd_data_B77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $06,$88,$8B,$CC,$03,$38,$70,$73
         .byte   $78,$70,$73,$78,$7C,$78,$02,$00
         .byte   $8D,$6D,$6D,$8D,$6D,$6D,$8D,$8F
@@ -3777,16 +3881,16 @@ LB77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $88,$68,$68,$88,$68,$68,$88,$88
         .byte   $80,$E6,$88,$88,$88
         txa
-        sta     L8880
+        sta     sound_cmd_set_detune
         txa
-        sta     L8880
+        sta     sound_cmd_set_detune
         txa
         sta     $0380
         .byte   $3F
         dey
         txa
         and     ($8D,x)
-        sbc     L9999
+        sbc     snd_data_9999
         .byte   $03,$3C,$06,$80,$99,$99,$03,$38
         .byte   $06,$80,$99,$99,$03,$35,$06,$80
         .byte   $99,$99,$03,$32,$06,$80,$99,$99
@@ -3799,7 +3903,7 @@ LB77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         brk
         .byte   $8B,$8D,$80,$8D
         ldy     #$8B
-        sta     L8D80
+        sta     snd_data_8D80
         .byte   $80,$8B,$8D,$90,$01,$10,$9D,$9D
         .byte   $01,$00,$8B,$8D,$80,$8D,$A0,$8B
         .byte   $8D,$80,$8D,$80,$8B,$8D,$90,$01
@@ -3810,7 +3914,7 @@ LB77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $8B,$80,$86,$01,$10,$BD,$BD,$04
         .byte   $01,$FC,$B8,$8D,$80,$9D,$8D,$80
         .byte   $8D
-        sta     L8D80,x
+        sta     snd_data_8D80,x
         .byte   $80,$9D,$8D,$6D,$6D,$6D,$6D,$9D
         .byte   $8D,$04,$05,$4A,$B9,$01,$00,$89
         .byte   $69,$69,$04,$07,$62,$B9,$8B,$6B
@@ -3829,29 +3933,29 @@ LB77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $62,$62,$04,$57,$BD,$B9,$83,$83
         .byte   $83,$83,$80,$83,$83,$83,$80,$83
         .byte   $83,$83,$80,$83
-LB9DF:  .byte   $83,$83,$09,$00,$00,$80,$00,$01
+snd_data_B9DF:  .byte   $83,$83,$09,$00,$00,$80,$00,$01
         .byte   $62,$80,$00,$0F,$F5,$B9,$0E,$BA
         .byte   $27,$BA,$00,$00,$4E,$BA,$00,$06
         .byte   $03
-LB9F8:  .byte   $3F,$05,$27,$07,$89
-        bpl     LB9DF
+snd_data_B9F8:  .byte   $3F,$05,$27,$07,$89
+        bpl     snd_data_B9DF
         ror     a
         ror     a
         .byte   $80,$6C
-LBA03:  jmp     (L6D80)
+snd_data_BA03:  jmp     (data_ref_6D80)
 
         .byte   $6D
-LBA07:  .byte   $80,$6F,$6D,$6F,$06,$F1
-LBA0D:  ora     #$00
+snd_data_BA07:  .byte   $80,$6F,$6D,$6F,$06,$F1
+snd_data_BA0D:  ora     #$00
         asl     $03
-LBA11:  .byte   $3F,$05,$27,$07,$89
-        bpl     LB9F8
+snd_data_BA11:  .byte   $3F,$05,$27,$07,$89
+        bpl     snd_data_B9F8
         ror     $66
         .byte   $80
         pla
         pla
         .byte   $80,$6A,$6A,$80,$6C,$6A
-        jmp     (LED06)
+        jmp     (data_ref_ED06)
 
         .byte   $09,$00,$06,$03,$30,$05,$27,$01
         .byte   $10,$9D,$9D
@@ -3875,13 +3979,13 @@ LBA11:  .byte   $3F,$05,$27,$07,$89
         .byte   $3F,$02,$00,$05,$23,$07,$AF,$10
         .byte   $06,$CD,$30,$8D,$30,$8C,$30
         sta     $CF06
-        bmi     LBA03
-        bmi     LBA03
-        bmi     LBA07
+        bmi     snd_data_BA03
+        bmi     snd_data_BA03
+        bmi     snd_data_BA07
         asl     $D1
-        bmi     LBA0D
-        bmi     LBA0D
-        bmi     LBA11
+        bmi     snd_data_BA0D
+        bmi     snd_data_BA0D
+        bmi     snd_data_BA11
         .byte   $D2,$30,$92,$30,$91,$30,$92,$30
         .byte   $8F,$30,$92,$30,$96,$06,$F4,$09
         .byte   $00,$06,$02,$40,$05,$23,$03,$3F
@@ -3903,17 +4007,17 @@ LBA11:  .byte   $3F,$05,$27,$07,$89
         .byte   $80,$00,$0F,$00,$00,$00,$00,$F8
         .byte   $BA,$13,$BB,$22,$BB,$00,$05,$03
         .byte   $30,$05,$23,$01,$10,$8D,$80
-        lda     L6D80,x
-        adc     L8DBD
+        lda     data_ref_6D80,x
+        adc     snd_data_8DBD
         .byte   $80,$BD,$6D,$6D,$6D,$6D,$BD,$04
         .byte   $00,$FE,$BA,$00,$05,$03,$3F,$07
         .byte   $82,$30,$01,$FF
         ldy     #$AB
         .byte   $04,$00,$1C,$BB
-        bvc     LBB2E
+        bvc     snd_data_BB2E
         .byte   $02,$00,$03,$3F,$83,$8A,$00,$06
         .byte   $03,$3F
-LBB2E:  .byte   $80,$0A,$80,$35,$00,$09,$02,$80
+snd_data_BB2E:  .byte   $80,$0A,$80,$35,$00,$09,$02,$80
         .byte   $01,$FF,$80,$05,$03,$3F,$8F,$FF
         .byte   $00,$09,$03,$3A,$80,$05,$03,$3A
         .byte   $01,$00,$8F,$FF,$00,$09,$03,$36
@@ -3927,28 +4031,28 @@ LBB2E:  .byte   $80,$0A,$80,$35,$00,$09,$02,$80
         .byte   $80,$64,$01,$15,$80,$C9,$01,$15
         .byte   $82,$FA,$00,$3A,$02,$00,$80,$08
         .byte   $06
-        bmi     LBB9A
+        bmi     snd_data_BB9A
         .byte   $02,$00,$03,$3F,$81,$AB,$00,$03
         .byte   $02,$80
-LBB9A:  .byte   $03,$3F,$80
-LBB9D:  .byte   $0A,$04,$01,$90,$BB,$03,$38,$02
+snd_data_BB9A:  .byte   $03,$3F,$80
+snd_data_BB9D:  .byte   $0A,$04,$01,$90,$BB,$03,$38,$02
         .byte   $C0,$01,$FF,$80,$3F,$00,$10,$02
         .byte   $80,$05,$00,$00,$84,$01,$80,$07
         .byte   $06
-        bmi     LBBBA
+        bmi     snd_data_BBBA
         brk
         .byte   $10
-LBBBA:  .byte   $02,$40,$03,$3F,$05,$02,$44,$80
+snd_data_BBBA:  .byte   $02,$40,$03,$3F,$05,$02,$44,$80
         .byte   $00,$01,$E0,$81,$0D,$06
-        bvc     LBBCC
+        bvc     snd_data_BBCC
         brk
         .byte   $08
-LBBCC:  .byte   $02,$40,$03,$3F,$01,$0F,$80,$64
+snd_data_BBCC:  .byte   $02,$40,$03,$3F,$01,$0F,$80,$64
         .byte   $06
-        bne     LBBE1
+        bne     snd_data_BBE1
         .byte   $02,$C0,$03,$3F,$05,$02,$A3,$80
         .byte   $07,$01
-LBBE1:  .byte   $5F,$80,$71,$00,$05,$05,$01,$43
+snd_data_BBE1:  .byte   $5F,$80,$71,$00,$05,$05,$01,$43
         .byte   $80,$07,$01,$5F,$03,$3F,$80,$0A
         .byte   $03,$38,$80,$64,$00,$0D,$05,$01
         .byte   $43,$80,$07,$01,$F1,$02,$80,$80
@@ -3971,10 +4075,10 @@ LBBE1:  .byte   $5F,$80,$71,$00,$05,$05,$01,$43
         .byte   $04,$02,$40,$01,$8B,$03,$3F,$05
         .byte   $01,$46,$82,$01,$80,$3F,$04,$01
         .byte   $4E,$BC,$06
-LBC62:  beq     LBC6F
+snd_data_BC62:  beq     snd_data_BC6F
         .byte   $03,$3F,$81,$AB,$02,$C0,$01,$F2
         .byte   $03,$3F,$87
-LBC6F:  .byte   $F2,$00,$1F,$03,$3F,$02,$80,$80
+snd_data_BC6F:  .byte   $F2,$00,$1F,$03,$3F,$02,$80,$80
         .byte   $04,$04,$0D,$64,$BC,$01,$01,$80
         .byte   $11,$02,$00,$01,$01,$80,$15,$00
         .byte   $7F,$02,$80,$03,$34,$80,$0A,$8F
@@ -3994,10 +4098,10 @@ LBC6F:  .byte   $F2,$00,$1F,$03,$3F,$02,$80,$80
         .byte   $09,$06,$80,$06,$03,$3F,$01,$81
         .byte   $80,$1E,$00,$04,$03,$3F,$80,$0F
         .byte   $06
-        bvs     LBD0C
+        bvs     snd_data_BD0C
         .byte   $02,$80,$03,$3F,$01,$EF,$80,$38
         .byte   $00,$04
-LBD0C:  .byte   $02,$80,$03,$3F,$01,$FF,$80,$08
+snd_data_BD0C:  .byte   $02,$80,$03,$3F,$01,$FF,$80,$08
         .byte   $01,$F9,$80,$25,$00,$04,$80,$05
         .byte   $01,$EF,$80,$38,$00,$04,$80,$0A
         .byte   $06
@@ -4012,10 +4116,10 @@ LBD0C:  .byte   $02,$80,$03,$3F,$01,$FF,$80,$08
         .byte   $35,$80,$05,$01,$F0,$80,$4D,$00
         ora     $03
         .byte   $33,$80,$05,$06
-        bmi     LBD69
+        bmi     snd_data_BD69
         .byte   $02,$00,$03,$37,$01,$FF,$80,$8E
         .byte   $00,$02
-LBD69:  .byte   $03,$3C,$80,$03,$03,$38,$80,$47
+snd_data_BD69:  .byte   $03,$3C,$80,$03,$03,$38,$80,$47
         .byte   $00,$06,$03,$3F,$80,$04,$06
         cpx     #$02
         brk
@@ -4029,35 +4133,35 @@ LBD69:  .byte   $03,$3C,$80,$03,$03,$38,$80,$47
         .byte   $02,$01,$B1,$80,$B3,$00,$06,$02
         .byte   $80,$05,$03,$85,$81,$02,$80,$09
         .byte   $04,$1E,$9A,$BD,$06
-        bmi     LBDC3
+        bmi     snd_data_BDC3
         .byte   $02,$40,$03,$3F,$01,$F6,$80,$6A
         .byte   $00,$03
-LBDC3:  .byte   $03,$34,$80,$08,$04,$02,$B9,$BD
+snd_data_BDC3:  .byte   $03,$34,$80,$08,$04,$02,$B9,$BD
         .byte   $06
-        bmi     LBDD8
+        bmi     snd_data_BDD8
         .byte   $02,$40,$03,$3F,$01,$F6,$80,$64
         .byte   $00,$03
-LBDD8:  .byte   $03,$38,$80,$0A,$04,$02,$CE,$BD
+snd_data_BDD8:  .byte   $03,$38,$80,$0A,$04,$02,$CE,$BD
         .byte   $06
-        bmi     LBDED
+        bmi     snd_data_BDED
         .byte   $02,$40,$03,$3F,$01,$F1,$80,$5F
         .byte   $00,$03
-LBDED:  .byte   $03,$38,$80,$0E,$04,$03,$E3,$BD
+snd_data_BDED:  .byte   $03,$38,$80,$0E,$04,$03,$E3,$BD
         .byte   $06
-        bmi     LBE02
+        bmi     snd_data_BE02
         .byte   $02,$C0,$03,$3F,$86,$4E,$00,$03
         .byte   $02,$80
-LBE02:  .byte   $03,$3F,$80,$0B,$01,$02,$86,$4E
+snd_data_BE02:  .byte   $03,$3F,$80,$0B,$01,$02,$86,$4E
         .byte   $00,$04,$02,$00,$80,$0F,$04,$0A
         .byte   $06,$BE,$06,$60,$0E,$02,$C0,$01
         .byte   $B1,$03,$3F,$05,$02,$A7,$82,$05
         .byte   $81,$FC,$01,$81,$03,$81,$81,$AB
         .byte   $00,$04,$02,$80,$80,$0D,$04,$01
         .byte   $17,$BE,$06
-        beq     LBE3A
+        beq     snd_data_BE3A
         ora     ($C1,x)
         .byte   $03
-LBE3A:  .byte   $3F,$80,$1A,$00,$03,$01,$C1,$03
+snd_data_BE3A:  .byte   $3F,$80,$1A,$00,$03,$01,$C1,$03
         .byte   $3F,$80,$1E,$04,$01,$37,$BE,$02
         .byte   $80,$03,$3F,$81,$AB,$00,$08,$03
         .byte   $3F,$80,$F0,$03,$3C,$81,$AB,$00
@@ -4067,7 +4171,7 @@ LBE3A:  .byte   $3F,$80,$1A,$00,$03,$01,$C1,$03
         .byte   $F0,$03,$34,$81,$AB,$00,$08,$03
         .byte   $34,$80,$F0,$03,$32,$81,$AB,$00
         .byte   $08,$03,$33,$80,$F0,$06
-LBE88:  .byte   $80,$0A,$01,$60,$05,$01
+snd_data_BE88:  .byte   $80,$0A,$01,$60,$05,$01
         and     ($82,x)
         ora     $03
         and     $FC81,y
@@ -4088,25 +4192,25 @@ LBE88:  .byte   $80,$0A,$01,$60,$05,$01
         .byte   $3F,$00,$08,$03,$36,$80,$3F,$00
         .byte   $08,$03,$34,$80,$3F,$00,$08,$03
         .byte   $33,$80,$3C,$06
-        bne     LBEF6
+        bne     snd_data_BEF6
         brk
-LBEF6:  .byte   $03,$02,$80,$01,$C1,$03,$3F,$80
+snd_data_BEF6:  .byte   $03,$02,$80,$01,$C1,$03,$3F,$80
         .byte   $1F,$04,$01,$F5,$BE,$00,$08,$01
         .byte   $F8,$03,$3F,$80,$3F,$00,$08,$03
         .byte   $3C,$80,$3F,$00,$08,$03,$3A,$80
         .byte   $3F,$00,$08,$03,$36,$80,$3F,$00
         .byte   $08,$03,$34,$80,$3F,$00,$08,$03
         .byte   $33,$80,$3F,$06
-LBF2A:  .byte   $40,$0A,$02,$00,$01,$F1,$03,$3E
+snd_data_BF2A:  .byte   $40,$0A,$02,$00,$01,$F1,$03,$3E
         .byte   $81,$7D,$00,$1D,$03,$3A,$80,$06
         .byte   $06
         cpx     #$08
         brk
         .byte   $04,$03,$36,$80,$04,$04,$02,$3D
         .byte   $BF,$06
-        beq     LBF4D
+        beq     snd_data_BF4D
         .byte   $02,$80,$01
-LBF4D:  .byte   $2F,$03,$3F,$80,$35,$00,$10,$02
+snd_data_BF4D:  .byte   $2F,$03,$3F,$80,$35,$00,$10,$02
         .byte   $00,$01,$2F,$03,$3F,$80,$3C,$03
         .byte   $3C,$80,$35,$00,$10,$03,$3C,$80
         .byte   $3C,$03,$39,$80,$35,$00,$10,$03
