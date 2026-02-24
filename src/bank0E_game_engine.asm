@@ -4332,11 +4332,20 @@ boss_check_physics:  jsr     apply_entity_physics_alt
         jsr     spawn_entity_from_parent
 boss_misc_rts:  rts
 
-boss_random_timer_table:  .byte   $12,$1F,$1F,$3D,$AD,$57,$03,$C9 ; random timer values for boss AI
-        .byte   $0F,$F0,$37,$A9,$23,$20,$10,$F0
-        .byte   $90,$30,$A9,$26,$20,$10,$F0,$90
-        .byte   $29,$BD,$E0,$04,$D0,$33,$BD,$20
-        .byte   $06
+boss_random_timer_table:  .byte   $12,$1F,$1F,$3D             ; random timer values for boss AI
+boss_palette_check:
+        lda     $0357
+        cmp     #$0F
+        beq     boss_palette_check_done
+        lda     #$23
+        jsr     find_entity_by_type
+        bcc     boss_palette_check_done
+        lda     #$26
+        jsr     find_entity_by_type
+        bcc     boss_palette_check_done
+        lda     $04E0,x
+        bne     boss_palette_flash_dec
+        lda     $0620,x
 
 ; =============================================================================
 ; boss_palette_flash -- Boss Palette Flash — cycle palette during death/hit animation ($A577)
@@ -4359,6 +4368,7 @@ boss_palette_flash_loop:  lda     boss_palette_flash_data,x
         inc     $0620,x
         lda     $0620,x
         cmp     #$04
+boss_palette_check_done:
         bne     boss_palette_flash_timer
         lsr     $0420,x
         lda     #$FF
@@ -4380,9 +4390,15 @@ boss_palette_flash_dec:  dec     $04E0,x
         eor     #$03
         jmp     boss_palette_flash
 
-        .byte   $BD,$E0,$04,$D0,$DD,$38,$BD,$20
-        .byte   $06,$49,$03,$18,$69,$03,$4C,$77
-        .byte   $A5
+boss_palette_flash_alt:
+        lda     $04E0,x
+        bne     boss_palette_flash_dec
+        sec
+        lda     $0620,x
+        eor     #$03
+        clc
+        adc     #$03
+        jmp     boss_palette_flash
 boss_palette_flash_data:  .byte   $0F,$2C,$10,$1C,$0F,$37,$27,$07 ; palette flash color cycle data
         .byte   $0F,$28,$16,$07,$0F,$1C,$00,$0C
         .byte   $0F,$37,$27,$08,$0F,$17,$06,$08
@@ -4393,8 +4409,11 @@ boss_palette_flash_data:  .byte   $0F,$2C,$10,$1C,$0F,$37,$27,$07 ; palette flas
         .byte   $0F,$07,$07,$08,$0F,$26,$16,$06
         .byte   $0F,$37,$27,$08,$0F,$17,$06,$08
         .byte   $0F,$36,$26,$16,$0F,$37,$27,$07
-        .byte   $0F,$27,$16,$07,$BD,$10,$01,$D0
-        .byte   $28,$FE,$E0,$04
+        .byte   $0F,$27,$16,$07
+wily_machine_phase_check:
+        lda     $0110,x
+        bne     wily_machine_ai_entry
+        inc     $04E0,x
         lda     $04E0,x
         cmp     #$3E
         bne     wily_machine_physics
@@ -4416,6 +4435,7 @@ boss_palette_flash_data:  .byte   $0F,$2C,$10,$1C,$0F,$37,$27,$07 ; palette flas
 wily_machine_physics:  jsr     apply_entity_physics_alt
         rts
 
+wily_machine_ai_entry:
         ldy     $0110,x
         cpy     #$FF
         beq     wily_capsule_collision
@@ -4485,20 +4505,44 @@ wily_capsule_physics:  jsr     apply_entity_physics
         sta     $0650,y
 wily_capsule_rts:  rts
 
-        .byte   $20,$BA,$EE,$90,$16,$BC,$10,$01
-        .byte   $C0,$FF,$F0,$0F,$A9,$00,$99,$00
-        .byte   $06,$A9,$A3,$99,$20,$06,$A9,$FF
-        .byte   $99,$10,$01,$60,$BD,$E0,$04,$D0
-        .byte   $15,$A9,$02,$85,$01,$A9,$2C,$20
-        .byte   $CF,$96,$B0,$05,$A9,$2C,$20,$59
-        .byte   $F1
+wily_capsule_cleanup:
+        jsr     apply_entity_physics
+        bcc     wily_capsule_cleanup_rts
+        ldy     $0110,x
+        cpy     #$FF
+        beq     wily_capsule_cleanup_rts
+        lda     #$00
+        sta     $0600,y
+        lda     #$A3
+        sta     $0620,y
+        lda     #$FF
+        sta     $0110,y
+wily_capsule_cleanup_rts:
+        rts
+
+wily_capsule_spawn_child:
+        lda     $04E0,x
+        bne     wily_capsule_dec_timer
+        lda     #$02
+        sta     $01
+        lda     #$2C
+        jsr     find_entity_count_check
+        bcs     wily_capsule_set_timer
+        lda     #$2C
+        jsr     spawn_entity_from_parent
+wily_capsule_set_timer:
         lda     #$7D
         sta     $04E0,x
+wily_capsule_dec_timer:
         dec     $04E0,x
         jsr     apply_entity_physics_alt
         rts
 
-        .byte   $BD,$10,$01,$D0,$03,$FE,$10,$01
+angler_phase_init:
+        lda     $0110,x
+        bne     angler_phase_check
+        inc     $0110,x
+angler_phase_check:
         lda     $0110,x
         cmp     #$02
         bcs     angler_check_bite_state
@@ -4567,7 +4611,12 @@ angler_dec_timer:  dec     $04E0,x
 angler_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $A9,$08,$D0,$02,$A9,$01
+entity_init_timer_long:
+        lda     #$08
+        bne     entity_store_timer
+entity_init_timer_short:
+        lda     #$01
+entity_store_timer:
         sta     $04E0,x
         lda     $0460,x
         and     $0600,x
@@ -4578,8 +4627,13 @@ angler_physics:  jsr     apply_entity_physics
         jsr     apply_simple_physics
         rts
 
-        .byte   $BD,$10,$01,$D0,$1F,$20,$EE,$EF
-        .byte   $A5,$00,$C9,$28,$B0,$12
+mecha_dragon_distance_check:
+        lda     $0110,x
+        bne     mecha_dragon_tile_check
+        jsr     entity_face_player
+        lda     $00
+        cmp     #$28
+        bcs     mecha_dragon_apply_physics
         lda     #$87
         sta     $0420,x
         lda     #$FF
@@ -4587,9 +4641,11 @@ angler_physics:  jsr     apply_entity_physics
         lda     #$C0
         sta     $0660,x
         inc     $0110,x
+mecha_dragon_apply_physics:
         jsr     apply_entity_physics_alt
         rts
 
+mecha_dragon_tile_check:
         lda     #$08
         sta     $01
         sta     $02
@@ -4686,9 +4742,15 @@ mecha_dragon_check_state:  lda     $0110,x
 mecha_dragon_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$10,$01,$D0,$0C,$A9,$32,$20
-        .byte   $59,$F1,$8A,$99,$F0,$04,$FE,$10
-        .byte   $01
+mecha_dragon_spawn_child:
+        lda     $0110,x
+        bne     mecha_dragon_check_walk
+        lda     #$32
+        jsr     spawn_entity_from_parent
+        txa
+        sta     $04F0,y
+        inc     $0110,x
+mecha_dragon_check_walk:
         lda     $0420,x
         and     #$08
         beq     mecha_dragon_walk
@@ -4794,7 +4856,7 @@ guts_tank_track_parent:  lda     $0460,y
         jsr     apply_entity_physics_alt
         rts
 
-        .byte   $BC,$10,$01
+        ldy     $0110,x
         bpl     picopico_check_timer
         lda     #$07
         sta     $01
@@ -4979,14 +5041,28 @@ buebeam_physics:  jsr     apply_entity_physics
 ; matasaburo_wind_push -- Enemy AI: Matasaburo (Fan Fiend) — wind push effect ($AB89)
 ; Entity type $36. Air Man stage only. Pushes player backward with wind.
 ; =============================================================================
-        .byte   $38,$A5,$2D,$E5,$2E,$B0,$10,$A9
-        .byte   $01,$85,$40,$A9,$00,$85,$AF,$A9
-        .byte   $A3,$85,$4F,$A9,$00,$85,$50
+matasaburo_wind_push:
+        sec
+        lda     $2D
+        sbc     $2E
+        bcs     matasaburo_apply_physics
+        lda     #$01
+        sta     $40
+        lda     #$00
+        sta     $AF
+        lda     #$A3
+        sta     $4F
+        lda     #$00
+        sta     $50
+matasaburo_apply_physics:
         jsr     apply_entity_physics_alt
         rts
 
 ; Entity AI subroutine — collision check, entity $37 parameter ($ABA4)
-        .byte   $BD,$20,$06,$D0,$08,$A9,$37
+boobeam_guard_check:
+        lda     $0620,x
+        bne     boobeam_init
+        lda     #$37
         jsr     check_entity_collision_scan
         bcc     boobeam_init
         rts
@@ -5035,12 +5111,22 @@ boobeam_dec_timer:  ldx     $2B
 
 boobeam_x_offset_table:  .byte   $F8,$08 ; Boobeam turret X offset per slot
 boobeam_dir_flags_table:  .byte   $83,$C3 ; Boobeam shot direction flags
+entity_shift_flags:
         lsr     $0420,x
         rts
 
-        .byte   $BD,$10,$01,$D0,$10,$A9,$3A,$20
-        .byte   $59,$F1,$B0,$F0,$8A,$99,$20,$01
-        .byte   $C8,$98,$9D,$10,$01
+capsule_missile_spawn_child:
+        lda     $0110,x
+        bne     capsule_missile_check_timer
+        lda     #$3A
+        jsr     spawn_entity_from_parent
+        bcs     entity_shift_flags
+        txa
+        sta     $0120,y
+        iny
+        tya
+        sta     $0110,x
+capsule_missile_check_timer:
         lda     $04E0,x
         bne     capsule_missile_anim
         lda     $0420,x
@@ -5086,9 +5172,19 @@ capsule_missile_physics:  jsr     apply_entity_physics
         sta     $0430,y
 capsule_missile_rts:  rts
 
-        .byte   $A9,$37,$85,$00,$4C,$52,$96,$BD
-        .byte   $20,$04,$29,$04,$D0,$04,$20,$B3
-        .byte   $EF,$60
+pipi_destroy_scan:
+        lda     #$37
+        sta     $00
+        jmp     enemy_destroy_scan
+
+boss_explode_flag_check:
+        lda     $0420,x
+        and     #$04
+        bne     boss_explode_tile_check
+        jsr     apply_entity_physics_alt
+        rts
+
+boss_explode_tile_check:
         lda     #$07
         sta     $01
         sta     $02
