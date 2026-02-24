@@ -4249,6 +4249,7 @@ boss_telly_dec_timer:
         jsr     apply_entity_physics_alt
         rts
 
+drop_boss_timer_entry:
         lda     $04E0,x
         bne     boss_spawn_dec_timer
         lda     #$00
@@ -5515,8 +5516,12 @@ turret_dec_timer:  dec     $04E0,x
         jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$10,$01,$C9,$02,$D0,$03,$4C
-        .byte   $A6,$A4
+drop_boss_phase_check:
+        lda     $0110,x
+        cmp     #$02
+        bne     drop_boss_active
+        jmp     drop_boss_timer_entry
+drop_boss_active:
         lda     $04E0,x
         bne     drop_boss_dec_timer
         lda     $0110,x
@@ -6018,9 +6023,15 @@ turret_boss_dec_timer:  dec     $04E0,x
         jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$E0,$04,$D0,$2E,$A9,$20,$9D
-        .byte   $E0,$04,$A9,$03,$85,$01,$A9,$51
-        .byte   $20,$CF,$96
+turret_boss_spawn_check:
+        lda     $04E0,x
+        bne     turret_boss_physics
+        lda     #$20
+        sta     $04E0,x
+        lda     #$03
+        sta     $01
+        lda     #$51
+        jsr     find_entity_count_check
         bcs     turret_boss_physics
         jsr     entity_face_player
         lda     $00
@@ -6039,11 +6050,23 @@ turret_boss_physics:  dec     $04E0,x
         jsr     apply_entity_physics_alt
         rts
 
-        .byte   $BD,$10,$01,$D0,$3B,$DE,$E0,$04
-        .byte   $D0,$5A,$A9,$87,$9D,$20,$04,$20
-        .byte   $EE,$EF,$A5,$4A,$29,$1F,$85,$01
-        .byte   $38,$A5,$00,$E5,$01,$B0,$02,$A9
-        .byte   $00
+jump_boss_init:
+        lda     $0110,x
+        bne     jump_boss_phase_dispatch
+        dec     $04E0,x
+        bne     jump_boss_check_anim
+        lda     #$87
+        sta     $0420,x
+        jsr     entity_face_player
+        lda     $4A
+        and     #$1F
+        sta     $01
+        sec
+        lda     $00
+        sbc     $01
+        bcs     jump_boss_store_dist
+        lda     #$00
+jump_boss_store_dist:
         sta     $00
         lda     #$00
         asl     $00
@@ -6059,6 +6082,7 @@ turret_boss_physics:  dec     $04E0,x
         sta     $0640,x
         inc     $0110,x
         bne     jump_boss_check_anim
+jump_boss_phase_dispatch:
         cmp     #$02
         bcs     jump_boss_wall_timer
         lda     $0640,x
@@ -6095,13 +6119,24 @@ jump_boss_wall_timer:  lda     $04E0,x
 jump_boss_wall_physics:  jsr     apply_entity_physics_alt
         rts
 
-        .byte   $DE,$E0,$04,$F0,$04,$20,$B3,$EF
-        .byte   $60
+gravity_boss_dec_timer:
+        dec     $04E0,x
+        beq     gravity_boss_deactivate
+        jsr     apply_entity_physics_alt
+        rts
+gravity_boss_deactivate:
         lsr     $0420,x
         rts
 
-        .byte   $A9,$7D,$D0,$06,$A9,$BB,$D0,$02
-        .byte   $A9,$FA
+despawn_timer_7D:
+        lda     #$7D
+        bne     despawn_timer_store
+despawn_timer_BB:
+        lda     #$BB
+        bne     despawn_timer_store
+despawn_timer_FA:
+        lda     #$FA
+despawn_timer_store:
         sta     $00
         lda     $0110,x
         bne     despawn_timer_phase_1
@@ -6148,10 +6183,24 @@ despawn_timer_dec:  dec     $0160,x
         jsr     apply_entity_physics_alt
         rts
 
-        .byte   $A5,$2A,$C9,$0C,$F0,$33,$5E,$20
-        .byte   $04,$A9,$FF,$9D,$F0,$00,$A5,$2A
-        .byte   $C9,$0A,$F0,$19,$38,$BD,$40,$04
-        .byte   $E9,$0A,$0A,$0A,$0A,$A8,$A2,$00
+stage_palette_init:
+        lda     $2A
+        cmp     #$0C
+        beq     stage_palette_check_boss
+        lsr     $0420,x
+        lda     #$FF
+        sta     a:$00F0,x
+        lda     $2A
+        cmp     #$0A
+        beq     stage_palette_clear
+        sec
+        lda     $0440,x
+        sbc     #$0A
+        asl     a
+        asl     a
+        asl     a
+        tay
+        ldx     #$00
 stage_palette_copy_loop:  lda     stage_palette_entries,y
         sta     $035E,x
         iny
@@ -6160,12 +6209,14 @@ stage_palette_copy_loop:  lda     stage_palette_entries,y
         bne     stage_palette_copy_loop
         rts
 
+stage_palette_clear:
         lda     #$0F
         sta     $0363
         sta     $0364
         sta     $0365
         rts
 
+stage_palette_check_boss:
         lda     $AA
         beq     stage_boss_jmp
         jsr     apply_entity_physics_alt
@@ -6338,8 +6389,14 @@ beam_boss_check_anim:  lda     $06A0,x
 beam_boss_apply_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$E0,$04,$D0,$09,$A9,$00,$9D
-        .byte   $80,$06,$20,$BA,$EE,$60
+gravity_boss_timer_check:
+        lda     $04E0,x
+        bne     gravity_boss_init
+        lda     #$00
+        sta     $0680,x
+        jsr     apply_entity_physics
+        rts
+gravity_boss_init:
         lda     $06A0,x
         ora     $0680,x
         bne     gravity_boss_accel
@@ -6381,7 +6438,11 @@ shield_boss_rts:  rts
 shield_boss_physics:  jsr     apply_entity_physics_alt
         rts
 
-        .byte   $BD,$E0,$04,$10,$01,$60
+wily4_timer_check:
+        lda     $04E0,x
+        bpl     wily4_timer_positive
+        rts
+wily4_timer_positive:
         bne     wily4_boss_active
         lda     $15
         sta     $14
@@ -6514,8 +6575,7 @@ wily4_shared_set_flags:  lda     #$8B
         sta     $0420,x
         rts
 
-        .byte   $A9
-        brk
+        lda     #$00
         sta     $06A0,x
         lda     $05A7
         and     #$40
@@ -6525,8 +6585,12 @@ wily4_facing_setup:  lda     #$00
         sta     $0680,x
         jmp     wily4_enemy_shared_ai
 
-        .byte   $A5,$2A,$C9,$08,$F0,$03,$4C,$7A
-        .byte   $B9
+wily4_stage_check:
+        lda     $2A
+        cmp     #$08
+        beq     wily4_stage_physics
+        jmp     wily4_enemy_shared_ai
+wily4_stage_physics:
         jsr     apply_entity_physics
         lda     $04A0,x
         cmp     #$80
@@ -6793,8 +6857,12 @@ wily_final_bank_table:  .byte   $D0,$2F,$BD,$A0,$06,$C9,$05,$D0 ; Wily final bos
 wily_final_check_anim:  jsr     apply_entity_physics_alt
         rts
 
-        .byte   $BD,$A0,$06,$F0,$04,$20,$B3,$EF
-        .byte   $60
+walker_ai_check:
+        lda     $06A0,x
+        beq     walker_ai_init
+        jsr     apply_entity_physics_alt
+        rts
+walker_ai_init:
         lda     #$00
         sta     $0680,x
         lda     #$03
