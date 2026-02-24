@@ -11,6 +11,9 @@ mm2.nes
 __pycache__/
 *.pyc
 
+# Tools (annotation/extraction scripts, not part of the build)
+tools/
+
 # Editor
 *.swp
 *.swo

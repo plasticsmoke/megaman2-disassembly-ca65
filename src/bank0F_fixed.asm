@@ -237,11 +237,22 @@ bank_switch_enqueue:  ldy     $66       ; Enqueue a bank switch request (A = ban
         inc     $66
 bank_switch_enqueue_rts:  rts
 
-        .byte   $8D,$FF,$9F,$4A,$8D,$FF,$9F,$4A
-        .byte   $8D,$FF,$9F,$4A,$8D,$FF,$9F,$4A
-        .byte   $8D,$FF,$9F,$60,$A9,$0D,$20,$00
-        .byte   $C0,$20,$06,$80,$A9,$0E,$20,$00
-        .byte   $C0,$60
+        sta     $9FFF
+        lsr     a
+        sta     $9FFF
+        lsr     a
+        sta     $9FFF
+        lsr     a
+        sta     $9FFF
+        lsr     a
+        sta     $9FFF
+        rts
+        lda     #$0D
+        jsr     bank_switch
+        jsr     $8006
+        lda     #$0E
+        jsr     bank_switch
+        rts
 ; =============================================================================
 ; wait_for_vblank — Wait for VBLANK, read controllers, detect new presses ($C07F)
 ; =============================================================================
@@ -275,8 +286,13 @@ wait_vblank_loop:
         rts
 
 ; ─── (unreachable code: duplicate wait-for-vblank, returns to bank $0D) ─────
-        .byte   $A5,$23,$85,$25,$A5,$24,$85,$26
-        .byte   $20,$27,$C4,$A9,$00,$85,$1D
+        lda     $23
+        sta     $25
+        lda     $24
+        sta     $26
+        jsr     palette_anim_update
+        lda     #$00
+        sta     $1D
 wait_vblank_loop_0D:
         lda     $1D                     ; wait for NMI
         beq     wait_vblank_loop_0D
@@ -517,9 +533,14 @@ reset_sound_state:  lda     #$00
         sta     $B1
         rts
 
-        .byte   $A9,$00,$85,$FD,$A9,$02,$8D,$54
-        .byte   $03,$A9,$04,$8D,$55,$03,$A9,$BB
-        .byte   $85,$FD
+        lda     #$00
+        sta     $FD
+        lda     #$02
+        sta     $0354
+        lda     #$04
+        sta     $0355
+        lda     #$BB
+        sta     $FD
 nametable_init_loop:  jsr     clear_entities_and_run
         dec     $FD
         bne     nametable_init_loop
@@ -705,9 +726,17 @@ palette_anim_copy_loop:  lda     $0376,x ; copy from palette animation frames
         inc     $3A
 palette_anim_done:  rts
 
-        .byte   $A5,$2A,$29,$07,$20,$00,$C0,$A9
-        .byte   $00,$85,$0A,$A9,$BC,$85,$0B,$A5
-        .byte   $2A,$29,$08,$F0,$02,$E6,$0B
+        lda     $2A
+        and     #$07
+        jsr     bank_switch
+        lda     #$00
+        sta     $0A
+        lda     #$BC
+        sta     $0B
+        lda     $2A
+        and     #$08
+        beq     *+4
+        inc     $0B
         ldy     #$00
         lda     ($0A),y
         sta     $00
@@ -757,16 +786,40 @@ chr_upload_palette_copy:  lda     ($0A),y
         jsr     bank_switch
         rts
 
-        .byte   $A5,$2A,$29,$07,$20,$00,$C0,$A4
-        .byte   $B0,$B9,$06,$BB,$85,$20,$8D,$40
-        .byte   $04,$B9,$0C,$BB,$85,$48,$85,$49
-        .byte   $B9,$12,$BB,$85,$4C,$85,$4D,$B9
-        .byte   $18,$BB,$85,$17,$B9,$1E,$BB,$85
-        .byte   $16,$B9,$24,$BB,$85,$19,$B9,$2A
-        .byte   $BB,$85,$18,$B9,$30,$BB,$85,$38
-        .byte   $B9,$36,$BB,$85,$14,$B9,$3C,$BB
-        .byte   $85,$15,$A6,$38,$20,$64,$CB,$98
-        .byte   $18,$69,$0B,$A8,$A2,$0C
+        lda     $2A
+        and     #$07
+        jsr     bank_switch
+        ldy     $B0
+        lda     $BB06,y
+        sta     $20
+        sta     $0440
+        lda     $BB0C,y
+        sta     $48
+        sta     $49
+        lda     $BB12,y
+        sta     $4C
+        sta     $4D
+        lda     $BB18,y
+        sta     $17
+        lda     $BB1E,y
+        sta     $16
+        lda     $BB24,y
+        sta     $19
+        lda     $BB2A,y
+        sta     $18
+        lda     $BB30,y
+        sta     $38
+        lda     $BB36,y
+        sta     $14
+        lda     $BB3C,y
+        sta     $15
+        ldx     $38
+        jsr     scroll_col_load_palette
+        tya
+        clc
+        adc     #$0B
+        tay
+        ldx     #$0C
 chr_upload_sound_bank:  lda     $B460,y
         pha
         dey
@@ -798,10 +851,19 @@ chr_sound_byte_loop:  lda     (jump_ptr),y
         jsr     banked_0E_wily_check
 chr_upload_wily_check:  rts
 
-        .byte   $A9,$0D,$20,$00,$C0,$20,$09,$80
-        .byte   $A9,$0E,$20,$00,$C0,$60,$A9,$0D
-        .byte   $20,$00,$C0,$20,$00,$80,$A9,$0E
-        .byte   $20,$00,$C0,$60,$A2,$0F
+        lda     #$0D
+        jsr     bank_switch
+        jsr     $8009
+        lda     #$0E
+        jsr     bank_switch
+        rts
+        lda     #$0D
+        jsr     bank_switch
+        jsr     $8000
+        lda     #$0E
+        jsr     bank_switch
+        rts
+        ldx     #$0F
 
 ; =============================================================================
 ; find_active_entity_slot — Scan entity slots for an unused one ($C575)
@@ -868,8 +930,11 @@ process_sound_jump_intro:  jmp     boss_intro_sequence ; start boss intro
 
 process_sound_done:  rts
 
-        .byte   $48,$AD,$A7,$05,$85,$09,$AD,$A9
-        .byte   $05,$85,$08
+        pha
+        lda     $05A7
+        sta     $09
+        lda     $05A9
+        sta     $08
         pla
         jsr     column_copy_to_buffer
         clc
@@ -890,8 +955,10 @@ process_sound_done:  rts
         jsr     bank_switch
         rts
 
-        .byte   $20,$00,$C0,$A9,$00,$85,$08,$A2
-        .byte   $04
+        jsr     bank_switch
+        lda     #$00
+        sta     $08
+        ldx     #$04
 chr_copy_ppu_loop:  lda     (jump_ptr),y
         sta     $2007
         iny
@@ -903,9 +970,16 @@ chr_copy_ppu_loop:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
-        .byte   $85,$00,$AA,$BD,$89,$C6,$85,$01
-        .byte   $BD,$90,$C6,$85,$02,$A9,$00,$85
-        .byte   $08,$8D,$06,$20,$8D,$06,$20
+        sta     $00
+        tax
+        lda     $C689,x
+        sta     $01
+        lda     $C690,x
+        sta     $02
+        lda     #$00
+        sta     $08
+        sta     $2006
+        sta     $2006
 chr_bank_load_ptr_lo:  .byte   $A6
 chr_bank_load_ptr_hi:  .byte   $02
         lda     chr_bank_src_addr_lo_tbl,x
@@ -966,7 +1040,9 @@ column_copy_loop:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
-        .byte   $A9,$01,$20,$00,$C0,$A2,$1F
+        lda     #$01
+        jsr     bank_switch
+        ldx     #$1F
 column_copy_from_ram:  lda     $9CD0,x
         sta     $03B8,x
         dex
@@ -981,7 +1057,9 @@ column_copy_from_ram:  lda     $9CD0,x
         jsr     bank_switch
         rts
 
-        .byte   $A9,$09,$20,$00,$C0,$A0,$1F
+        lda     #$09
+        jsr     bank_switch
+        ldy     #$1F
 column_copy_from_ptr:  lda     ($FE),y
         sta     $03B8,y
         dey
@@ -992,10 +1070,22 @@ column_copy_from_ptr:  lda     ($FE),y
         jsr     bank_switch
         rts
 
-        .byte   $A5,$FD,$85,$09,$A9,$00,$46,$09
-        .byte   $6A,$46,$09,$6A,$46,$09,$6A,$8D
-        .byte   $B7,$03,$85,$08,$A5,$FD,$C9,$08
-        .byte   $90,$05,$A5,$09,$4C,$83,$C7
+        lda     $FD
+        sta     $09
+        lda     #$00
+        lsr     $09
+        ror     a
+        lsr     $09
+        ror     a
+        lsr     $09
+        ror     a
+        sta     $03B7
+        sta     $08
+        lda     $FD
+        cmp     #$08
+        bcc     *+7
+        lda     $09
+        jmp     $C783
         lda     $09
         adc     #$09
         sta     $03B6
@@ -1016,11 +1106,22 @@ column_copy_from_bank:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
-        .byte   $A5,$2A,$29,$07,$20,$00,$C0,$B9
-        .byte   $00,$B4,$A8,$A9,$0E,$20,$00,$C0
-        .byte   $60,$A9,$C0,$8D,$20,$04,$A9,$80
-        .byte   $8D,$60,$04,$A9,$14,$8D,$A0,$04
-        .byte   $A9,$1A,$8D,$00,$04
+        lda     $2A
+        and     #$07
+        jsr     bank_switch
+        lda     $B400,y
+        tay
+        lda     #$0E
+        jsr     bank_switch
+        rts
+        lda     #$C0
+        sta     $0420
+        lda     #$80
+        sta     $0460
+        lda     #$14
+        sta     $04A0
+        lda     #$1A
+        sta     $0400
 boss_entrance_scroll:  lda     $2A
         and     #$07
         jsr     bank_switch
@@ -1145,8 +1246,12 @@ div16_next:  dey
         sta     $0E
         rts
 
-        .byte   $A6,$1B,$A0,$20,$A5,$09,$29,$01
-        .byte   $F0,$02,$A0,$24
+        ldx     $1B
+        ldy     #$20
+        lda     $09
+        and     #$01
+        beq     *+4
+        ldy     #$24
         sty     $0B
         lda     jump_ptr
         lsr     a
@@ -1177,8 +1282,12 @@ div16_next:  dey
         sta     $030C,x
         rts
 
-        .byte   $A6,$51,$A0,$08,$A5,$09,$29,$01
-        .byte   $F0,$02,$A0,$09
+        ldx     $51
+        ldy     #$08
+        lda     $09
+        and     #$01
+        beq     *+4
+        ldy     #$09
         sty     $0B
         lda     $0A
         and     #$F8
@@ -1197,8 +1306,16 @@ div16_next:  dey
         sta     $03B6,x
         rts
 
-        .byte   $48,$A5,$08,$48,$A6,$51,$A5,$0A
-        .byte   $29,$E0,$4A,$4A,$85,$0B,$06,$08
+        pha
+        lda     $08
+        pha
+        ldx     $51
+        lda     $0A
+        and     #$E0
+        lsr     a
+        lsr     a
+        sta     $0B
+        asl     $08
         rol     a
         asl     jump_ptr
         rol     a
@@ -1320,17 +1437,48 @@ metatile_set_base_nt:  sty     $0D
         jsr     bank_switch
         rts
 
-metatile_offset_table:  .byte   $00,$08,$02,$0A,$A5,$29,$48,$20
-        .byte   $6B,$C9,$68,$20,$00,$C0,$60,$A5
-        .byte   $2A,$29,$07,$20,$00,$C0,$A5,$39
-        .byte   $4A,$4A,$4A,$4A,$8D,$00,$03,$A5
-        .byte   $39,$0A,$0A,$0A,$48,$29,$18,$8D
-        .byte   $01,$03,$68,$0A,$29,$C0,$0D,$01
-        .byte   $03,$8D,$01,$03,$A5,$39,$29,$F8
-        .byte   $09,$C0,$8D,$13,$03,$A5,$39,$29
-        .byte   $03,$0A,$0D,$13,$03,$8D,$13,$03
-        .byte   $A2,$20,$A5,$20,$29,$01,$F0,$02
-        .byte   $A2,$24
+metatile_offset_table:  .byte   $00,$08,$02,$0A
+        lda     $29
+        pha
+        jsr     $C96B
+        pla
+        jsr     bank_switch
+        rts
+        lda     $2A
+        and     #$07
+        jsr     bank_switch
+        lda     $39
+        lsr     a
+        lsr     a
+        lsr     a
+        lsr     a
+        sta     $0300
+        lda     $39
+        asl     a
+        asl     a
+        asl     a
+        pha
+        and     #$18
+        sta     $0301
+        pla
+        asl     a
+        and     #$C0
+        ora     $0301
+        sta     $0301
+        lda     $39
+        and     #$F8
+        ora     #$C0
+        sta     $0313
+        lda     $39
+        and     #$03
+        asl     a
+        ora     $0313
+        sta     $0313
+        ldx     #$20
+        lda     $20
+        and     #$01
+        beq     *+4
+        ldx     #$24
         txa
         ora     $0300
         sta     $0300
@@ -1424,7 +1572,10 @@ metatile_attr_done:  lda     #$80
         jsr     bank_switch
         rts
 
-        .byte   $A5,$FD,$C9,$60,$90,$01,$60
+        lda     $FD
+        cmp     #$60
+        bcc     *+3
+        rts
         lda     $29
         pha
         lda     $FD
@@ -1485,7 +1636,8 @@ scroll_col_load_palette:  ldy     $B42C,x
         sta     $0375
         rts
 
-        .byte   $A2,$0F,$A0,$00
+        ldx     #$0F
+        ldy     #$00
 build_active_entity_list:  lda     $0430,x
         bpl     active_entity_next
         and     #$10
@@ -1595,11 +1747,14 @@ tile_lookup_done:  lda     #$0E         ; switch back to game engine
         jsr     bank_switch
         rts
 
-stage_collision_table:  .byte   $02,$03,$02,$03,$02,$00,$04,$03 ; tile collision types per stage
+stage_collision_table:  .byte   $02,$03,$02,$03,$02,$00,$04,$03
         .byte   $00,$03,$02,$07,$05,$06,$02,$03
         .byte   $02,$00,$02,$03,$04,$03,$02,$03
-        .byte   $00,$00,$00,$00,$20,$A2,$CB,$A9
-        .byte   $0B,$20,$00,$C0,$60
+        .byte   $00,$00,$00,$00
+        jsr     lookup_cached_tile
+        lda     #$0B
+        jsr     bank_switch
+        rts
 
 ; =============================================================================
 ; clear_oam_buffer — Fill OAM buffer with $F8 (hide all sprites) ($CC6C)
@@ -2454,7 +2609,12 @@ attr_special_merge:  and     $03D4
         sty     $54
         jmp     attr_update_done
 
-        .byte   $A5,$A9,$0A,$0A,$AA,$E8,$A0,$01
+        lda     $A9
+        asl     a
+        asl     a
+        tax
+        inx
+        ldy     #$01
 weapon_palette_copy_loop:  lda     weapon_palette_data,x
         sta     $0366,y
         iny
@@ -2606,10 +2766,10 @@ projectile_flags_tbl:  .byte   $81,$83,$83,$82,$87,$83,$83,$81 ; entity flags fo
         .byte   $82,$82,$82,$86,$81,$82,$80,$80
         .byte   $80,$80
 projectile_x_offset_tbl:  .byte   $10,$00
-        bpl     projectile_x_offset_2
-projectile_x_offset_2:  bpl     projectile_xvel_sub_2
-        bpl     projectile_x_offset_3
-projectile_x_offset_3:  brk
+        .byte   $10,$00
+projectile_x_offset_2:  .byte   $10,$10
+        .byte   $10,$00
+projectile_x_offset_3:  .byte   $00
         .byte   $20,$20,$00,$00,$00,$00,$00,$00
         .byte   $00
 projectile_xvel_sub_tbl:  .byte   $00,$00,$00,$00
@@ -2635,92 +2795,92 @@ contact_damage_range_x_tbl:  .byte   $0E,$12,$12,$12,$0A,$16,$2E,$0E ; hitbox X 
         .byte   $0C,$10,$10,$10,$08,$14,$2C,$0C
         .byte   $10,$14,$04,$2C,$08,$14,$0C,$0A
         .byte   $08,$1C,$1C
-        bit     $44
+        .byte   $24,$44
         .byte   $02,$04,$04,$04,$04,$04,$04,$04
         .byte   $04,$04,$04,$10,$14,$14,$14,$0C
         .byte   $18,$30,$10,$14,$18,$08,$30,$0C
         .byte   $18,$10,$0E,$0A,$20,$20,$28,$48
         .byte   $02
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
         .byte   $14,$18,$18,$18,$10,$1C,$34,$14
         .byte   $18,$1C,$0C,$34,$10,$1C,$14,$12
         .byte   $10,$24,$24,$2C,$4C,$02,$0C,$0C
         .byte   $0C,$0C,$0C,$0C,$0C,$0C,$0C,$0C
         .byte   $18,$1C,$1C,$1C,$14,$20,$38,$18
         .byte   $1C,$20
-        bpl     contact_range_y_data_6
+        .byte   $10,$38
         .byte   $14,$20,$18,$16,$14,$28,$28,$30
         .byte   $50,$02
-        bpl     contact_range_y_data_1
-        bpl     contact_range_y_data_2
-        bpl     contact_range_y_data_3
-        bpl     contact_range_y_data_4
-        bpl     contact_range_y_data_5
-contact_damage_range_y_tbl:  clc
+        .byte   $10,$10
+        .byte   $10,$10
+        .byte   $10,$10
+        .byte   $10,$10
+        .byte   $10,$10
+contact_damage_range_y_tbl:  .byte   $18
         .byte   $14,$10,$0C,$0C,$10,$28,$10
 contact_range_y_data_1:  .byte   $1E
-        clc
-contact_range_y_data_2:  plp
+        .byte   $18
+contact_range_y_data_2:  .byte   $28
         .byte   $30
 contact_range_y_data_3:  .byte   $14
         .byte   $24
 contact_range_y_data_4:  .byte   $0C
         .byte   $10
-contact_range_y_data_5:  clc
-        bpl     contact_range_y_data_8
-        sec
-        clc
-        clc
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
+contact_range_y_data_5:  .byte   $18
+        .byte   $10,$20
+        .byte   $38
+        .byte   $18
+        .byte   $18
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
         .byte   $14
-        bpl     contact_range_y_data_7
-        php
-contact_range_y_data_6:  php
+        .byte   $10,$0C
+        .byte   $08
+contact_range_y_data_6:  .byte   $08
         .byte   $0C,$24,$0C,$1A,$14,$24,$2C,$10
         .byte   $20,$08
 contact_range_y_data_7:  .byte   $0C,$14,$0C,$1C
 contact_range_y_data_8:  .byte   $34,$14,$14,$04,$04,$04,$04,$04
         .byte   $04,$04,$04,$04,$04,$18,$14,$10
         .byte   $0C,$0C
-        bpl     contact_range_y_data_12
-        bpl     contact_range_y_data_10
-        clc
-        plp
-        bmi     contact_range_y_data_9
-        bit     $0C
-        bpl     contact_range_y_data_11
-        bpl     contact_range_y_data_13
-        sec
-        clc
-        clc
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
-        php
+        .byte   $10,$28
+        .byte   $10,$1E
+        .byte   $18
+        .byte   $28
+        .byte   $30,$14
+        .byte   $24,$0C
+        .byte   $10,$18
+        .byte   $10,$20
+        .byte   $38
+        .byte   $18
+        .byte   $18
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
+        .byte   $08
         .byte   $1C
 contact_range_y_data_9:  .byte   $18,$14,$10,$10,$14,$2C
 contact_range_y_data_10:  .byte   $14,$22
@@ -2744,8 +2904,8 @@ switch_to_bank_0D:  lda     #$0D
         .byte   $A9,$09,$20,$00,$C0,$20,$03,$86
         .byte   $4C,$31,$D6,$A9,$09,$20,$00,$C0
         .byte   $20
-        asl     $86
-        jmp     switch_to_bank_0D
+        .byte   $06,$86
+        .byte   $4C,$31,$D6
 
         .byte   $A9,$09,$20,$00,$C0,$20,$09,$86
         .byte   $4C,$31,$D6
@@ -2994,7 +3154,7 @@ entity_hitbox_height_idx_tbl:  .byte   $00,$02,$02,$02,$04,$02,$04,$04 ; hitbox 
         .byte   $02,$02,$02,$02,$04,$02,$02,$02
         .byte   $02,$02,$02,$02,$02,$02,$02,$02
         .byte   $02,$02,$0A,$10,$02,$02,$02
-        bpl     entity_hitbox_height_idx_2
+        .byte   $10,$02
         .byte   $02,$02
 entity_hitbox_height_idx_2:  .byte   $02,$20,$02,$02,$02,$14,$16,$02
         .byte   $02,$02,$02,$02,$18,$02,$02,$02
@@ -3014,8 +3174,8 @@ entity_ai_behavior_tbl:  .byte   $00,$00,$00,$01,$01,$01,$01,$01 ; AI behavior i
         .byte   $07,$00,$07,$04,$04,$01,$03,$07
         .byte   $0B,$0B,$00,$00,$07,$07,$07,$00
         .byte   $0C,$0C,$00,$01,$01,$04,$0D,$01
-        asl     $0A0F
-        brk
+        .byte   $0E,$0F,$0A
+        .byte   $00
         .byte   $00,$00,$13,$10,$04,$04,$0E,$07
         .byte   $07,$07,$07,$07,$00,$12,$07,$00
         .byte   $00,$13,$00,$00,$02,$00,$07,$09
@@ -3044,8 +3204,12 @@ find_slot_loop:  lda     $0430,x
 find_slot_found:  clc
         rts
 
-        .byte   $A5,$F9,$D0,$15,$A6,$A9,$F0,$04
-        .byte   $B5,$9B,$F0,$0D
+        lda     $F9
+        bne     *+23
+        ldx     $A9
+        beq     *+6
+        lda     $9B,x
+        beq     *+15
         lda     weapon_dispatch_lo_tbl,x
         sta     jump_ptr
         lda     weapon_dispatch_hi_tbl,x
@@ -3055,7 +3219,10 @@ find_slot_found:  clc
         sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$2B,$A2,$04
+        lda     $27
+        and     #$02
+        beq     fire_weapon_no_slot
+        ldx     #$04
 fire_weapon_scan_slot:  lda     $0420,x
         bpl     fire_weapon_found_slot
         dex
@@ -3080,13 +3247,21 @@ fire_weapon_set_dir:  sta     $3D
 fire_weapon_no_slot:  sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$0C,$A2,$02
-        .byte   $A0,$01,$20,$E0,$D3,$A9,$82,$9D
-        .byte   $20,$04
+        lda     $27
+        and     #$02
+        beq     *+14
+        ldx     #$02
+        ldy     #$01
+        jsr     weapon_spawn_projectile
+        lda     #$82
+        sta     $0420,x
         sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$2B,$A2,$04
+        lda     $27
+        and     #$02
+        beq     fire_weapon_multi_fail
+        ldx     #$04
 fire_weapon_multi_scan:  lda     $0420,x
         bmi     fire_weapon_multi_fail
         dex
@@ -3111,9 +3286,16 @@ fire_weapon_multi_loop:  stx     $01
 fire_weapon_multi_fail:  sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$1C,$AD,$22
-        .byte   $04,$30,$17,$38,$A5,$9E,$E9,$03
-        .byte   $90,$10,$A2,$05
+        lda     $27
+        and     #$02
+        beq     *+30
+        lda     $0422
+        bmi     *+25
+        sec
+        lda     $9E
+        sbc     #$03
+        bcc     *+18
+        ldx     #$05
 fire_weapon_spread_loop:  stx     $02
         ldy     #$03
         jsr     weapon_spawn_projectile
@@ -3124,7 +3306,10 @@ fire_weapon_spread_loop:  stx     $02
         sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$29,$A2,$03
+        lda     $27
+        and     #$02
+        beq     fire_weapon_bubble_fail
+        ldx     #$03
 fire_weapon_bubble_scan:  lda     $0420,x
         bpl     fire_weapon_bubble_fire
         dex
@@ -3147,8 +3332,15 @@ fire_weapon_bubble_done:  jmp     fire_weapon_set_timer
 fire_weapon_bubble_fail:  sec
         rts
 
-        .byte   $A5,$27,$29,$02,$D0,$0A,$A5,$AB
-        .byte   $C9,$0B,$F0,$04,$E6,$AB,$18,$60
+        lda     $27
+        and     #$02
+        bne     *+12
+        lda     $AB
+        cmp     #$0B
+        beq     *+6
+        inc     $AB
+        clc
+        rts
         ldx     #$05
 fire_weapon_leaf_scan:  lda     $0420,x
         bpl     fire_weapon_leaf_fire
@@ -3174,15 +3366,29 @@ fire_weapon_leaf_reset:  lda     #$00
 fire_weapon_leaf_fail:  sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$1D,$AD,$22
-        .byte   $04,$30,$18,$38,$A5,$A3,$E9,$04
-        .byte   $90,$11,$85,$A3,$A2,$02,$A0,$06
-        .byte   $20,$E0,$D3,$A9,$24,$20,$51,$C0
-        .byte   $4C,$8A,$DA
+        lda     $27
+        and     #$02
+        beq     *+31
+        lda     $0422
+        bmi     *+26
+        sec
+        lda     $A3
+        sbc     #$04
+        bcc     *+19
+        sta     $A3
+        ldx     #$02
+        ldy     #$06
+        jsr     weapon_spawn_projectile
+        lda     #$24
+        jsr     bank_switch_enqueue
+        jmp     fire_weapon_set_timer
         sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$4A,$A2,$04
+        lda     $27
+        and     #$02
+        beq     fire_weapon_crash_fail
+        ldx     #$04
 fire_weapon_crash_scan:  lda     $0420,x
         bpl     fire_weapon_crash_fire
         dex
@@ -3228,10 +3434,18 @@ crash_xvel_sub_tbl:  .byte   $00,$00,$00,$00,$00,$D4,$D4,$00
         .byte   $00,$D4,$D4,$00,$00,$00,$00,$00
 crash_xvel_tbl:  .byte   $04,$00,$00,$00,$04,$02,$02,$00
         .byte   $04,$02,$02,$00,$00,$00,$00,$00
-        .byte   $A5,$27,$29,$02,$F0,$1F,$A2,$02
-        .byte   $AD,$22,$04,$30,$18,$A0,$08,$20
-        .byte   $E0,$D3,$A9,$01,$8D,$A6,$05,$A9
-        .byte   $21,$20,$51,$C0
+        lda     $27
+        and     #$02
+        beq     *+33
+        ldx     #$02
+        lda     $0422
+        bmi     *+26
+        ldy     #$08
+        jsr     weapon_spawn_projectile
+        lda     #$01
+        sta     $05A6
+        lda     #$21
+        jsr     bank_switch_enqueue
 fire_weapon_finish:  lda     #$0F
         sta     $36
         lda     #$03
@@ -3240,7 +3454,10 @@ fire_weapon_finish:  lda     #$0F
         sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$F8,$A2,$04
+        lda     $27
+        and     #$02
+        beq     *-6
+        ldx     #$04
 fire_weapon_star_scan:  lda     $0420,x
         bpl     fire_weapon_star_fire
         dex
@@ -3258,17 +3475,35 @@ fire_weapon_star_fire:  ldy     #$09
 fire_weapon_star_fail:  sec
         rts
 
-        .byte   $A5,$27,$29,$02,$F0,$19,$AD,$22
-        .byte   $04,$30,$14,$A2,$02,$A0,$0A,$20
-        .byte   $E0,$D3,$A9,$3E,$8D,$E2,$04,$A9
-        .byte   $13,$8D,$C2,$06,$4C,$4D,$DC,$60
-        .byte   $A5,$27,$29,$02,$F0,$14,$AD,$22
-        .byte   $04,$30,$0F,$A2,$02,$A0,$0B,$20
-        .byte   $E0,$D3,$A9,$1F,$8D,$C2,$06,$4C
-        .byte   $4D,$DC,$60
-weapon_dispatch_lo_tbl:  .byte   $6C,$9F,$B3,$E6,$0A,$3B,$31,$9F ; weapon handler ptr low bytes
+        lda     $27
+        and     #$02
+        beq     *+27
+        lda     $0422
+        bmi     *+22
+        ldx     #$02
+        ldy     #$0A
+        jsr     weapon_spawn_projectile
+        lda     #$3E
+        sta     $04E2
+        lda     #$13
+        sta     $06C2
+        jmp     fire_weapon_finish
+        rts
+        lda     $27
+        and     #$02
+        beq     *+22
+        lda     $0422
+        bmi     *+17
+        ldx     #$02
+        ldy     #$0B
+        jsr     weapon_spawn_projectile
+        lda     #$1F
+        sta     $06C2
+        jmp     fire_weapon_finish
+        rts
+weapon_dispatch_lo_tbl:  .byte   $6C,$9F,$B3,$E6,$0A,$3B,$31,$9F
         .byte   $7A,$58,$7D,$9D
-weapon_dispatch_hi_tbl:  .byte   $DA,$DA,$DA,$DA,$DB,$DB,$DC,$DB ; weapon handler ptr high bytes
+weapon_dispatch_hi_tbl:  .byte   $DA,$DA,$DA,$DA,$DB,$DB,$DC,$DB
         .byte   $DB,$DC,$DC,$DC
 
 ; =============================================================================
@@ -3309,11 +3544,13 @@ update_entity_special:  lda     #$DC
         sta     $09
         jmp     (jump_ptr)
 
-entity_special_dispatch_lo:  .byte   $34,$34,$48,$74,$6F,$CE,$16,$58 ; weapon entity dispatch (low bytes)
+entity_special_dispatch_lo:  .byte   $34,$34,$48,$74,$6F,$CE,$16,$58
         .byte   $58,$90,$10,$DD,$71,$E4,$E4,$E8
-entity_special_dispatch_hi:  .byte   $DD,$DD,$DE,$DE,$DF,$DF,$E0,$E1 ; weapon entity dispatch (high bytes)
+entity_special_dispatch_hi:  .byte   $DD,$DD,$DE,$DE,$DF,$DF,$E0,$E1
         .byte   $E1,$E1,$E2,$E2,$E4,$E4,$E4,$E4
-        .byte   $BD,$E0,$04,$F0,$03,$4C,$EC,$DD
+        lda     $04E0,x
+        beq     *+5
+        jmp     $DDEC
         lda     #$00
         sta     $06A0,x
         sta     $0680,x
@@ -3550,11 +3787,20 @@ bubble_done:  rts
 bubble_apply_physics:  jsr     apply_entity_physics
         rts
 
-bubble_yvel_tbl:  .byte   $04,$FC,$A9,$07,$85,$01,$A9,$07
-        .byte   $85,$02,$20,$CF,$F0,$BD,$E0,$04
-        .byte   $D0,$20,$A5,$00,$F0,$47,$FE,$E0
-        .byte   $04,$BD,$20,$04,$29,$FB,$9D,$20
-        .byte   $04
+bubble_yvel_tbl:  .byte   $04,$FC
+        lda     #$07
+        sta     $01
+        lda     #$07
+        sta     $02
+        jsr     check_horiz_tile_collision
+        lda     $04E0,x
+        bne     *+34
+        lda     $00
+        beq     metal_blade_physics
+        inc     $04E0,x
+        lda     $0420,x
+        and     #$FB
+        sta     $0420,x
 metal_blade_launch:  lda     #$C0
         sta     $0660,x
         lda     #$FF
@@ -3588,10 +3834,10 @@ metal_blade_physics:  jsr     apply_entity_physics
         .byte   $BD,$E0,$04,$C9,$12,$B0,$14,$38
         .byte   $BD,$60,$06,$E9,$4B,$9D,$60,$06
         .byte   $BD
-        rti
+        .byte   $40
 
-        asl     $E9
-        brk
+        .byte   $06,$E9
+        .byte   $00
         .byte   $9D,$40,$06,$4C,$0F,$E0
         bne     metal_blade_check_despawn
         lda     $0420,x
@@ -3614,12 +3860,27 @@ metal_blade_accelerate:  clc
         jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$E0,$04,$D0,$77,$A9,$00,$9D
-        .byte   $A0,$06,$9D,$80,$06,$38,$BD,$A0
-        .byte   $04,$E9,$08,$85,$0A,$A9,$00,$85
-        .byte   $0B,$BD,$20,$04,$29,$40,$D0,$10
-        .byte   $38,$BD,$60,$04,$E9,$06,$85,$08
-        .byte   $BD,$40,$04,$E9,$00,$4C,$53,$E0
+        lda     $04E0,x
+        bne     *+121
+        lda     #$00
+        sta     $06A0,x
+        sta     $0680,x
+        sec
+        lda     $04A0,x
+        sbc     #$08
+        sta     $0A
+        lda     #$00
+        sta     $0B
+        lda     $0420,x
+        and     #$40
+        bne     *+18
+        sec
+        lda     $0460,x
+        sbc     #$06
+        sta     $08
+        lda     $0440,x
+        sbc     #$00
+        jmp     $E053
         clc
         lda     $0460,x
         adc     #$06
@@ -3719,28 +3980,37 @@ quick_boomerang_check:  jsr     check_entity_on_screen
         rts
 
 scatter_offset_y_tbl:  .byte   $F8,$F0,$08,$00,$F8,$F8
-scatter_offset_y_2:  php
-        brk
+scatter_offset_y_2:  .byte   $08
+        .byte   $00
         .byte   $F0,$00
-        bpl     scatter_offset_x_lo_2
-        beq     scatter_offset_y_2
-        php
-        php
-scatter_offset_x_lo_tbl:  sed
-        php
-        brk
+        .byte   $10,$10
+        .byte   $F0,$F8
+        .byte   $08
+        .byte   $08
+scatter_offset_x_lo_tbl:  .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $10,$F8,$10,$F0,$08,$00,$00,$F8
         .byte   $10
-scatter_offset_x_lo_2:  beq     scatter_offset_x_hi_3
-        beq     scatter_offset_x_hi_2
+scatter_offset_x_lo_2:  .byte   $F0,$10
+        .byte   $F0,$08
 scatter_offset_x_hi_tbl:  .byte   $FF,$00,$00,$00,$FF,$00,$FF,$00
 scatter_offset_x_hi_2:  .byte   $00,$00,$FF,$00,$FF,$00
 scatter_offset_x_hi_3:  .byte   $FF,$00
-tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01 ; solid flag per collision type
-        .byte   $01,$DE,$20,$06,$D0,$15,$A9,$0F
-        .byte   $9D,$20,$06,$C6,$A1,$D0,$0C,$5E
-        .byte   $20,$04,$A9,$00,$85,$AA,$A9,$01
-        .byte   $85,$50,$60
+tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
+        .byte   $01
+        dec     $0620,x
+        bne     *+23
+        lda     #$0F
+        sta     $0620,x
+        dec     $A1
+        bne     *+14
+        lsr     $0420,x
+        lda     #$00
+        sta     $AA
+        lda     #$01
+        sta     $50
+        rts
         lda     #$01
         sta     $AA
         lda     #$00
@@ -3756,10 +4026,17 @@ tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01 ; solid flag per c
         sta     $0440,x
         rts
 
-        .byte   $BD,$E0,$04,$D0,$23,$FE,$C0,$06
-        .byte   $BD,$C0,$06,$C9,$BB,$F0,$0F,$BD
-        .byte   $A0,$06,$C9,$02,$D0,$05,$A9,$00
-        .byte   $9D,$A0,$06
+        lda     $04E0,x
+        bne     *+37
+        inc     $06C0,x
+        lda     $06C0,x
+        cmp     #$BB
+        beq     *+17
+        lda     $06A0,x
+        cmp     #$02
+        bne     *+7
+        lda     #$00
+        sta     $06A0,x
         jmp     air_shooter_collision
 
         lda     #$3E
@@ -3805,8 +4082,10 @@ air_shooter_physics:  jsr     apply_entity_physics
         sta     $059E,x
 air_shooter_done:  rts
 
-        .byte   $BD,$E0,$04,$F0,$05,$DE,$E0,$04
-        .byte   $D0,$4C
+        lda     $04E0,x
+        beq     *+7
+        dec     $04E0,x
+        bne     leaf_shield_wall_check
         dec     $06C0,x
         bne     leaf_shield_accel
         lda     #$13
@@ -4126,7 +4405,7 @@ crash_entity_dec_timer:  dec     $06C0,x
         jsr     check_entity_on_screen
         rts
 
-        .byte   $60
+        rts
 check_entity_on_screen:  sec
         lda     $0460,x
         sbc     $1F
@@ -4302,13 +4581,29 @@ weapon_collision_dispatch:  ldy     $A9 ; current weapon ID for handler
         sta     $09
         jmp     (jump_ptr)              ; indirect jump to handler
 
-        .byte   $A4,$2B,$B9,$20,$04,$29,$08,$D0
-        .byte   $34,$B9,$00,$04,$A8,$B9,$98,$E9
-        .byte   $85,$00,$F0,$29,$20,$7F,$E9,$5E
-        .byte   $20,$04,$A9,$2B,$20,$51,$C0,$A6
-        .byte   $2B,$BD,$00,$01,$D0,$30,$FE,$00
-        .byte   $01,$38,$BD,$C0,$06,$E5,$00,$9D
-        .byte   $C0,$06,$F0,$02,$B0,$20
+        ldy     $2B
+        lda     $0420,y
+        and     #$08
+        bne     *+54
+        lda     $0400,y
+        tay
+        lda     weapon_damage_table,y
+        sta     $00
+        beq     *+43
+        jsr     apply_difficulty_modifier
+        lsr     $0420,x
+        lda     #$2B
+        jsr     bank_switch_enqueue
+        ldx     $2B
+        lda     $0100,x
+        bne     *+50
+        inc     $0100,x
+        sec
+        lda     $06C0,x
+        sbc     $00
+        sta     $06C0,x
+        beq     *+4
+        bcs     *+34
         lda     #$00
         sta     $06C0,x
         sec
@@ -4327,10 +4622,18 @@ weapon_collision_dispatch:  ldy     $A9 ; current weapon ID for handler
         clc
         rts
 
-        .byte   $A4,$2B,$B9,$20,$04,$29,$08,$D0
-        .byte   $4F,$B9,$00,$04,$A8,$BD,$E0,$04
-        .byte   $C9,$02,$90,$13,$F0,$06,$B9,$14
-        .byte   $EA,$4C,$D4,$E6
+        ldy     $2B
+        lda     $0420,y
+        and     #$08
+        bne     weapon_damage_zero
+        lda     $0400,y
+        tay
+        lda     $04E0,x
+        cmp     #$02
+        bcc     *+21
+        beq     *+8
+        lda     $EA14,y
+        jmp     weapon_damage_apply
         clc
         lda     weapon_damage_table,y
         asl     a
@@ -4373,9 +4676,15 @@ weapon_damage_done:  ldx     $2B
         clc
         rts
 
-        .byte   $A4,$2B,$B9,$20,$04,$29,$08,$D0
-        .byte   $35,$B9,$00,$04,$A8,$B9,$8C,$EA
-        .byte   $85,$00,$F0
+        ldy     $2B
+        lda     $0420,y
+        and     #$08
+        bne     *+55
+        lda     $0400,y
+        tay
+        lda     $EA8C,y
+        sta     $00
+        .byte   $F0
         rol     a
         jsr     apply_difficulty_modifier
         txa
@@ -4413,13 +4722,32 @@ weapon_damage_killed_alt:  lda     #$00
 weapon_damage_return:  clc
         rts
 
-        .byte   $A4,$2B,$B9,$20,$04,$29,$08,$D0
-        .byte   $35,$B9,$00,$04,$A8,$B9,$04,$EB
-        .byte   $85,$00,$F0,$2A,$20,$7F,$E9,$8A
-        .byte   $48,$A9,$2B,$20,$51,$C0,$68,$A8
-        .byte   $A6,$2B,$BD,$00,$01,$D0,$39,$FE
-        .byte   $00,$01,$38,$BD,$C0,$06,$E5,$00
-        .byte   $9D,$C0,$06,$F0,$02,$B0,$2B
+        ldy     $2B
+        lda     $0420,y
+        and     #$08
+        bne     *+55
+        lda     $0400,y
+        tay
+        lda     $EB04,y
+        sta     $00
+        beq     *+44
+        jsr     apply_difficulty_modifier
+        txa
+        pha
+        lda     #$2B
+        jsr     bank_switch_enqueue
+        pla
+        tay
+        ldx     $2B
+        lda     $0100,x
+        bne     *+59
+        inc     $0100,x
+        sec
+        lda     $06C0,x
+        sbc     $00
+        sta     $06C0,x
+        beq     *+4
+        bcs     weapon_coll_deactivate
         lda     #$00
         sta     $06C0,x
         sec
@@ -4489,13 +4817,32 @@ weapon_coll_rebound:  lda     #$00
 weapon_coll_rebound_done:  clc
         rts
 
-        .byte   $A4,$2B,$B9,$20,$04,$29,$08,$D0
-        .byte   $35,$B9,$00,$04,$A8,$B9,$F4,$EB
-        .byte   $85,$00,$F0,$2A,$20,$7F,$E9,$8A
-        .byte   $48,$A9,$2B,$20,$51,$C0,$68,$A8
-        .byte   $A6,$2B,$BD,$00,$01,$D0,$47,$FE
-        .byte   $00,$01,$38,$BD,$C0,$06,$E5,$00
-        .byte   $9D,$C0,$06,$F0,$02,$B0,$39
+        ldy     $2B
+        lda     $0420,y
+        and     #$08
+        bne     *+55
+        lda     $0400,y
+        tay
+        lda     $EBF4,y
+        sta     $00
+        beq     *+44
+        jsr     apply_difficulty_modifier
+        txa
+        pha
+        lda     #$2B
+        jsr     bank_switch_enqueue
+        pla
+        tay
+        ldx     $2B
+        lda     $0100,x
+        bne     *+73
+        inc     $0100,x
+        sec
+        lda     $06C0,x
+        sbc     $00
+        sta     $06C0,x
+        beq     *+4
+        bcs     weapon_coll_deactivate_2
         lda     #$00
         sta     $06C0,x
         sec
@@ -4576,13 +4923,32 @@ weapon_coll_stun_done:  ldx     $2B
         clc
         rts
 
-        .byte   $A4,$2B,$B9,$20,$04,$29,$08,$D0
-        .byte   $35,$B9,$00,$04,$A8,$B9,$E4,$EC
-        .byte   $85,$00,$F0,$2A,$20,$7F,$E9,$8A
-        .byte   $48,$A9,$2B,$20,$51,$C0,$68,$A8
-        .byte   $A6,$2B,$BD,$00,$01,$D0,$3A,$FE
-        .byte   $00,$01,$38,$BD,$C0,$06,$E5,$00
-        .byte   $9D,$C0,$06,$F0,$02,$B0,$2C
+        ldy     $2B
+        lda     $0420,y
+        and     #$08
+        bne     *+55
+        lda     $0400,y
+        tay
+        lda     $ECE4,y
+        sta     $00
+        beq     *+44
+        jsr     apply_difficulty_modifier
+        txa
+        pha
+        lda     #$2B
+        jsr     bank_switch_enqueue
+        pla
+        tay
+        ldx     $2B
+        lda     $0100,x
+        bne     *+60
+        inc     $0100,x
+        sec
+        lda     $06C0,x
+        sbc     $00
+        sta     $06C0,x
+        beq     *+4
+        bcs     *+46
         lda     #$00
         sta     $06C0,x
         sec
@@ -4753,37 +5119,59 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         .byte   $00,$08,$04,$04,$00,$1C,$1C,$04
         .byte   $06,$04,$08,$06,$00,$04,$04,$06
         .byte   $00,$0A,$0A,$0A,$0A,$00,$00,$00
-        .byte   $00,$00,$00,$00,$A9,$14,$9D,$50
-        .byte   $01,$20,$B3,$EF,$90,$05,$A9,$00
-        .byte   $9D
-hitbox_y_offset_data:  .byte   $50,$01
+        .byte   $00,$00,$00,$00,$A9,$14,$9D
+        bvc     *+3
+        jsr     apply_entity_physics_alt
+        bcc     *+7
+        lda     #$00
+        sta     $0150,x
         sec
         lda     $04A0,x
         sbc     #$04
         sta     $0160,x
         rts
 
-        .byte   $A9,$18,$9D,$50,$01,$20,$B3,$EF
-        .byte   $90,$05,$A9,$00,$9D,$50,$01
+        lda     #$18
+        sta     $0150,x
+        jsr     apply_entity_physics_alt
+        bcc     *+7
+        lda     #$00
+        sta     $0150,x
         sec
         lda     $04A0,x
         sbc     #$08
         sta     $0160,x
         rts
 
-        .byte   $A9,$18,$9D,$50,$01,$20,$B3,$EF
-        .byte   $90,$05,$A9,$00,$9D,$50,$01
+        lda     #$18
+        sta     $0150,x
+        jsr     apply_entity_physics_alt
+        bcc     *+7
+        lda     #$00
+        sta     $0150,x
         sec
         lda     $04A0,x
         sbc     #$08
         sta     $0160,x
         rts
 
-        .byte   $20,$EE,$EF,$38,$BD,$00,$04,$E9
-        .byte   $40,$A8,$B9,$79,$AF,$85,$01,$BD
-        .byte   $20,$04,$29,$20,$F0,$1B,$A4,$01
-        .byte   $A9,$15,$D9,$58,$03,$D0,$07,$A9
-        .byte   $04,$9D,$20,$06,$D0,$06
+        jsr     $EFEE
+        sec
+        lda     $0400,x
+        sbc     #$40
+        tay
+        lda     $AF79,y
+        sta     $01
+        lda     $0420,x
+        and     #$20
+        beq     *+29
+        ldy     $01
+        lda     #$15
+        cmp     $0358,y
+        bne     *+9
+        lda     #$04
+        sta     $0620,x
+        bne     *+8
         lda     $00
         cmp     #$60
         bcs     collision_apply_physics
@@ -4808,11 +5196,22 @@ collision_inc_state:  inc     $04E0,x
 collision_apply_physics:  jsr     apply_entity_physics_alt
         rts
 
-        .byte   $BD,$20,$06,$D0,$22,$A9,$6E,$9D
-        .byte   $E0,$04,$FE,$20,$06,$A9,$00,$9D
-        .byte   $20,$04,$A9,$01,$85,$01,$A9,$23
-        .byte   $20,$CF,$96,$A9,$83,$9D,$20,$04
-        .byte   $B0,$05,$A9,$26,$20,$59,$F1
+        lda     $0620,x
+        bne     *+36
+        lda     #$6E
+        sta     $04E0,x
+        inc     $0620,x
+        lda     #$00
+        sta     $0420,x
+        lda     #$01
+        sta     $01
+        lda     #$23
+        jsr     $96CF
+        lda     #$83
+        sta     $0420,x
+        bcs     *+7
+        lda     #$26
+        jsr     spawn_entity_from_parent
         jsr     apply_entity_physics_alt
         bcc     collision_done
         lda     #$23
@@ -4822,7 +5221,10 @@ collision_apply_physics:  jsr     apply_entity_physics_alt
         jsr     spawn_entity_from_parent
 collision_done:  rts
 
-        .byte   $60,$A9,$01,$D0,$02,$A9,$00
+        rts
+        lda     #$01
+        bne     *+4
+        lda     #$00
         sta     $4E
         lda     $0420,x
         and     #$03
@@ -4936,7 +5338,8 @@ physics_despawn_secondary:  lda     #$FF
         sec
         rts
 
-        .byte   $A9,$01,$D0,$02
+        lda     #$01
+        bne     *+4
 
 ; =============================================================================
 ; apply_entity_physics_alt — Alternate physics — used for weapons/projectiles ($EFB3)
@@ -5189,9 +5592,17 @@ spawn_entity_no_slot:  pla
         sec
         rts
 
-        .byte   $A0,$40,$38,$A5,$2D,$E5,$2E,$85
-        .byte   $00,$B0,$0A,$A5,$00,$49,$FF,$69
-        .byte   $01,$A0,$00,$85,$00
+        ldy     #$40
+        sec
+        lda     $2D
+        sbc     $2E
+        sta     $00
+        bcs     *+12
+        lda     $00
+        eor     #$FF
+        adc     #$01
+        ldy     #$00
+        sta     $00
         lda     $0420,x
         and     #$BF
         sta     $0420,x
@@ -5553,26 +5964,26 @@ sprite_def_ptr_lo:  .byte   $00,$0D,$1A,$27,$34,$38,$3C,$40 ; sprite def pointer
         .byte   $90,$9C,$A4,$AB,$AF,$B3,$B3,$B7
         .byte   $BB,$BF,$BF,$C3,$C6,$CC,$D2,$D8
         .byte   $D8,$D8,$D8,$D8,$D8
-        cld
-        cld
-        cld
+        .byte   $D8
+        .byte   $D8
+        .byte   $D8
         .byte   $DF,$EB,$F0,$F9,$FE,$04,$0C,$10
         .byte   $1B,$2A,$36,$47,$4C,$4F,$56,$56
         .byte   $5E,$5E,$5E,$5E,$5E,$5E,$5E,$5E
         .byte   $5E,$5E,$5E,$5E,$5E,$5E,$5E,$5E
         .byte   $5E,$70,$76,$86
-        txa
-        stx     $9A,y
+        .byte   $8A
+        .byte   $96,$9A
         .byte   $9E,$A2,$A8,$AC,$B6,$BB,$BF,$C2
         .byte   $C6,$D1,$D9
-        cmp     hitbox_y_offset_data,x
+        .byte   $DD,$E5,$ED
         .byte   $F3,$F8,$0A,$10,$13,$19,$1F,$24
         .byte   $32,$36,$3D,$43,$47,$4B,$4F,$53
         .byte   $58,$5C,$62,$66,$69,$6D,$70,$74
-        sei
-        sei
-        sei
-sprite_def_ptr_lo_wpn:  sei
+        .byte   $78
+        .byte   $78
+        .byte   $78
+sprite_def_ptr_lo_wpn:  .byte   $78
         .byte   $82,$8C,$8C,$8C,$90,$90,$97,$97
         .byte   $9B,$9B,$A3,$A6,$B5,$B9,$BD,$C1
         .byte   $C8,$C8,$CC,$CF,$CF,$D2,$DD,$E3
@@ -5580,7 +5991,7 @@ sprite_def_ptr_lo_wpn:  sei
         .byte   $16,$16,$1E,$26,$26,$26,$26,$26
         .byte   $2A,$2E,$32,$32,$40,$40,$40,$43
         .byte   $46,$58,$58,$5B,$63,$66
-        adc     $7979,y
+        .byte   $79,$79,$79
         .byte   $7F,$82,$85,$89,$90,$94,$97,$97
         .byte   $97,$97,$9B,$9E,$A3,$AB,$AB,$B0
         .byte   $B5,$B5,$B5,$63,$C2,$C8,$CC,$CF
@@ -5588,12 +5999,12 @@ sprite_def_ptr_lo_wpn:  sei
         .byte   $F4,$F9,$FD,$01,$06,$0D,$14,$1A
         .byte   $20,$27,$27,$2A,$2E,$FE,$32,$36
         .byte   $39,$42,$46,$49,$52,$63
-        eor     $59,x
-        eor     $675D,x
-        adc     $716D
-        adc     $79,x
-        adc     $8481,x
-        sty     $84
+        .byte   $55,$59
+        .byte   $5D,$5D,$67
+        .byte   $6D,$6D,$71
+        .byte   $75,$79
+        .byte   $7D,$81,$84
+        .byte   $84,$84
         .byte   $87
 sprite_def_ptr_hi:  .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB ; sprite def pointer table (high bytes)
         .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB
@@ -5633,13 +6044,13 @@ sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
         .byte   $09,$09,$0A,$08,$10,$10,$10,$10
         .byte   $10,$10,$10,$10,$10,$10,$11,$0A
         .byte   $08,$20,$20,$20,$20,$20
-        jsr     ppu_nametable_2020
-        jsr     ppu_nametable_2020
-        ora     ($05,x)
-        asl     $06
-        ora     ($05,x)
-        ora     #$09
-        ora     ($05,x)
+        .byte   $20,$20,$20
+        .byte   $20,$20,$20
+        .byte   $01,$05
+        .byte   $06,$06
+        .byte   $01,$05
+        .byte   $09,$09
+        .byte   $01,$05
         .byte   $12
         .byte   $12,$01,$05,$20,$20,$03,$06,$01
         .byte   $03,$02,$03,$03,$06,$0A,$0C,$0B
@@ -5653,8 +6064,8 @@ sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
         .byte   $01,$0E,$10,$10,$02,$01,$20,$20
         .byte   $20,$09,$02,$18,$07,$07,$18,$07
         .byte   $07,$18,$07,$07
-        clc
-        ora     $07
+        .byte   $18
+        .byte   $05,$07
         .byte   $1A,$1A,$1A,$1A,$1A,$1A,$04,$02
         .byte   $1B,$1C,$1D,$1B,$1B,$01,$08,$15
         .byte   $16,$01,$08,$19,$19,$01,$08,$1F
@@ -5667,8 +6078,8 @@ sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
         .byte   $50,$4F,$51,$52,$51,$02,$01,$3D
         .byte   $3E,$3F,$06,$03,$53,$56,$58,$57
         .byte   $59,$56,$2E,$02,$05
-        pha
-        eor     #$4A
+        .byte   $48
+        .byte   $49,$4A
         .byte   $03,$03,$44,$45,$46,$47,$05,$06
         .byte   $2A,$2B,$2C,$2D,$2C,$2E,$01,$04
         .byte   $4B,$4C,$08,$06,$30,$31,$32,$33
@@ -5697,19 +6108,19 @@ sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
         .byte   $08,$06,$88,$89,$8A,$8B,$8C,$8D
         .byte   $8E,$8F,$90,$05,$08,$91,$91,$91
         .byte   $91,$92,$93,$01,$08
-        sta     ($96),y
-        ora     $05
-        sty     $95,x
-        sty     $97,x
-        tya
+        .byte   $91,$96
+        .byte   $05,$05
+        .byte   $94,$95
+        .byte   $94,$97
+        .byte   $98
         .byte   $97,$05,$08,$9C,$99,$99,$99,$9A
         .byte   $9B,$03,$06,$9F,$A0,$A1,$A0,$02
         .byte   $08,$9C
-        sta     $0F9E,x
+        .byte   $9D,$9E,$0F
         .byte   $03,$A5
-        ldx     #$A3
-        ldy     $A3
-        ldy     $A2
+        .byte   $A2,$A3
+        .byte   $A4,$A3
+        .byte   $A4,$A2
         .byte   $A3,$A4,$A3,$A4,$A2,$A3,$A4,$A3
         .byte   $A2,$03,$03,$A6,$A3,$A4,$A3,$00
         .byte   $00,$A5,$03,$08,$AA,$A7,$A8,$A9
@@ -5717,11 +6128,11 @@ sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
         .byte   $AA,$AB,$AC,$0B,$06,$B4,$B3,$B0
         .byte   $B1,$B2,$B1,$B2,$B1,$B2,$B1,$B2
         .byte   $B0,$01,$06
-        lda     ($B2),y
+        .byte   $B1,$B2
         .byte   $04,$06,$B0,$B3,$B4,$B3,$B0,$03
         .byte   $08,$B0,$B5
-        ldx     $B0,y
-        ora     ($18,x)
+        .byte   $B6,$B0
+        .byte   $01,$18
         .byte   $B7,$B8,$01,$08,$B9,$BA,$01,$02
         .byte   $BC,$BD,$01,$04,$BE,$BF,$02,$06
         .byte   $C0,$C1,$C2,$01,$04,$C7,$C8,$03
@@ -5742,13 +6153,13 @@ sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
         .byte   $00,$86,$00,$00,$87,$08,$04,$2C
         .byte   $2C,$2D,$2E,$2F,$30,$31,$32,$30
         .byte   $03,$04,$3B,$3C
-        and     a:$3C,x
-        brk
+        .byte   $3D,$3C,$00
+        .byte   $00
         .byte   $88,$08,$06,$89,$8A,$89,$8B,$8C
         .byte   $89,$8B,$8C,$89,$06,$04,$8D,$8E
         .byte   $8D,$8E,$8D,$8E,$8D,$01,$04,$8F
-        bcc     sprite_data_FE02
-        brk
+        .byte   $90,$03
+        .byte   $00
         .byte   $91,$92
 sprite_data_FE02:  .byte   $93,$93,$09,$0A,$22,$20,$20,$1F
         .byte   $1E,$1D,$1E,$1F,$21,$22,$03,$04
@@ -5781,14 +6192,14 @@ sprite_data_FE02:  .byte   $93,$93,$09,$0A,$22,$20,$20,$1F
         .byte   $06,$A4,$A5,$A6,$A7,$A8,$A5,$02
         .byte   $04,$B4,$B5,$B6,$03,$03,$B7,$B8
         .byte   $B9,$BA,$02,$04,$BB,$BC
-        lda     $0401,x
-        ldx     $01BF,y
+        .byte   $BD,$01,$04
+        .byte   $BE,$BF,$01
         .byte   $03
-        cpy     #$C1
+        .byte   $C0,$C1
         .byte   $02
-        ora     ($C2,x)
+        .byte   $01,$C2
         .byte   $C3,$C4,$06,$04
-        cmp     $C6
+        .byte   $C5,$C6
         .byte   $C7,$C8,$C7,$04,$00,$79,$7A,$7B
         .byte   $7C,$00,$03,$01,$79,$7A,$7B,$7C
         .byte   $03,$03,$C9,$CA,$CB,$CC,$04,$02
@@ -5804,8 +6215,8 @@ sprite_data_FE02:  .byte   $93,$93,$09,$0A,$22,$20,$20,$1F
         .byte   $E4,$E5,$00,$01,$04,$A9,$AA,$01
         .byte   $04,$AB,$AC,$01,$04,$AD,$AE,$01
         .byte   $04,$AF,$B0,$01,$04
-        lda     ($B2),y
-        brk
+        .byte   $B1,$B2
+        .byte   $00
         .byte   $00,$B3,$00,$00,$67,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF

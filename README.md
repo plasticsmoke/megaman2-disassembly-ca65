@@ -74,8 +74,8 @@ data table entries, and vice versa. Phase 5 fixes these misidentifications.
 | $0E | Game engine, entity AI dispatch | 6% | 0 | **DONE** | 100% |
 | $0D | Stage engine, player control, OAM | 29% | 0 | **DONE** | 100% |
 | $0C | Weapon system, UI rendering | 64% | 0 | **DONE** | 100% |
-| $0B | Boss AI, enemy AI, collision | 21% | 33 | Pending | 0% |
-| $0F | Fixed bank: NMI, PPU, bank switch | 17% | 8 | Pending | 0% |
+| $0B | Boss AI, enemy AI, collision | 23% | 0 | **DONE** | 100% |
+| $0F | Fixed bank: NMI, PPU, bank switch | 18% | 0 | **DONE** | 100% |
 
 **.byte %** = proportion of lines that are `.byte` directives (lower = more code decoded).
 **BRK** = `brk` instructions remaining — almost always da65 artifacts (NES code never
