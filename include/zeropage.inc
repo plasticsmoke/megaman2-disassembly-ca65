@@ -1,53 +1,54 @@
 ; =============================================================================
 ; Mega Man 2 — Zero Page Variable Definitions
 ; =============================================================================
-; Confirmed from fixed bank (bank0F) analysis.
-; These are NOT yet .imported — they serve as reference documentation
-; for annotation work. Use Ctrl+F with the address to find usage.
-;
-; Format: name = $XX    ; description (source routine)
+; Confirmed from fixed bank (bank0F) analysis and Mesen tracing.
+; High-confidence names only — uncertain addresses left as raw hex.
 
-; ─── General purpose temporaries ──────────────────────────────────────────────
-; zp_temp_lo            = $00    ; General temp (used in NMI scroll calc, PPU buffer)
-; zp_temp_hi            = $01    ; General temp high byte
-; zp_game_state         = $04    ; Game state index (checked in LF2B6 dispatch)
+; ─── General purpose temporaries ────────────────────────────────────────────
+temp_00               = $00    ; general scratch ($00)
+temp_01               = $01    ; general scratch ($01)
+temp_02               = $02    ; general scratch ($02)
+temp_03               = $03    ; general scratch ($03)
+temp_04               = $04    ; general scratch / game state index ($04)
+temp_05               = $05    ; general scratch ($05)
+temp_06               = $06    ; general scratch ($06)
+temp_07               = $07    ; general scratch ($07)
 
-; ─── Indirect jump pointer ────────────────────────────────────────────────────
-; jump_ptr_lo           = $08    ; Jump table pointer low (jmp ($0008))
-; jump_ptr_hi           = $09    ; Jump table pointer high
+; ─── Indirect jump pointer ──────────────────────────────────────────────────
+jump_ptr              = $08    ; jump table pointer low ($08) — jmp ($0008)
+jump_ptr_hi           = $09    ; jump table pointer high ($09)
 
-; ─── PPU / Rendering ─────────────────────────────────────────────────────────
-; ppu_buffer_count      = $1B    ; Number of PPU buffer entries to transfer
-; frame_counter         = $1C    ; Incremented every NMI
-; vblank_done           = $1D    ; Nonzero after VBLANK processing complete
-; scroll_x              = $1F    ; Horizontal scroll position
-; nametable_select      = $20    ; Base nametable (bit 0)
-; scroll_y              = $22    ; Vertical scroll position
-; controller_1          = $23    ; Player 1 controller state (8 buttons)
-; controller_2          = $24    ; Player 2 controller state (8 buttons)
-; controller_temp       = $27    ; Temp used during controller read
-; current_bank          = $29    ; Currently switched PRG bank number
-; palette_dirty         = $3A    ; Cleared after palette upload
-; ppu_col_update        = $47    ; Nonzero = update nametable column this frame
-; rng_seed              = $4A    ; Random number generator state
-; ppu_attr_update       = $51    ; Nonzero = update attribute table this frame
-; bank_queue_count      = $66    ; Number of queued bank switch requests
-; bank_callback_flag    = $67    ; Nonzero = bank switch callback pending
-; bank_switch_busy      = $68    ; Nonzero = bank switch in progress (for NMI safety)
-; bank_switch_backup    = $69    ; Backup of bank number for restore after callback
+; ─── PPU / Rendering ────────────────────────────────────────────────────────
+ppu_buffer_count      = $1B    ; PPU buffer entry count ($1B)
+frame_counter         = $1C    ; frame counter, incremented every NMI ($1C)
+vblank_done           = $1D    ; VBLANK completion flag ($1D)
+scroll_x              = $1F    ; horizontal scroll position ($1F)
+nametable_select      = $20    ; active nametable, bit 0 ($20)
+scroll_y              = $22    ; vertical scroll position ($22)
 
-; ─── PPU control shadows ─────────────────────────────────────────────────────
-; sprite_size_flag      = $AE    ; 8x16 sprite size flag (ORed into PPUCTRL)
-; camera_offset_y       = $B6    ; Camera Y offset (screen shake / split scroll)
-; camera_offset_x       = $B8    ; Camera X offset low
-; camera_offset_x_hi    = $B9    ; Camera X offset high
-; ppuctrl_shadow        = $F7    ; Shadow of PPUCTRL ($2000) register
-; ppumask_shadow        = $F8    ; Shadow of PPUMASK ($2001) register
+; ─── Controller Input ───────────────────────────────────────────────────────
+controller_1          = $23    ; P1 buttons ($23) — A=$80 B=$40 Sel=$20 Start=$10 U=$08 D=$04 L=$02 R=$01
+controller_2          = $24    ; P2 buttons ($24)
+p1_prev_buttons       = $25    ; P1 previous frame buttons ($25)
+p2_prev_buttons       = $26    ; P2 previous frame buttons ($26)
+p1_new_presses        = $27    ; P1 newly pressed this frame ($27)
+p2_new_presses        = $28    ; P2 newly pressed this frame ($28)
 
-; ─── RAM buffers (not zero page) ─────────────────────────────────────────────
-; oam_buffer            = $0200  ; 256-byte OAM sprite buffer (DMA source)
-; ppu_update_buffer     = $0300  ; PPU nametable update buffer
-; palette_ram           = $0356  ; 32-byte palette copy (uploaded to $3F00)
-; bank_switch_queue     = $057F  ; Queued bank switch request stack
-; bank_switch_queue2    = $0580  ; Bank switch enqueue destination
-; rng_entropy           = $0480  ; Entropy source for RNG
+; ─── Game State ─────────────────────────────────────────────────────────────
+current_bank          = $29    ; currently switched PRG bank ($29)
+current_stage         = $2A    ; stage index 0-13 ($2A)
+current_entity_slot   = $2B    ; entity slot being processed ($2B)
+game_substate         = $2C    ; game sub-state / weapon select state ($2C)
+
+; ─── Misc ───────────────────────────────────────────────────────────────────
+rng_seed              = $4A    ; random number generator ($4A)
+invincibility_timer   = $4B    ; player i-frames countdown ($4B)
+
+; ─── Player State ───────────────────────────────────────────────────────────
+current_etanks        = $A7    ; E-tank count ($A7)
+current_lives         = $A8    ; lives remaining ($A8)
+current_weapon        = $A9    ; selected weapon ID ($A9)
+
+; ─── PPU Control Shadows ────────────────────────────────────────────────────
+ppuctrl_shadow        = $F7    ; PPUCTRL mirror ($F7)
+ppumask_shadow        = $F8    ; PPUMASK mirror ($F8)

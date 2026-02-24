@@ -165,8 +165,12 @@
 
         .setcpu "6502"
 
+.include "include/hardware.inc"
+.include "include/ram.inc"
+.include "include/zeropage.inc"
+.include "include/constants.inc"
+
 ; ─── External references (banked addresses) ─────────────────────────────────
-jump_ptr           := $0008         ; Indirect jump pointer (zero page)
 ppu_nametable_2020 := $2020         ; PPU nametable address $2020
 banked_entry       := $8000         ; Standard entry point in switched bank
 banked_entry_alt   := $8003         ; Alternate entry point in switched bank
@@ -190,7 +194,7 @@ banked_0B_item_spawn := $AF4C       ; Bank $0B: item/powerup spawn
 ; Writing to $E000-$FFFF sets the PRG bank register.
 ; =============================================================================
 bank_switch:                            ; PRG bank switch — A = bank number ($00-$0E)
-        sta     $29                     ; Save requested bank number
+        sta     current_bank                     ; Save requested bank number
         sta     $69                     ; Backup for later restore
         inc     $68                     ; Set "bank switch in progress" flag
         sta     mmc1_scratch            ; MMC1 serial write: bit 0
@@ -262,49 +266,49 @@ bank_switch_enqueue_rts:  rts
 ; Output: $27 = P1 new presses, $28 = P2 new presses
 ; -----------------------------------------------------------------------------
 wait_for_vblank:
-        lda     $23                     ; save previous P1 controller state
-        sta     $25
-        lda     $24                     ; save previous P2 controller state
-        sta     $26
+        lda     controller_1                     ; save previous P1 controller state
+        sta     p1_prev_buttons
+        lda     controller_2                     ; save previous P2 controller state
+        sta     p2_prev_buttons
         jsr     palette_anim_update     ; run palette cycling animation
         lda     #$00
-        sta     $1D                     ; clear VBLANK-done flag
+        sta     vblank_done                     ; clear VBLANK-done flag
 wait_vblank_loop:
-        lda     $1D                     ; wait for NMI handler to set flag
+        lda     vblank_done                     ; wait for NMI handler to set flag
         beq     wait_vblank_loop
         jsr     read_controllers        ; read controller hardware
-        lda     $23                     ; P1 current state
-        eor     $25                     ; XOR with previous = changed bits
-        and     $23                     ; AND with current = newly pressed
-        sta     $27                     ; store P1 new presses
-        lda     $24                     ; P2 current state
-        eor     $26                     ; detect changed bits
-        and     $24                     ; newly pressed only
-        sta     $28                     ; store P2 new presses
+        lda     controller_1                     ; P1 current state
+        eor     p1_prev_buttons                     ; XOR with previous = changed bits
+        and     controller_1                     ; AND with current = newly pressed
+        sta     p1_new_presses                     ; store P1 new presses
+        lda     controller_2                     ; P2 current state
+        eor     p2_prev_buttons                     ; detect changed bits
+        and     controller_2                     ; newly pressed only
+        sta     p2_new_presses                     ; store P2 new presses
         lda     #$0E                    ; switch to game engine bank
         jsr     bank_switch
         rts
 
 ; ─── (unreachable code: duplicate wait-for-vblank, returns to bank $0D) ─────
-        lda     $23
-        sta     $25
-        lda     $24
-        sta     $26
+        lda     controller_1
+        sta     p1_prev_buttons
+        lda     controller_2
+        sta     p2_prev_buttons
         jsr     palette_anim_update
         lda     #$00
-        sta     $1D
+        sta     vblank_done
 wait_vblank_loop_0D:
-        lda     $1D                     ; wait for NMI
+        lda     vblank_done                     ; wait for NMI
         beq     wait_vblank_loop_0D
         jsr     read_controllers        ; read controller hardware
-        lda     $23                     ; compute P1 new presses
-        eor     $25
-        and     $23
-        sta     $27
-        lda     $24                     ; compute P2 new presses
-        eor     $26
-        and     $24
-        sta     $28
+        lda     controller_1                     ; compute P1 new presses
+        eor     p1_prev_buttons
+        and     controller_1
+        sta     p1_new_presses
+        lda     controller_2                     ; compute P2 new presses
+        eor     p2_prev_buttons
+        and     controller_2
+        sta     p2_new_presses
         lda     #$0D                    ; switch to stage engine bank
         jsr     bank_switch
         rts
@@ -316,27 +320,27 @@ wait_vblank_loop_0D:
 ; Preserves controller state across the wait.
 ; -----------------------------------------------------------------------------
 wait_one_rendering_frame:
-        lda     $23                     ; save P1 controller state
+        lda     controller_1                     ; save P1 controller state
         pha
-        lda     $24                     ; save P2 controller state
+        lda     controller_2                     ; save P2 controller state
         pha
-        lda     $27                     ; save new presses
+        lda     p1_new_presses                     ; save new presses
         pha
         lda     #$1E                    ; enable all rendering
-        ora     $F8                     ; merge with current PPUMASK shadow
-        sta     $F8
-        sta     $2001                   ; apply to PPU
+        ora     ppumask_shadow                     ; merge with current PPUMASK shadow
+        sta     ppumask_shadow
+        sta     PPUMASK                   ; apply to PPU
         lda     #$00
-        sta     $1D                     ; clear VBLANK flag
+        sta     vblank_done                     ; clear VBLANK flag
 wait_frame_loop:
-        lda     $1D                     ; wait for NMI
+        lda     vblank_done                     ; wait for NMI
         beq     wait_frame_loop
         pla                             ; restore new presses
-        sta     $27
+        sta     p1_new_presses
         pla
-        sta     $24
+        sta     controller_2
         pla
-        sta     $23
+        sta     controller_1
         lda     #$0E
         jsr     bank_switch
         rts
@@ -359,7 +363,7 @@ boss_death_sequence:  lda     #$41
         jsr     bank_switch_enqueue     ; queue sound effect
         lda     #$FF
         jsr     bank_switch_enqueue
-        lda     $2C
+        lda     game_substate
         bne     boss_death_delay_start
         sta     $36
 boss_death_check_type:  and     #$01
@@ -373,13 +377,13 @@ boss_death_setup_slot:  lda     #$25
         lda     #$80
         sta     $042E,y
         clc
-        lda     $0460
+        lda     ent_x_px
         adc     explosion_offset_x_lo_tbl,x
         sta     $046E,y
-        lda     $0440
+        lda     ent_x_screen
         adc     explosion_offset_x_hi_tbl,x
         sta     $044E,y
-        lda     $04A0
+        lda     ent_y_px
         adc     explosion_offset_y_tbl,x
         sta     $04AE,y
         lda     #$01
@@ -405,19 +409,19 @@ boss_death_run_frame:  jsr     run_one_game_frame
         bne     boss_death_delay_loop
 boss_death_delay_start:  lda     #$E0
 boss_death_delay_loop:  sta     $36
-boss_death_delay_step:  lsr     $0420
+boss_death_delay_step:  lsr     ent_flags
         jsr     run_one_game_frame      ; run game frame during delay
         dec     $36
         bne     boss_death_delay_step
         lda     #$10
-        sta     $2000
+        sta     PPUCTRL
         lda     #$06
-        sta     $2001
-        lda     $2A
+        sta     PPUMASK
+        lda     current_stage
         and     #$07
         jsr     bank_switch
         ldx     #$00
-        lda     $0440
+        lda     ent_x_screen
 boss_death_calc_score:  cmp     $BB07,x
         bcc     boss_death_finish
         inx
@@ -428,10 +432,10 @@ boss_death_finish:  stx     $B0
         txs
         lda     #$0E                    ; switch to game engine bank
         jsr     bank_switch             ; switch to game engine bank
-        dec     $A8
+        dec     current_lives
         bne     boss_death_to_0E_2
         lda     #$00
-        sta     $A7
+        sta     current_etanks
         lda     #$0D
         jsr     bank_switch
         jsr     banked_0D_scroll_update
@@ -455,8 +459,8 @@ explosion_offset_x_hi_tbl:  .byte   $00,$00,$FF,$00,$FF,$00,$FF,$00 ; X offsets 
 boss_intro_sequence:  jsr     reset_sound_state ; silence music for intro
         inc     $BD
 boss_intro_loop:  jsr     boss_fight_frame
-        lda     $2A
-        cmp     #$08
+        lda     current_stage
+        cmp     #WILY_STAGE_START
         bne     boss_intro_done
         lda     $37
         cmp     #$03
@@ -464,7 +468,7 @@ boss_intro_loop:  jsr     boss_fight_frame
         lda     #$00
         sta     $BD
         lda     #$01
-        sta     $2C
+        sta     game_substate
         jmp     boss_death_sequence
 
 boss_intro_done:  lda     $B1
@@ -473,18 +477,18 @@ boss_intro_done:  lda     $B1
         lda     #$00
         sta     $BD
         lda     #$10
-        sta     $F7
-        sta     $2000
+        sta     ppuctrl_shadow
+        sta     PPUCTRL
         lda     #$06
-        sta     $F8
-        sta     $2001
+        sta     ppumask_shadow
+        sta     PPUMASK
         lda     #$00
         sta     $B0
         ldx     #$FF
         txs
         lda     #$0E
         jsr     bank_switch
-        ldx     $2A
+        ldx     current_stage
         cpx     #$08
         bcs     advance_to_next_stage
         lda     boss_beaten_mask_lo,x
@@ -504,9 +508,9 @@ boss_intro_done:  lda     $B1
         jmp     banked_0E_all_beaten
 
 all_bosses_defeated:  lda     #$07
-        sta     $2A
-advance_to_next_stage:  inc     $2A
-        lda     $2A
+        sta     current_stage
+advance_to_next_stage:  inc     current_stage
+        lda     current_stage
         cmp     #$0E
         bne     next_stage_continue
         lda     #$0D
@@ -566,18 +570,18 @@ nametable_column_upload:  lda     #$09  ; switch to bank $09 (scroll data)
         lsr     a
         tax
         lda     nametable_bank_table,x
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     nametable_addr_table,x
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     $FD
         and     #$01
         beq     nametable_col_copy_inner
-        lda     $03B7
+        lda     col_update_addr_lo
         ora     #$20
-        sta     $03B7
+        sta     col_update_addr_lo
 nametable_col_copy_inner:  ldy     #$20
 nametable_col_copy_byte:  lda     ($FE),y
-        sta     $03B8,y
+        sta     col_update_tiles,y
         dey
         bpl     nametable_col_copy_byte
         lda     #$20
@@ -612,9 +616,9 @@ nametable_addr_table:  .byte   $00,$80,$C0,$00,$40,$80,$C0,$00 ; column data VRA
 run_one_game_frame:  lda     #$0E       ; switch to game engine bank
         jsr     bank_switch
         lda     #$00
-        sta     $0680
+        sta     ent_anim_frame
         lda     #$01
-        sta     $4B                     ; set invincibility frame
+        sta     invincibility_timer                     ; set invincibility frame
         jsr     update_entity_positions ; move all entities
         jsr     entity_spawn_scan       ; spawn/despawn entities
         jsr     process_sound_and_bosses ; process sound + boss check
@@ -637,7 +641,7 @@ game_frame_done:  jsr     wait_for_vblank ; wait for NMI and read input
 ; =============================================================================
 clear_entities_and_run:  ldx     #$1F
         lda     #$00
-clear_entities_loop:  sta     $0680,x
+clear_entities_loop:  sta     ent_anim_frame,x
         dex
         bpl     clear_entities_loop
         jmp     run_sound_and_scroll
@@ -645,11 +649,11 @@ clear_entities_loop:  sta     $0680,x
 ; =============================================================================
 ; setup_explosion_array — Set up 12 explosion entities around boss position ($C393)
 ; =============================================================================
-setup_explosion_array:  lda     $0440
-        sta     $09
-        lda     $0460
+setup_explosion_array:  lda     ent_x_screen
+        sta     jump_ptr_hi
+        lda     ent_x_px
         sta     jump_ptr
-        lda     $04A0
+        lda     ent_y_px
         sta     $0A
         lda     #$25                    ; explosion entity type
         sta     $0B
@@ -657,26 +661,26 @@ setup_explosion_array:  lda     $0440
         ldy     #$0B
 explosion_setup_loop:  lda     #$80
         ora     explosion_flags_tbl,y
-        sta     $0420,x                 ; set entity flags (active)
+        sta     ent_flags,x                 ; set entity flags (active)
         lda     $0B
-        sta     $0400,x
-        lda     $09
-        sta     $0440,x
+        sta     ent_type,x
+        lda     jump_ptr_hi
+        sta     ent_x_screen,x
         lda     jump_ptr
-        sta     $0460,x
+        sta     ent_x_px,x
         lda     $0A
-        sta     $04A0,x
+        sta     ent_y_px,x
         lda     explosion_xvel_sub_tbl,y
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         lda     explosion_xvel_tbl,y
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     explosion_yvel_sub_tbl,y
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     explosion_yvel_tbl,y
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$00
-        sta     $0680,x
-        sta     $06A0,x
+        sta     ent_anim_frame,x
+        sta     ent_anim_id,x
         dex
         dey
         bpl     explosion_setup_loop
@@ -718,7 +722,7 @@ palette_anim_advance:  asl     a
         tax
         ldy     #$00
 palette_anim_copy_loop:  lda     $0376,x ; copy from palette animation frames
-        sta     $0356,y                 ; write to active palette RAM
+        sta     palette_ram,y                 ; write to active palette RAM
         inx
         iny
         cpy     #$10
@@ -726,53 +730,53 @@ palette_anim_copy_loop:  lda     $0376,x ; copy from palette animation frames
         inc     $3A
 palette_anim_done:  rts
 
-        lda     $2A
+        lda     current_stage
         and     #$07
         jsr     bank_switch
         lda     #$00
         sta     $0A
         lda     #$BC
         sta     $0B
-        lda     $2A
+        lda     current_stage
         and     #$08
         beq     *+4
         inc     $0B
         ldy     #$00
         lda     ($0A),y
-        sta     $00
+        sta     temp_00
         lda     #$00
-        sta     $2006
-        sta     $2006
+        sta     PPUADDR
+        sta     PPUADDR
         sta     jump_ptr
         iny
-        sty     $01
+        sty     temp_01
 
 ; =============================================================================
 ; chr_upload_entry — Upload CHR tile data from stage banks to CHR-RAM ($C487)
 ; =============================================================================
-chr_upload_entry:  ldy     $01
+chr_upload_entry:  ldy     temp_01
         lda     ($0A),y
-        sta     $09
+        sta     jump_ptr_hi
         iny
         lda     ($0A),y
-        sta     $02
+        sta     temp_02
         iny
         lda     ($0A),y
         iny
-        sty     $01
+        sty     temp_01
         jsr     bank_switch
 chr_upload_page_loop:  ldy     #$00
 chr_upload_byte_loop:  lda     (jump_ptr),y ; read CHR byte from bank
-        sta     $2007                   ; write to CHR-RAM via PPUDATA
+        sta     PPUDATA                   ; write to CHR-RAM via PPUDATA
         iny
         bne     chr_upload_byte_loop
-        inc     $09
-        dec     $02
+        inc     jump_ptr_hi
+        dec     temp_02
         bne     chr_upload_page_loop
-        lda     $2A
+        lda     current_stage
         and     #$07
         jsr     bank_switch
-        dec     $00
+        dec     temp_00
         bne     chr_upload_entry
         inc     $0B
         inc     $0B
@@ -786,13 +790,13 @@ chr_upload_palette_copy:  lda     ($0A),y
         jsr     bank_switch
         rts
 
-        lda     $2A
+        lda     current_stage
         and     #$07
         jsr     bank_switch
         ldy     $B0
         lda     $BB06,y
-        sta     $20
-        sta     $0440
+        sta     nametable_select
+        sta     ent_x_screen
         lda     $BB0C,y
         sta     $48
         sta     $49
@@ -826,22 +830,22 @@ chr_upload_sound_bank:  lda     $B460,y
         dex
         bne     chr_upload_sound_bank
         lda     #$0A
-        sta     $2006
+        sta     PPUADDR
         lda     #$00
-        sta     $2006
+        sta     PPUADDR
         sta     jump_ptr
         lda     #$06
-        sta     $00
+        sta     temp_00
 chr_sound_page_loop:  pla
-        sta     $09
+        sta     jump_ptr_hi
         pla
         jsr     bank_switch
         ldy     #$00
 chr_sound_byte_loop:  lda     (jump_ptr),y
-        sta     $2007
+        sta     PPUDATA
         iny
         bne     chr_sound_byte_loop
-        dec     $00
+        dec     temp_00
         bne     chr_sound_page_loop
         lda     #$0E
         jsr     bank_switch
@@ -868,7 +872,7 @@ chr_upload_wily_check:  rts
 ; =============================================================================
 ; find_active_entity_slot — Scan entity slots for an unused one ($C575)
 ; =============================================================================
-find_active_entity_slot:  lda     $0420,x ; check entity flags (bit 7=active)
+find_active_entity_slot:  lda     ent_flags,x ; check entity flags (bit 7=active)
         bmi     find_entity_done
         dex
         cpx     #$01
@@ -876,9 +880,9 @@ find_active_entity_slot:  lda     $0420,x ; check entity flags (bit 7=active)
         lda     $47
         beq     scroll_column_setup
         jsr     wait_for_vblank
-scroll_column_setup:  lda     $03B6
+scroll_column_setup:  lda     col_update_addr_hi
         pha
-        lda     $03B7
+        lda     col_update_addr_lo
         pha
         lda     #$32
         jsr     bank_switch_enqueue
@@ -886,9 +890,9 @@ scroll_column_setup:  lda     $03B6
         jsr     bank_switch
         jsr     banked_entry_alt
         pla
-        sta     $03B7
+        sta     col_update_addr_lo
         pla
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$0E
         jsr     bank_switch
 find_entity_done:  rts
@@ -905,19 +909,19 @@ process_sound_and_bosses:  lda     $B1  ; check boss HP / intro state
         jsr     bank_switch
         lda     $05AA                   ; check sound trigger flag
         beq     process_sound_done
-        lda     $2A                     ; check current stage index
+        lda     current_stage                     ; check current stage index
         cmp     #$0C
         bne     process_sound_jump_intro
         lda     $BC
         cmp     #$FF
         beq     process_sound_jump_intro
         ldx     #$0F
-clear_boss_entities:  lsr     $0430,x
+clear_boss_entities:  lsr     ent_spawn_flags,x
         dex
         bpl     clear_boss_entities
         jsr     reset_sound_state
         lda     #$00
-        sta     $2B
+        sta     current_entity_slot
         lda     #$7D
         ldx     #$0F
         jsr     spawn_entity_init
@@ -932,18 +936,18 @@ process_sound_done:  rts
 
         pha
         lda     $05A7
-        sta     $09
+        sta     jump_ptr_hi
         lda     $05A9
-        sta     $08
+        sta     jump_ptr
         pla
         jsr     column_copy_to_buffer
         clc
-        lda     $03B7
+        lda     col_update_addr_lo
         adc     #$20
-        sta     $03B7
-        lda     $03B6
+        sta     col_update_addr_lo
+        lda     col_update_addr_hi
         adc     #$00
-        sta     $03B6
+        sta     col_update_addr_hi
         clc
         lda     $05A9
         adc     #$20
@@ -957,47 +961,47 @@ process_sound_done:  rts
 
         jsr     bank_switch
         lda     #$00
-        sta     $08
+        sta     jump_ptr
         ldx     #$04
 chr_copy_ppu_loop:  lda     (jump_ptr),y
-        sta     $2007
+        sta     PPUDATA
         iny
         bne     chr_copy_ppu_loop
-        inc     $09
+        inc     jump_ptr_hi
         dex
         bne     chr_copy_ppu_loop
         lda     #$0D
         jsr     bank_switch
         rts
 
-        sta     $00
+        sta     temp_00
         tax
         lda     $C689,x
-        sta     $01
+        sta     temp_01
         lda     $C690,x
-        sta     $02
+        sta     temp_02
         lda     #$00
-        sta     $08
-        sta     $2006
-        sta     $2006
+        sta     jump_ptr
+        sta     PPUADDR
+        sta     PPUADDR
 chr_bank_load_ptr_lo:  .byte   $A6
 chr_bank_load_ptr_hi:  .byte   $02
         lda     chr_bank_src_addr_lo_tbl,x
-        sta     $09
+        sta     jump_ptr_hi
         lda     chr_bank_page_count_tbl,x
-        sta     $03
+        sta     temp_03
         lda     chr_bank_src_bank_tbl,x
         jsr     bank_switch
         ldy     #$00
 chr_copy_loop:  lda     (jump_ptr),y
-        sta     $2007
+        sta     PPUDATA
         iny
         bne     chr_copy_loop
-        inc     $09
-        dec     $03
+        inc     jump_ptr_hi
+        dec     temp_03
         bne     chr_copy_loop
-        inc     $02
-        dec     $01
+        inc     temp_02
+        dec     temp_01
         bne     chr_bank_load_ptr_lo
         lda     #$0D
         jsr     bank_switch
@@ -1022,16 +1026,16 @@ chr_bank_src_addr_lo_tbl:  .byte   $90,$88,$90,$90
 chr_bank_page_count_tbl:  .byte   $10,$10,$10,$10,$08,$08,$10,$0E
         .byte   $02,$04,$02,$04,$06,$02,$01,$01
         .byte   $01,$02,$01,$01,$02,$01
-        ora     ($01,x)
+        ora     (temp_01,x)
         .byte   $02,$0C,$02,$10,$03,$01,$0C,$08
-        ora     ($01,x)
-        ora     ($01,x)
-        ora     ($01,x)
+        ora     (temp_01,x)
+        ora     (temp_01,x)
+        ora     (temp_01,x)
         .byte   $02
 column_copy_to_buffer:  jsr     bank_switch
         ldy     #$1F
 column_copy_loop:  lda     (jump_ptr),y
-        sta     $03B8,y
+        sta     col_update_tiles,y
         dey
         bpl     column_copy_loop
         lda     #$20
@@ -1044,13 +1048,13 @@ column_copy_loop:  lda     (jump_ptr),y
         jsr     bank_switch
         ldx     #$1F
 column_copy_from_ram:  lda     $9CD0,x
-        sta     $03B8,x
+        sta     col_update_tiles,x
         dex
         bpl     column_copy_from_ram
         lda     #$08
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$00
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$20
         sta     $47
         lda     #$0D
@@ -1061,7 +1065,7 @@ column_copy_from_ram:  lda     $9CD0,x
         jsr     bank_switch
         ldy     #$1F
 column_copy_from_ptr:  lda     ($FE),y
-        sta     $03B8,y
+        sta     col_update_tiles,y
         dey
         bpl     column_copy_from_ptr
         lda     #$20
@@ -1071,33 +1075,33 @@ column_copy_from_ptr:  lda     ($FE),y
         rts
 
         lda     $FD
-        sta     $09
+        sta     jump_ptr_hi
         lda     #$00
-        lsr     $09
+        lsr     jump_ptr_hi
         ror     a
-        lsr     $09
+        lsr     jump_ptr_hi
         ror     a
-        lsr     $09
+        lsr     jump_ptr_hi
         ror     a
-        sta     $03B7
-        sta     $08
+        sta     col_update_addr_lo
+        sta     jump_ptr
         lda     $FD
         cmp     #$08
         bcc     *+7
-        lda     $09
+        lda     jump_ptr_hi
         jmp     $C783
-        lda     $09
+        lda     jump_ptr_hi
         adc     #$09
-        sta     $03B6
+        sta     col_update_addr_hi
         clc
         tya
-        adc     $09
-        sta     $09
+        adc     jump_ptr_hi
+        sta     jump_ptr_hi
         txa
         jsr     bank_switch
         ldy     #$1F
 column_copy_from_bank:  lda     (jump_ptr),y
-        sta     $03B8,y
+        sta     col_update_tiles,y
         dey
         bpl     column_copy_from_bank
         lda     #$20
@@ -1106,7 +1110,7 @@ column_copy_from_bank:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
-        lda     $2A
+        lda     current_stage
         and     #$07
         jsr     bank_switch
         lda     $B400,y
@@ -1115,23 +1119,23 @@ column_copy_from_bank:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
         lda     #$C0
-        sta     $0420
+        sta     ent_flags
         lda     #$80
-        sta     $0460
+        sta     ent_x_px
         lda     #$14
-        sta     $04A0
+        sta     ent_y_px
         lda     #$1A
-        sta     $0400
-boss_entrance_scroll:  lda     $2A
+        sta     ent_type
+boss_entrance_scroll:  lda     current_stage
         and     #$07
         jsr     bank_switch
         lda     #$00
-        sta     $0680
-        sta     $06A0
+        sta     ent_anim_frame
+        sta     ent_anim_id
         clc
-        lda     $04A0
+        lda     ent_y_px
         adc     #$10
-        sta     $04A0
+        sta     ent_y_px
         ldx     $B0
         cmp     $BB00,x
         beq     boss_entrance_done
@@ -1142,7 +1146,7 @@ boss_entrance_scroll:  lda     $2A
 boss_entrance_done:  lda     #$30
         jsr     bank_switch_enqueue
         lda     #$00
-        sta     $2C
+        sta     game_substate
         sta     $3E
         sta     $3F
         lda     #$40
@@ -1151,7 +1155,7 @@ boss_entrance_done:  lda     #$30
         jsr     bank_switch
         rts
 
-        lda     $2A
+        lda     current_stage
         sta     $B3
         lda     #$0B
         jsr     bank_switch
@@ -1159,8 +1163,8 @@ boss_entrance_done:  lda     #$30
         lda     #$0E
         jsr     bank_switch
 boss_fight_frame:  lda     #$00
-        sta     $23
-        sta     $27
+        sta     controller_1
+        sta     p1_new_presses
         jsr     banked_0E_entity_update
         jsr     update_entity_positions
         jsr     entity_spawn_scan
@@ -1186,24 +1190,24 @@ boss_fight_wait_vblank:  jsr     wait_for_vblank
 ; divide_8bit — 8-bit unsigned division: $01/$02 -> quotient $03 ($C84E)
 ; =============================================================================
 divide_8bit:  lda     #$00
-        sta     $03
-        sta     $04                     ; clear remainder high
-        lda     $01
-        ora     $02
+        sta     temp_03
+        sta     temp_04                     ; clear remainder high
+        lda     temp_01
+        ora     temp_02
         bne     div8_setup
-        sta     $03
+        sta     temp_03
         rts
 
 div8_setup:  ldy     #$08               ; 8 bits to process
-div8_loop:  asl     $03
-        rol     $01
-        rol     $04
+div8_loop:  asl     temp_03
+        rol     temp_01
+        rol     temp_04
         sec
-        lda     $04
-        sbc     $02
+        lda     temp_04
+        sbc     temp_02
         bcc     div8_next
-        sta     $04
-        inc     $03
+        sta     temp_04
+        inc     temp_03
 div8_next:  dey
         bne     div8_loop
         rts
@@ -1235,7 +1239,7 @@ div16_loop:  asl     $10
         lda     $11
         sbc     $0D
         bcc     div16_next
-        stx     $09
+        stx     jump_ptr_hi
         sta     $11
         inc     $10
 div16_next:  dey
@@ -1246,9 +1250,9 @@ div16_next:  dey
         sta     $0E
         rts
 
-        ldx     $1B
+        ldx     ppu_buffer_count
         ldy     #$20
-        lda     $09
+        lda     jump_ptr_hi
         and     #$01
         beq     *+4
         ldy     #$24
@@ -1260,7 +1264,7 @@ div16_next:  dey
         lsr     a
         and     #$03
         ora     $0B
-        sta     $0300,x
+        sta     ppu_update_buf,x
         pla
         pha
         ror     a
@@ -1284,7 +1288,7 @@ div16_next:  dey
 
         ldx     $51
         ldy     #$08
-        lda     $09
+        lda     jump_ptr_hi
         and     #$01
         beq     *+4
         ldy     #$09
@@ -1303,11 +1307,11 @@ div16_next:  dey
         ora     $03BC,x
         sta     $03BC,x
         lda     $0B
-        sta     $03B6,x
+        sta     col_update_addr_hi,x
         rts
 
         pha
-        lda     $08
+        lda     jump_ptr
         pha
         ldx     $51
         lda     $0A
@@ -1315,7 +1319,7 @@ div16_next:  dey
         lsr     a
         lsr     a
         sta     $0B
-        asl     $08
+        asl     jump_ptr
         rol     a
         asl     jump_ptr
         rol     a
@@ -1325,7 +1329,7 @@ div16_next:  dey
         ora     #$C0
         sta     $03C8,x
         ldy     #$23
-        lda     $09
+        lda     jump_ptr_hi
         and     #$01
         beq     attr_set_nametable
         ldy     #$27
@@ -1350,7 +1354,7 @@ attr_calc_mask:  pla
         rts
 
 attr_mask_table:  .byte   $03,$0C,$30,$C0
-        lda     $2A
+        lda     current_stage
         and     #$07
         jsr     bank_switch
         lda     #$20
@@ -1367,7 +1371,7 @@ attr_mask_table:  .byte   $03,$0C,$30,$C0
         asl     a
         rol     $0B
         sta     $0A
-        lda     $1B
+        lda     ppu_buffer_count
         asl     a
         asl     a
         asl     a
@@ -1412,10 +1416,10 @@ metatile_set_base_nt:  sty     $0D
         sta     $0D
         pla
         and     #$FC
-        ldx     $1B
+        ldx     ppu_buffer_count
         sta     $0304,x
         lda     $0D
-        sta     $0300,x
+        sta     ppu_update_buf,x
         lda     $0D
         ora     #$03
         sta     $0308,x
@@ -1432,19 +1436,19 @@ metatile_set_base_nt:  sty     $0D
         sta     $030C,x
         pla
         sta     $0350,x
-        inc     $1B
+        inc     ppu_buffer_count
         lda     #$0E
         jsr     bank_switch
         rts
 
 metatile_offset_table:  .byte   $00,$08,$02,$0A
-        lda     $29
+        lda     current_bank
         pha
         jsr     $C96B
         pla
         jsr     bank_switch
         rts
-        lda     $2A
+        lda     current_stage
         and     #$07
         jsr     bank_switch
         lda     $39
@@ -1452,7 +1456,7 @@ metatile_offset_table:  .byte   $00,$08,$02,$0A
         lsr     a
         lsr     a
         lsr     a
-        sta     $0300
+        sta     ppu_update_buf
         lda     $39
         asl     a
         asl     a
@@ -1475,30 +1479,30 @@ metatile_offset_table:  .byte   $00,$08,$02,$0A
         ora     $0313
         sta     $0313
         ldx     #$20
-        lda     $20
+        lda     nametable_select
         and     #$01
         beq     *+4
         ldx     #$24
         txa
-        ora     $0300
-        sta     $0300
+        ora     ppu_update_buf
+        sta     ppu_update_buf
         txa
         ora     #$03
         sta     $0312
         lda     #$00
-        sta     $00
+        sta     temp_00
         lda     $39
         and     #$3B
         lsr     a
-        ror     $00
+        ror     temp_00
         lsr     a
-        ror     $00
+        ror     temp_00
         lsr     a
-        ror     $00
-        lsr     $00
-        ora     $00
-        sta     $00
-        lda     $0440
+        ror     temp_00
+        lsr     temp_00
+        ora     temp_00
+        sta     temp_00
+        lda     ent_x_screen
         ldx     #$00
         stx     jump_ptr
         lsr     a
@@ -1507,11 +1511,11 @@ metatile_offset_table:  .byte   $00,$08,$02,$0A
         ror     jump_ptr
         clc
         adc     #$85
-        sta     $09
-        stx     $01
-metatile_attr_loop:  ldy     $00
+        sta     jump_ptr_hi
+        stx     temp_01
+metatile_attr_loop:  ldy     temp_00
         lda     (jump_ptr),y
-        sta     $03
+        sta     temp_03
         sta     $0A
         lda     #$20
         asl     $0A
@@ -1525,7 +1529,7 @@ metatile_attr_loop:  ldy     $00
         beq     metatile_attr_count
         iny
 metatile_attr_count:  lda     #$02
-        sta     $02
+        sta     temp_02
 metatile_attr_inner:  lda     ($0A),y
         asl     a
         asl     a
@@ -1541,7 +1545,7 @@ metatile_attr_inner:  lda     ($0A),y
         inx
         iny
         iny
-        dec     $02
+        dec     temp_02
         bne     metatile_attr_inner
         lda     $39
         ldy     #$0F
@@ -1549,22 +1553,22 @@ metatile_attr_inner:  lda     ($0A),y
         beq     metatile_attr_mask_setup
         ldy     #$F0
 metatile_attr_mask_setup:  sty     $0314
-        ldy     $03
+        ldy     temp_03
         lda     $8400,y
         and     $0314
-        ldy     $01
+        ldy     temp_01
         sta     $0315,y
-        lda     $00
+        lda     temp_00
         ora     #$08
-        sta     $00
-        inc     $01
-        lda     $01
+        sta     temp_00
+        inc     temp_01
+        lda     temp_01
         cmp     #$02
         beq     metatile_attr_done
         jmp     metatile_attr_loop
 
 metatile_attr_done:  lda     #$80
-        sta     $1B
+        sta     ppu_buffer_count
         lda     #$FF
         eor     $0314
         sta     $0314
@@ -1576,7 +1580,7 @@ metatile_attr_done:  lda     #$80
         cmp     #$60
         bcc     *+3
         rts
-        lda     $29
+        lda     current_bank
         pha
         lda     $FD
         and     #$F0
@@ -1587,15 +1591,15 @@ metatile_attr_done:  lda     #$80
         lsr     a
         clc
         adc     #$0A
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     $FD
         asl     a
         asl     a
         asl     a
         asl     a
-        sta     $03B7
+        sta     col_update_addr_lo
         sta     jump_ptr
-        lda     $2A
+        lda     current_stage
         and     #$07
         jsr     bank_switch
         ldx     $FE
@@ -1605,12 +1609,12 @@ metatile_attr_done:  lda     #$80
         adc     $B42C,x
         tax
         lda     $B460,x
-        sta     $09
+        sta     jump_ptr_hi
         lda     $B461,x
         jsr     bank_switch
         ldy     #$1F
 scroll_col_copy_loop:  lda     (jump_ptr),y
-        sta     $03B8,y
+        sta     col_update_tiles,y
         dey
         bpl     scroll_col_copy_loop
         lda     #$20
@@ -1638,7 +1642,7 @@ scroll_col_load_palette:  ldy     $B42C,x
 
         ldx     #$0F
         ldy     #$00
-build_active_entity_list:  lda     $0430,x
+build_active_entity_list:  lda     ent_spawn_flags,x
         bpl     active_entity_next
         and     #$10
         beq     active_entity_next
@@ -1665,17 +1669,17 @@ cached_tile_scan_loop:  dey
         cmp     $0670,x
         bne     cached_tile_scan_loop
         lda     $04F0,x
-        sta     $00
+        sta     temp_00
         rts
 
 ; =============================================================================
 ; lookup_tile_from_map — Look up tile collision type from stage metatile map ($CBC3)
 ; =============================================================================
-lookup_tile_from_map:  lda     $2A
+lookup_tile_from_map:  lda     current_stage
         and     #$07                    ; stage bank = stage index & 7
         jsr     bank_switch             ; switch to stage data bank
         lda     #$00
-        sta     $00
+        sta     temp_00
         lda     $0B
         beq     tile_lookup_calc_index
         bmi     tile_lookup_clear_y
@@ -1687,18 +1691,18 @@ tile_lookup_calc_index:  lda     jump_ptr
         lsr     a
         lsr     a
         and     #$38
-        sta     $00
+        sta     temp_00
         lda     $0A
         asl     a
         rol     a
         rol     a
         rol     a
         and     #$07
-        ora     $00
-        sta     $00
+        ora     temp_00
+        sta     temp_00
         lda     #$00
         sta     $0C
-        lda     $09
+        lda     jump_ptr_hi
         lsr     a
         ror     $0C
         lsr     a
@@ -1706,7 +1710,7 @@ tile_lookup_calc_index:  lda     jump_ptr
         clc
         adc     #$85
         sta     $0D
-        ldy     $00
+        ldy     temp_00
         lda     ($0C),y
         sta     $0C
         lda     #$20
@@ -1726,23 +1730,23 @@ tile_check_vert:  lda     $0A
         beq     tile_get_collision_type
         iny
 tile_get_collision_type:  lda     ($0C),y
-        sta     $00
-        asl     $00
+        sta     temp_00
+        asl     temp_00
         rol     a
-        asl     $00
+        asl     temp_00
         rol     a
         and     #$03
-        sta     $00
+        sta     temp_00
         lsr     a
         beq     tile_lookup_done
-        dec     $00
-        dec     $00
-        lda     $2A
+        dec     temp_00
+        dec     temp_00
+        lda     current_stage
         asl     a
-        adc     $00
+        adc     temp_00
         tax
         lda     stage_collision_table,x
-        sta     $00
+        sta     temp_00
 tile_lookup_done:  lda     #$0E         ; switch back to game engine
         jsr     bank_switch
         rts
@@ -1761,7 +1765,7 @@ stage_collision_table:  .byte   $02,$03,$02,$03,$02,$00,$04,$03
 ; =============================================================================
 clear_oam_buffer:  lda     #$F8         ; $F8 = off-screen Y (hide sprite)
         ldx     #$00
-clear_oam_loop:  sta     $0200,x        ; write $F8 to OAM Y position
+clear_oam_loop:  sta     oam_buffer,x        ; write $F8 to OAM Y position
         inx
         bne     clear_oam_loop
         rts
@@ -1773,55 +1777,55 @@ render_all_sprites:  lda     #$0A       ; switch to sound data bank
         jsr     bank_switch             ; bank $0A has sprite def ptrs
         jsr     clear_oam_buffer        ; clear all sprites first
         lda     #$00
-        sta     $06
+        sta     temp_06
         sta     $0D
         sta     $0C
         lda     $AA
         beq     render_even_frame
         jmp     render_special_mode
 
-render_even_frame:  lda     $1C         ; frame counter (odd/even toggle)
+render_even_frame:  lda     frame_counter         ; frame counter (odd/even toggle)
         and     #$01
         bne     render_odd_frame
         lda     #$FF
         sta     $0C
         lda     #$00
-        sta     $2B
+        sta     current_entity_slot
 render_entity_forward:  jsr     render_entity_normal
         bcs     render_even_done
-        inc     $2B
-        lda     $2B
+        inc     current_entity_slot
+        lda     current_entity_slot
         cmp     #$10
         bne     render_entity_forward
 render_weapon_forward:  jsr     render_weapon_normal
         bcs     render_even_done
-        inc     $2B
-        lda     $2B
+        inc     current_entity_slot
+        lda     current_entity_slot
         cmp     #$20
         bne     render_weapon_forward
-        lda     $06
+        lda     temp_06
         sta     $0C
         jsr     render_hp_bars
 render_even_done:  jmp     render_priority_fix
 
 render_odd_frame:  jsr     render_hp_bars
-        lda     $06
+        lda     temp_06
         sta     $0D
         lda     #$1F
-        sta     $2B
+        sta     current_entity_slot
 render_weapon_reverse:  jsr     render_weapon_normal
         bcs     render_priority_fix
-        dec     $2B
-        lda     $2B
+        dec     current_entity_slot
+        lda     current_entity_slot
         cmp     #$0F
         bne     render_weapon_reverse
 render_entity_reverse:  jsr     render_entity_normal
         bcs     render_priority_fix
-        dec     $2B
+        dec     current_entity_slot
         bpl     render_entity_reverse
-        lda     $06
+        lda     temp_06
         sta     $0C
-render_priority_fix:  lda     $2A
+render_priority_fix:  lda     current_stage
         cmp     #$01
         bne     render_sprites_done
         ldx     $0D
@@ -1839,13 +1843,13 @@ render_sprites_done:  lda     #$0E      ; switch back to game engine
         jsr     bank_switch
         rts
 
-render_special_mode:  lda     $1C
+render_special_mode:  lda     frame_counter
         and     #$01
         bne     render_special_odd
         lda     #$FF
         sta     $0C
         lda     #$00
-        sta     $2B
+        sta     current_entity_slot
         lda     $AA
         and     #$04
         beq     render_special_check_entity
@@ -1853,7 +1857,7 @@ render_special_mode:  lda     $1C
         jmp     render_special_entity_loop
 
 render_special_check_entity:  jsr     render_entity_normal
-render_special_entity_loop:  inc     $2B
+render_special_entity_loop:  inc     current_entity_slot
 render_special_entity_inner:  lda     $AA
         and     #$02
         bne     render_special_jump_1
@@ -1862,30 +1866,30 @@ render_special_entity_inner:  lda     $AA
 
 render_special_jump_1:  jsr     render_entity_special
 render_special_carry:  bcs     render_special_done
-        inc     $2B
-        lda     $2B
+        inc     current_entity_slot
+        lda     current_entity_slot
         cmp     #$10
         bne     render_special_entity_inner
 render_special_weapon:  jsr     render_weapon_special
         bcs     render_special_done
-        inc     $2B
-        lda     $2B
+        inc     current_entity_slot
+        lda     current_entity_slot
         cmp     #$20
         bne     render_special_weapon
-        lda     $06
+        lda     temp_06
         sta     $0C
         jsr     render_hp_bars
 render_special_done:  jmp     render_priority_fix
 
 render_special_odd:  jsr     render_hp_bars
-        lda     $06
+        lda     temp_06
         sta     $0D
         lda     #$1F
-        sta     $2B
+        sta     current_entity_slot
 render_special_weapon_rev:  jsr     render_weapon_special
         bcs     render_special_jump_end
-        dec     $2B
-        lda     $2B
+        dec     current_entity_slot
+        lda     current_entity_slot
         cmp     #$0F
         bne     render_special_weapon_rev
 render_special_entity_rev:  lda     $AA
@@ -1896,7 +1900,7 @@ render_special_entity_rev:  lda     $AA
 
 render_special_entity_inner_2:  jsr     render_entity_special
 render_special_carry_2:  bcs     render_special_jump_end
-        dec     $2B
+        dec     current_entity_slot
         bne     render_special_entity_rev
         lda     $AA
         and     #$04
@@ -1905,22 +1909,22 @@ render_special_carry_2:  bcs     render_special_jump_end
         jmp     render_special_jump_2
 
 render_special_check_2:  jsr     render_entity_normal
-render_special_jump_2:  lda     $06
+render_special_jump_2:  lda     temp_06
         sta     $0C
 render_special_jump_end:  jmp     render_priority_fix
 
-render_entity_special:  ldx     $2B
-        lda     $0420,x
+render_entity_special:  ldx     current_entity_slot
+        lda     ent_flags,x
         bmi     render_entity_get_sprite_ptr
         clc
         rts
 
-render_entity_get_sprite_ptr:  ldy     $0400,x
+render_entity_get_sprite_ptr:  ldy     ent_type,x
         lda     sprite_def_ptr_lo,y
         sta     jump_ptr
         lda     sprite_def_ptr_hi,y
-        sta     $09
-        lda     $06A0,x
+        sta     jump_ptr_hi
+        lda     ent_anim_id,x
         clc
         adc     #$02
         tay
@@ -1928,21 +1932,21 @@ render_entity_get_sprite_ptr:  ldy     $0400,x
         beq     render_entity_deactivate
         jmp     render_begin_oam_write
 
-render_entity_deactivate:  lsr     $0420,x
+render_entity_deactivate:  lsr     ent_flags,x
         rts
 
-render_weapon_special:  ldx     $2B
-        lda     $0420,x
+render_weapon_special:  ldx     current_entity_slot
+        lda     ent_flags,x
         bmi     render_weapon_get_sprite_ptr
         clc
         rts
 
-render_weapon_get_sprite_ptr:  ldy     $0400,x
+render_weapon_get_sprite_ptr:  ldy     ent_type,x
         lda     sprite_def_ptr_lo_wpn,y
         sta     jump_ptr
         lda     sprite_def_ptr_hi_wpn,y
-        sta     $09
-        lda     $06A0,x
+        sta     jump_ptr_hi
+        lda     ent_anim_id,x
         clc
         adc     #$02
         tay
@@ -1950,55 +1954,55 @@ render_weapon_get_sprite_ptr:  ldy     $0400,x
         beq     render_weapon_deactivate
         jmp     render_weapon_begin_write
 
-render_weapon_deactivate:  lsr     $0420,x
+render_weapon_deactivate:  lsr     ent_flags,x
         rts
 
 ; =============================================================================
 ; render_entity_normal — Render a normal entity's sprites to OAM ($CDE7)
 ; =============================================================================
-render_entity_normal:  ldx     $2B
-        lda     $0420,x                 ; check entity active flag
+render_entity_normal:  ldx     current_entity_slot
+        lda     ent_flags,x                 ; check entity active flag
         bmi     render_entity_get_ptr
         clc
         rts
 
-render_entity_get_ptr:  ldy     $0400,x
+render_entity_get_ptr:  ldy     ent_type,x
         lda     sprite_def_ptr_lo,y
         sta     jump_ptr
         lda     sprite_def_ptr_hi,y
-        sta     $09
-        lda     $06A0,x
+        sta     jump_ptr_hi
+        lda     ent_anim_id,x
         pha
-        inc     $0680,x
+        inc     ent_anim_frame,x
         ldy     #$01
         lda     (jump_ptr),y
-        cmp     $0680,x
+        cmp     ent_anim_frame,x
         bcs     render_entity_check_frame
         lda     #$00
-        sta     $0680,x
-        inc     $06A0,x
+        sta     ent_anim_frame,x
+        inc     ent_anim_id,x
         dey
         lda     (jump_ptr),y
-        cmp     $06A0,x
+        cmp     ent_anim_id,x
         bcs     render_entity_check_frame
         lda     #$00
-        sta     $06A0,x
+        sta     ent_anim_id,x
 render_entity_check_frame:  pla
         clc
         adc     #$02
         tay
         lda     (jump_ptr),y
         bne     render_begin_oam_write
-        lsr     $0420,x
+        lsr     ent_flags,x
         rts
 
 render_begin_oam_write:  tay
         cpx     #$01
         bcs     render_skip_flash
-        lda     $4B
+        lda     invincibility_timer
         beq     render_check_flash
-        dec     $4B
-        lda     $1C
+        dec     invincibility_timer
+        lda     frame_counter
         and     #$02
         beq     render_check_flash
 render_flash_jump:  jmp     render_ok_return
@@ -2009,7 +2013,7 @@ render_check_flash:  lda     $F9
 render_skip_flash:  bne     render_load_sprite_data
         lda     $05A8
         beq     render_load_sprite_data
-        lda     $1C
+        lda     frame_counter
         and     #$02
         bne     render_dec_extra_timer
         ldy     #$18
@@ -2017,12 +2021,12 @@ render_dec_extra_timer:  dec     $05A8
 render_load_sprite_data:  lda     banked_entry,y
         sta     jump_ptr
         lda     $8200,y
-        sta     $09
+        sta     jump_ptr_hi
         lda     #$00
-        sta     $03
+        sta     temp_03
 render_sprite_loop:  ldy     #$00
         lda     (jump_ptr),y
-        sta     $04
+        sta     temp_04
         iny
         lda     (jump_ptr),y
         tay
@@ -2031,37 +2035,37 @@ render_sprite_loop:  ldy     #$00
         lda     $8500,y
         sta     $0B
         sec
-        lda     $0460,x
-        sbc     $1F
-        sta     $00
-        lda     $0440,x
-        sbc     $20
-        lda     $04A0,x
-        sta     $01
-        lda     $0420,x
+        lda     ent_x_px,x
+        sbc     scroll_x
+        sta     temp_00
+        lda     ent_x_screen,x
+        sbc     nametable_select
+        lda     ent_y_px,x
+        sta     temp_01
+        lda     ent_flags,x
         and     #$40
-        sta     $02
+        sta     temp_02
         lda     #$02
-        sta     $07
-render_sprite_oam_entry:  ldx     $06
-        ldy     $07
+        sta     temp_07
+render_sprite_oam_entry:  ldx     temp_06
+        ldy     temp_07
         lda     (jump_ptr),y
         sta     $0201,x
         clc
         lda     ($0A),y
-        adc     $01
-        sta     $0200,x
+        adc     temp_01
+        sta     oam_buffer,x
         iny
-        lda     $03
+        lda     temp_03
         beq     render_sprite_load_tile
         lda     (jump_ptr),y
         and     #$F0
-        ora     $03
+        ora     temp_03
         bne     render_sprite_apply_flip
 render_sprite_load_tile:  lda     (jump_ptr),y
-render_sprite_apply_flip:  eor     $02
+render_sprite_apply_flip:  eor     temp_02
         sta     $0202,x
-        lda     $02
+        lda     temp_02
         beq     render_sprite_no_flip_x
         lda     ($0A),y
         tay
@@ -2071,23 +2075,23 @@ render_sprite_apply_flip:  eor     $02
 render_sprite_no_flip_x:  lda     ($0A),y
 render_sprite_write_x:  clc
         bmi     render_sprite_neg_x
-        adc     $00
+        adc     temp_00
         bcc     render_sprite_store_x
         bcs     render_sprite_offscreen
-render_sprite_neg_x:  adc     $00
+render_sprite_neg_x:  adc     temp_00
         bcs     render_sprite_store_x
 render_sprite_offscreen:  lda     #$F8
-        sta     $0200,x
+        sta     oam_buffer,x
         bne     render_sprite_next
 render_sprite_store_x:  sta     $0203,x
         clc
         txa
         adc     #$04
-        sta     $06
+        sta     temp_06
         beq     render_full_return
-render_sprite_next:  inc     $07
-        inc     $07
-        dec     $04
+render_sprite_next:  inc     temp_07
+        inc     temp_07
+        dec     temp_04
         bne     render_sprite_oam_entry
 render_ok_return:  clc
         rts
@@ -2098,52 +2102,52 @@ render_full_return:  sec
 ; =============================================================================
 ; render_weapon_normal — Render a weapon entity's sprites to OAM ($CEF9)
 ; =============================================================================
-render_weapon_normal:  ldx     $2B
-        lda     $0420,x
+render_weapon_normal:  ldx     current_entity_slot
+        lda     ent_flags,x
         bmi     render_weapon_get_ptr
         clc
         rts
 
-render_weapon_get_ptr:  ldy     $0400,x
+render_weapon_get_ptr:  ldy     ent_type,x
         lda     sprite_def_ptr_lo_wpn,y
         sta     jump_ptr
         lda     sprite_def_ptr_hi_wpn,y
-        sta     $09
-        lda     $06A0,x
+        sta     jump_ptr_hi
+        lda     ent_anim_id,x
         pha
-        inc     $0680,x
+        inc     ent_anim_frame,x
         ldy     #$01
         lda     (jump_ptr),y
-        cmp     $0680,x
+        cmp     ent_anim_frame,x
         bcs     render_weapon_check_frame
         lda     #$00
-        sta     $0680,x
-        inc     $06A0,x
+        sta     ent_anim_frame,x
+        inc     ent_anim_id,x
         dey
         lda     (jump_ptr),y
-        cmp     $06A0,x
+        cmp     ent_anim_id,x
         bcs     render_weapon_check_frame
         lda     #$00
-        sta     $06A0,x
+        sta     ent_anim_id,x
 render_weapon_check_frame:  pla
         clc
         adc     #$02
         tay
         lda     (jump_ptr),y
         bne     render_weapon_begin_write
-        lsr     $0420,x
+        lsr     ent_flags,x
         rts
 
 render_weapon_begin_write:  tay
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$20
         bne     render_weapon_skip
         lda     $8100,y
         sta     jump_ptr
         lda     $8300,y
-        sta     $09
+        sta     jump_ptr_hi
         lda     $0100,x
-        sta     $03
+        sta     temp_03
         jmp     render_sprite_loop
 
 render_weapon_skip:  clc
@@ -2152,29 +2156,29 @@ render_weapon_skip:  clc
 ; =============================================================================
 ; render_hp_bars — Render player and boss HP bars ($CF5D)
 ; =============================================================================
-render_hp_bars:  lda     $06C0          ; player HP (entity slot 0)
-        sta     $00
-        ldx     $06
+render_hp_bars:  lda     ent_hp          ; player HP (entity slot 0)
+        sta     temp_00
+        ldx     temp_06
         lda     #$01
-        sta     $02
+        sta     temp_02
         lda     #$18
-        sta     $01
+        sta     temp_01
         jsr     render_hp_bar_loop
         bcs     render_hp_done
-        ldy     $A9
+        ldy     current_weapon
         beq     render_weapon_hp
         lda     $9B,y
-        sta     $00
+        sta     temp_00
         lda     #$00
-        sta     $02
+        sta     temp_02
         lda     #$10
-        sta     $01
+        sta     temp_01
         jsr     render_hp_bar_loop
         bcs     render_hp_done
 render_weapon_hp:  lda     $B1
         beq     render_hp_done
         lda     $06C1
-        sta     $00
+        sta     temp_00
         lda     #$03
         ldy     $B3
         cpy     #$08
@@ -2182,38 +2186,38 @@ render_weapon_hp:  lda     $B1
         cpy     #$0D
         bne     render_boss_hp_setup
 render_boss_hp_start:  lda     #$01
-render_boss_hp_setup:  sta     $02
+render_boss_hp_setup:  sta     temp_02
         lda     #$28
-        sta     $01
+        sta     temp_01
         jsr     render_hp_bar_loop
 render_hp_done:  rts
 
 render_hp_bar_loop:  ldy     #$06
 render_hp_entry:  lda     hp_y_positions_tbl,y
-        sta     $0200,x
+        sta     oam_buffer,x
         sec
-        lda     $00
+        lda     temp_00
         sbc     #$04
         bcs     render_hp_empty_check
-        ldx     $00
+        ldx     temp_00
         lda     #$00
-        sta     $00
+        sta     temp_00
         lda     hp_tile_ids_tbl,x
-        ldx     $06
+        ldx     temp_06
         jmp     render_hp_set_tile
 
-render_hp_empty_check:  sta     $00
+render_hp_empty_check:  sta     temp_00
         lda     #$87
 render_hp_set_tile:  sta     $0201,x
-        lda     $02
+        lda     temp_02
         sta     $0202,x
-        lda     $01
+        lda     temp_01
         sta     $0203,x
         inx
         inx
         inx
         inx
-        stx     $06
+        stx     temp_06
         beq     render_hp_overflow
         dey
         bpl     render_hp_entry
@@ -2237,25 +2241,25 @@ nmi_handler:  pha                       ; NMI handler — called every VBLANK
         pha
         tya
         pha
-        lda     $1D
+        lda     vblank_done
         beq     nmi_do_vblank
         jmp     nmi_tail
 
 nmi_do_vblank:                          ; Main VBLANK processing path
-        lda     $F7                     ; PPUCTRL shadow
+        lda     ppuctrl_shadow                     ; PPUCTRL shadow
         and     #$7C                    ; Disable NMI, clear nametable select
-        sta     $F7
-        sta     $2000                   ; Apply to PPUCTRL
-        lda     $F8                     ; PPUMASK shadow
+        sta     ppuctrl_shadow
+        sta     PPUCTRL                   ; Apply to PPUCTRL
+        lda     ppumask_shadow                     ; PPUMASK shadow
         and     #$E7                    ; Disable sprite/bg rendering
-        sta     $F8
-        sta     $2001                   ; Apply to PPUMASK (rendering off)
-        lda     $2002                   ; Read PPUSTATUS (reset addr latch)
+        sta     ppumask_shadow
+        sta     PPUMASK                   ; Apply to PPUMASK (rendering off)
+        lda     PPUSTATUS                   ; Read PPUSTATUS (reset addr latch)
         lda     #$00
-        sta     $2003                   ; OAMADDR = 0
+        sta     OAMADDR                   ; OAMADDR = 0
         lda     #$02
-        sta     $4014                   ; OAM DMA from $0200
-        lda     $1B                     ; PPU buffer transfer count
+        sta     OAMDMA                   ; OAM DMA from $0200
+        lda     ppu_buffer_count                     ; PPU buffer transfer count
         beq     nmi_update_palette      ; Skip if no buffer data
         jsr     ppu_buffer_transfer
 nmi_update_palette:  jsr     upload_palette
@@ -2266,51 +2270,51 @@ nmi_check_scroll_update:  lda     $51
         beq     nmi_check_ppu_update
         jsr     ppu_attribute_update
 nmi_check_ppu_update:                   ; Set scroll position
-        lda     $2002                   ; Reset PPUADDR latch
+        lda     PPUSTATUS                   ; Reset PPUADDR latch
         lda     #$00
-        sta     $01                     ; Scroll X high byte (nametable bit)
-        lda     $1F                     ; Scroll X position
-        sta     $00
+        sta     temp_01                     ; Scroll X high byte (nametable bit)
+        lda     scroll_x                     ; Scroll X position
+        sta     temp_00
         lda     $B8                     ; Camera X offset (shake/split)
         beq     nmi_set_scroll_x        ; Skip if no offset
         sec
-        lda     $00
+        lda     temp_00
         sbc     $B8
-        sta     $00
+        sta     temp_00
         lda     #$00
         sbc     $B9
         and     #$01
-        sta     $01
+        sta     temp_01
 nmi_set_scroll_x:
-        lda     $00
-        sta     $2005                   ; PPUSCROLL X
-        lda     $22                     ; Scroll Y position
-        sta     $00
+        lda     temp_00
+        sta     PPUSCROLL                   ; PPUSCROLL X
+        lda     scroll_y                     ; Scroll Y position
+        sta     temp_00
         lda     $B6                     ; Camera Y offset (shake/split)
         beq     nmi_set_scroll_y
         sec
-        lda     $00
+        lda     temp_00
         sbc     $B6
-        sta     $00
+        sta     temp_00
 nmi_set_scroll_y:
-        lda     $00
-        sta     $2005                   ; PPUSCROLL Y
-        lda     $F8                     ; PPUMASK shadow
+        lda     temp_00
+        sta     PPUSCROLL                   ; PPUSCROLL Y
+        lda     ppumask_shadow                     ; PPUMASK shadow
         ora     #$1E                    ; Enable sprites + background
-        sta     $F8
-        sta     $2001                   ; Re-enable rendering
-        lda     $F7                     ; PPUCTRL shadow
+        sta     ppumask_shadow
+        sta     PPUMASK                   ; Re-enable rendering
+        lda     ppuctrl_shadow                     ; PPUCTRL shadow
         ora     #$80                    ; Re-enable NMI
-        sta     $F7
-        lda     $20                     ; Base nametable select
-        eor     $01                     ; XOR with scroll high bit
+        sta     ppuctrl_shadow
+        lda     nametable_select                     ; Base nametable select
+        eor     temp_01                     ; XOR with scroll high bit
         and     #$01                    ; Keep bit 0 only
-        ora     $F7
+        ora     ppuctrl_shadow
         ora     $AE                     ; OR with sprite size flag
-        sta     $F7
-        sta     $2000                   ; Write final PPUCTRL
-        sta     $1D                     ; Set "VBLANK done" flag (nonzero)
-        inc     $1C                     ; Increment frame counter
+        sta     ppuctrl_shadow
+        sta     PPUCTRL                   ; Write final PPUCTRL
+        sta     vblank_done                     ; Set "VBLANK done" flag (nonzero)
+        inc     frame_counter                     ; Increment frame counter
 nmi_tail:  lda     $68                  ; NMI exit path (also handles interrupted bank switches)
         beq     nmi_restore_bank
         inc     $67
@@ -2335,14 +2339,14 @@ nmi_process_queue:  ldx     $66
 nmi_queue_call:  jsr     banked_entry_alt
         dec     $66
         bne     nmi_process_queue
-nmi_queue_done:  lda     $29
+nmi_queue_done:  lda     current_bank
         jsr     bank_switch
 nmi_rng_and_exit:                       ; Update RNG seed and return from interrupt
-        lda     $0480                   ; Entropy source
-        eor     $4A                     ; XOR with current RNG state
-        adc     $1C                     ; Add frame counter
+        lda     ent_x_sub                   ; Entropy source
+        eor     rng_seed                     ; XOR with current RNG state
+        adc     frame_counter                     ; Add frame counter
         lsr     a
-        sta     $4A                     ; Store new RNG value
+        sta     rng_seed                     ; Store new RNG value
         pla                             ; Restore Y
         tay
         pla                             ; Restore X
@@ -2356,17 +2360,17 @@ nmi_rng_and_exit:                       ; Update RNG seed and return from interr
 ; Controller Input
 ; =============================================================================
 read_controllers:  ldx     #$01         ; Read both controllers into $23 (P1) and $24 (P2)
-        stx     $4016
+        stx     JOY1
         dex
-        stx     $4016
+        stx     JOY1
         inx
 read_controller_loop:  ldy     #$08     ; Read 8 bits from controller X
-read_controller_bits:  lda     $4016,x  ; Shift in one button bit
-        sta     $27
+read_controller_bits:  lda     JOY1,x  ; Shift in one button bit
+        sta     p1_new_presses
         lsr     a
-        ora     $27
+        ora     p1_new_presses
         lsr     a
-        ror     $23,x
+        ror     controller_1,x
         dey
         bne     read_controller_bits
         dex
@@ -2378,19 +2382,19 @@ read_controller_bits:  lda     $4016,x  ; Shift in one button bit
 ; PPU Update Routines
 ; =============================================================================
 upload_palette:  ldy     #$3F           ; Upload 32-byte palette from $0356 to PPU $3F00
-        sty     $2006
+        sty     PPUADDR
         ldx     #$00
-        stx     $2006
-upload_palette_loop:  lda     $0356,x   ; Copy palette bytes to PPUDATA
-        sta     $2007
+        stx     PPUADDR
+upload_palette_loop:  lda     palette_ram,x   ; Copy palette bytes to PPUDATA
+        sta     PPUDATA
         inx
         cpx     #$20
         bne     upload_palette_loop
-        sty     $2006
+        sty     PPUADDR
         lda     #$00
-        sta     $2006
-        sta     $2006
-        sta     $2006
+        sta     PPUADDR
+        sta     PPUADDR
+        sta     PPUADDR
         sta     $3A
         rts
 
@@ -2398,7 +2402,7 @@ ppu_buffer_transfer:  bpl     ppu_buffer_transfer_main; Transfer PPU update buff
         jmp     ppu_buffer_transfer_alt
 
 ppu_buffer_transfer_main:  ldy     #$00
-ppu_buffer_entry_loop:  sty     $00
+ppu_buffer_entry_loop:  sty     temp_00
         tya
         asl     a
         asl     a
@@ -2406,8 +2410,8 @@ ppu_buffer_entry_loop:  sty     $00
         asl     a
         tax
         lda     #$04
-        sta     $01
-        lda     $0300,y
+        sta     temp_01
+        lda     ppu_update_buf,y
         sta     $0B
         lda     $0304,y
         sta     $0A
@@ -2418,42 +2422,42 @@ ppu_buffer_entry_loop:  sty     $00
         cmp     #$03
         bne     ppu_buffer_write_entry
         lda     #$02
-        sta     $01
+        sta     temp_01
 ppu_buffer_write_entry:  lda     $0308,y
-        sta     $2006
+        sta     PPUADDR
         lda     $030C,y
-        sta     $2006
+        sta     PPUADDR
         lda     $0350,y
-        sta     $2007
+        sta     PPUDATA
 ppu_buffer_write_row:  lda     $0B
-        sta     $2006
+        sta     PPUADDR
         clc
         lda     $0A
-        sta     $2006
+        sta     PPUADDR
         adc     #$20
         sta     $0A
         ldy     #$04
 ppu_buffer_write_bytes:  lda     $0310,x
-        sta     $2007
+        sta     PPUDATA
         inx
         dey
         bne     ppu_buffer_write_bytes
-        dec     $01
+        dec     temp_01
         bne     ppu_buffer_write_row
-        ldy     $00
+        ldy     temp_00
         iny
-        dec     $1B
+        dec     ppu_buffer_count
         bne     ppu_buffer_entry_loop
         rts
 
 ppu_buffer_transfer_alt:  ldx     #$00
-        stx     $1B
-ppu_buffer_alt_row:  lda     $0300
-        sta     $2006
+        stx     ppu_buffer_count
+ppu_buffer_alt_row:  lda     ppu_update_buf
+        sta     PPUADDR
         lda     $0301
-        sta     $2006
+        sta     PPUADDR
 ppu_buffer_alt_byte:  lda     $0302,x
-        sta     $2007
+        sta     PPUDATA
         inx
         txa
         and     #$07
@@ -2463,84 +2467,84 @@ ppu_buffer_alt_byte:  lda     $0302,x
         adc     #$20
         sta     $0301
         lda     $0312
-        sta     $2006
+        sta     PPUADDR
         lda     $0313
-        sta     $2006
-        lda     $2007
-        lda     $2007
-        ldy     $1B
+        sta     PPUADDR
+        lda     PPUDATA
+        lda     PPUDATA
+        ldy     ppu_buffer_count
         and     $0314
         ora     $0315,y
         pha
         lda     $0312
-        sta     $2006
+        sta     PPUADDR
         lda     $0313
-        sta     $2006
+        sta     PPUADDR
         pla
-        sta     $2007
-        inc     $1B
+        sta     PPUDATA
+        inc     ppu_buffer_count
         inc     $0313
         cpx     #$10
         bne     ppu_buffer_alt_row
         lda     #$00
-        sta     $1B
+        sta     ppu_buffer_count
         rts
 
-ppu_scroll_column_update:  lda     $03B6; Update nametable column during scroll
-        sta     $2006
-        lda     $03B7
-        sta     $2006
+ppu_scroll_column_update:  lda     col_update_addr_hi; Update nametable column during scroll
+        sta     PPUADDR
+        lda     col_update_addr_lo
+        sta     PPUADDR
         ldx     #$00
-ppu_col_write_loop:  lda     $03B8,x
-        sta     $2007
+ppu_col_write_loop:  lda     col_update_tiles,x
+        sta     PPUDATA
         inx
         dec     $47
         bne     ppu_col_write_loop
         rts
 
-ppu_attribute_update:  lda     $F7      ; Update attribute table during scroll
+ppu_attribute_update:  lda     ppuctrl_shadow      ; Update attribute table during scroll
         ora     #$04
-        sta     $2000
+        sta     PPUCTRL
         lda     $54
         bne     attr_update_special
         ldy     $51
         bmi     attr_update_fill_mode
 attr_update_loop:  lda     $03B5,y
-        sta     $2006
+        sta     PPUADDR
         lda     $03BB,y
-        sta     $2006
+        sta     PPUADDR
         lda     $03C1,y
-        sta     $2007
+        sta     PPUDATA
         clc
         adc     #$01
-        sta     $2007
+        sta     PPUDATA
         dey
         bne     attr_update_loop
 attr_update_done:  sty     $51
-        lda     $F7
+        lda     ppuctrl_shadow
         and     #$FB
-        sta     $2000
+        sta     PPUCTRL
         rts
 
 attr_update_fill_mode:  tya
         and     #$7F
         tay
 attr_fill_outer:  lda     #$02
-        sta     $00
+        sta     temp_00
         lda     #$E4
-        sta     $01
+        sta     temp_01
 attr_fill_write_addr:  lda     $03B5,y
-        sta     $2006
+        sta     PPUADDR
         lda     $03BB,y
-        sta     $2006
+        sta     PPUADDR
         lda     #$02
-        sta     $02
-attr_fill_write_byte:  lda     $01
-        sta     $2007
-        inc     $01
-        dec     $02
+        sta     temp_02
+attr_fill_write_byte:  lda     temp_01
+        sta     PPUDATA
+        inc     temp_01
+        dec     temp_02
         bne     attr_fill_write_byte
-        dec     $00
+        dec     temp_00
         beq     attr_fill_next
         clc
         lda     $03BB,y
@@ -2552,64 +2556,64 @@ attr_fill_next:  dey
         bne     attr_fill_outer
         beq     attr_update_done
 attr_update_special:  bpl     attr_special_default
-        lda     $03B6
-        sta     $2006
+        lda     col_update_addr_hi
+        sta     PPUADDR
         ldx     $03BC
         dex
         dex
-        stx     $2006
-        lda     $2007
-        lda     $2007
+        stx     PPUADDR
+        lda     PPUDATA
+        lda     PPUDATA
         tax
         jmp     attr_special_setup
 
 attr_special_default:  ldx     #$20
 attr_special_setup:  ldy     #$02
-attr_special_write_loop:  lda     $03B6
-        sta     $2006
+attr_special_write_loop:  lda     col_update_addr_hi
+        sta     PPUADDR
         lda     $03BC
-        sta     $2006
-        stx     $2007
+        sta     PPUADDR
+        stx     PPUDATA
         inx
-        stx     $2007
+        stx     PPUDATA
         inx
         inc     $03BC
         dey
         bne     attr_special_write_loop
         lda     $03C2
-        sta     $2006
+        sta     PPUADDR
         lda     $03C8
-        sta     $2006
+        sta     PPUADDR
         lda     $54
         bpl     attr_special_read_current
-        lda     $2007
-        lda     $2007
-        sta     $00
+        lda     PPUDATA
+        lda     PPUDATA
+        sta     temp_00
         lda     $03D4
         eor     #$FF
         lsr     a
         lsr     a
-        and     $00
+        and     temp_00
         asl     a
         asl     a
         sta     $03CE
-        lda     $00
+        lda     temp_00
         jmp     attr_special_merge
 
-attr_special_read_current:  lda     $2007
-        lda     $2007
+attr_special_read_current:  lda     PPUDATA
+        lda     PPUDATA
 attr_special_merge:  and     $03D4
         ora     $03CE
         tax
         lda     $03C2
-        sta     $2006
+        sta     PPUADDR
         lda     $03C8
-        sta     $2006
-        stx     $2007
+        sta     PPUADDR
+        stx     PPUDATA
         sty     $54
         jmp     attr_update_done
 
-        lda     $A9
+        lda     current_weapon
         asl     a
         asl     a
         tax
@@ -2639,25 +2643,25 @@ fire_weapon_buster:  lda     #$26       ; sound effect: buster shot
         sta     $3D
         sta     $36
         lda     #$02
-        sta     $2C
+        sta     game_substate
         jsr     weapon_set_base_type    ; set player animation type
         lda     #$01
-        sta     $06A0
+        sta     ent_anim_id
         lda     #$6F                    ; invincibility timer duration
-        sta     $4B                     ; set invincibility timer
+        sta     invincibility_timer                     ; set invincibility timer
         lda     #$01
-        sta     $0640
+        sta     ent_y_vel
         lda     #$40
-        sta     $0660
+        sta     ent_y_vel_sub
         lda     #$00
-        sta     $0600
+        sta     ent_x_vel
         lda     #$90
-        sta     $0620
+        sta     ent_x_vel_sub
         lsr     $042F
         lda     #$00
         sta     $AA
         ldx     #$0E
-fire_find_slot_loop:  lda     $0420,x
+fire_find_slot_loop:  lda     ent_flags,x
         bpl     fire_setup_projectile
         dex
         cpx     #$01
@@ -2665,38 +2669,38 @@ fire_find_slot_loop:  lda     $0420,x
         rts
 
 fire_setup_projectile:  lda     #$80    ; active flag
-        sta     $0420,x                 ; activate projectile entity
+        sta     ent_flags,x                 ; activate projectile entity
         lda     #$24                    ; buster projectile entity type
-        sta     $0400,x
-        lda     $0440
-        sta     $0440,x
-        lda     $0460
-        sta     $0460,x
-        lda     $04A0
-        sta     $04A0,x
+        sta     ent_type,x
+        lda     ent_x_screen
+        sta     ent_x_screen,x
+        lda     ent_x_px
+        sta     ent_x_px,x
+        lda     ent_y_px
+        sta     ent_y_px,x
         lda     #$08
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$00
-        sta     $0640,x
-        sta     $0620,x
-        sta     $0600,x
-        sta     $0680,x
-        sta     $06A0,x
+        sta     ent_y_vel,x
+        sta     ent_x_vel_sub,x
+        sta     ent_x_vel,x
+        sta     ent_anim_frame,x
+        sta     ent_anim_id,x
         rts
 
 ; =============================================================================
 ; weapon_set_base_type — Set weapon's base entity type from current weapon ID ($D3A8)
 ; =============================================================================
-weapon_set_base_type:  ldx     $2C      ; current weapon select index
+weapon_set_base_type:  ldx     game_substate      ; current weapon select index
         clc
         lda     weapon_base_type_tbl,x  ; look up base sprite type
         adc     $3D
-        cmp     $0400
+        cmp     ent_type
         beq     weapon_store_type
         ldx     #$00
-        stx     $06A0
-        stx     $0680
-weapon_store_type:  sta     $0400
+        stx     ent_anim_id
+        stx     ent_anim_frame
+weapon_store_type:  sta     ent_type
         lda     $36
         beq     weapon_reset_direction
         dec     $36
@@ -2704,9 +2708,9 @@ weapon_store_type:  sta     $0400
 
 weapon_reset_direction:  lda     #$00
         sta     $3D
-        ldx     $2C
+        ldx     game_substate
         lda     weapon_base_type_tbl,x
-        sta     $0400
+        sta     ent_type
         rts
 
 weapon_base_type_tbl:  .byte   $1A,$19,$18,$00,$04,$08,$0C,$10 ; base sprite type per weapon ID
@@ -2716,47 +2720,47 @@ weapon_base_type_tbl:  .byte   $1A,$19,$18,$00,$04,$08,$0C,$10 ; base sprite typ
 ; weapon_spawn_projectile — Spawn a projectile entity at player position ($D3E0)
 ; =============================================================================
 weapon_spawn_projectile:  lda     projectile_type_tbl,y ; entity type for this weapon
-        sta     $0400,x
-        lda     $0420
+        sta     ent_type,x
+        lda     ent_flags
         and     #$40
         php
         ora     projectile_flags_tbl,y  ; merge weapon entity flags
-        sta     $0420,x
+        sta     ent_flags,x
         plp
         bne     weapon_spawn_facing_right
         sec
-        lda     $0460
+        lda     ent_x_px
         sbc     projectile_x_offset_tbl,y
-        sta     $0460,x
-        lda     $0440
+        sta     ent_x_px,x
+        lda     ent_x_screen
         sbc     #$00
-        sta     $0440,x
+        sta     ent_x_screen,x
         jmp     weapon_spawn_set_y
 
 weapon_spawn_facing_right:  clc
-        lda     $0460
+        lda     ent_x_px
         adc     projectile_x_offset_tbl,y
-        sta     $0460,x
-        lda     $0440
+        sta     ent_x_px,x
+        lda     ent_x_screen
         adc     #$00
-        sta     $0440,x
-weapon_spawn_set_y:  lda     $04A0      ; copy player Y position
-        sta     $04A0,x
+        sta     ent_x_screen,x
+weapon_spawn_set_y:  lda     ent_y_px      ; copy player Y position
+        sta     ent_y_px,x
         lda     projectile_xvel_sub_tbl,y
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         lda     projectile_xvel_tbl,y
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     projectile_yvel_sub_tbl,y
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     projectile_yvel_tbl,y
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     projectile_damage_type_tbl,y
         sta     $0590,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
-        sta     $04E0,x
-        sta     $06C0,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
+        sta     ent_state,x
+        sta     ent_hp,x
         rts
 
 projectile_type_tbl:  .byte   $23,$30,$31,$32,$33,$34,$35,$36 ; entity type for each projectile
@@ -2892,8 +2896,8 @@ contact_range_y_data_13:  .byte   $3C,$1C,$1C,$0C,$0C,$0C,$0C,$0C
         .byte   $38,$1C,$2C,$14,$18,$20,$18,$28
         .byte   $40,$20,$20,$10,$10,$10,$10,$10
         .byte   $10,$10,$10,$10,$10
-        ldy     $0400
-        sty     $01
+        ldy     ent_type
+        sty     temp_01
         lda     #$09
         jsr     bank_switch
         jsr     banked_09_scroll_code
@@ -2913,18 +2917,18 @@ switch_to_bank_0D:  lda     #$0D
 ; =============================================================================
 ; entity_spawn_scan — Scan stage data and spawn/despawn entities based on scroll ($C658)
 ; =============================================================================
-entity_spawn_scan:  lda     $2A
+entity_spawn_scan:  lda     current_stage
         and     #$07                    ; mask to stage bank index 0-7
         jsr     bank_switch             ; switch to current stage bank
         clc
-        lda     $1F
+        lda     scroll_x
         sta     $0A
         adc     #$FF
         sta     jump_ptr
-        lda     $20
+        lda     nametable_select
         sta     $0B
         adc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         lda     $42
         and     #$40
         bne     spawn_scan_right_scroll
@@ -2944,7 +2948,7 @@ spawn_backward_despawn:  dey
 spawn_scan_forward:  ldy     $49
         beq     spawn_forward_done
 spawn_forward_check:  lda     $B5FF,y
-        cmp     $09
+        cmp     jump_ptr_hi
         bcc     spawn_forward_done
         bne     spawn_forward_skip
         lda     $B6FF,y
@@ -2971,7 +2975,7 @@ spawn_sec_backward_next:  dec     $4C
 spawn_secondary_forward:  ldy     $4D
         beq     spawn_sec_forward_done
 spawn_sec_forward_check:  lda     $B9FF,y
-        cmp     $09
+        cmp     jump_ptr_hi
         bcc     spawn_sec_forward_done
         bne     spawn_sec_forward_skip
         lda     $BA3F,y
@@ -2983,7 +2987,7 @@ spawn_sec_forward_done:  sty     $4D
         jmp     spawn_scan_done
 
 spawn_scan_right_scroll:  ldy     $49
-        lda     $09
+        lda     jump_ptr_hi
         cmp     $B600,y
         bcc     spawn_right_backward
         bne     spawn_right_activate
@@ -3005,7 +3009,7 @@ spawn_right_back_skip:  iny
         bne     spawn_right_back_check
 spawn_right_back_done:  sty     $48
 spawn_right_sec_forward:  ldy     $4D
-        lda     $09
+        lda     jump_ptr_hi
         cmp     $BA00,y
         bcc     spawn_right_sec_backward
         bne     spawn_right_sec_check
@@ -3046,17 +3050,17 @@ activate_check_dup:  cmp     $0100,x    ; check for duplicate spawn
         tya
         sta     $0100,x
         lda     $B600,y
-        sta     $0450,x
+        sta     ent_x_spawn_scr,x
         lda     $B700,y
-        sta     $0470,x
+        sta     ent_x_spawn_px,x
         lda     $B800,y
-        sta     $04B0,x
+        sta     ent_y_spawn_px,x
         lda     $B900,y
-entity_init_from_type:  sta     $0410,x ; store enemy type ID
+entity_init_from_type:  sta     ent_spawn_type,x ; store enemy type ID
         tay
         pha
         lda     entity_flags_table,y    ; look up default entity flags
-        sta     $0430,x                 ; store entity spawn flags
+        sta     ent_spawn_flags,x                 ; store entity spawn flags
         lda     entity_ai_behavior_tbl,y ; look up AI behavior index
         sta     $06F0,x                 ; store entity AI behavior
         lda     #$14                    ; default entity timer (20 frames)
@@ -3100,11 +3104,11 @@ activate_sec_check_dup:  cmp     $0130,x
         pha
         sta     $0130,x
         lda     $BA00,y
-        sta     $0450,x
+        sta     ent_x_spawn_scr,x
         lda     $BA40,y
-        sta     $0470,x
+        sta     ent_x_spawn_px,x
         lda     $BA80,y
-        sta     $04B0,x
+        sta     ent_y_spawn_px,x
         lda     $BAC0,y
         jsr     entity_init_from_type
         pla
@@ -3194,7 +3198,7 @@ hitbox_height_hi_tbl:  .byte   $C7,$00,$00,$FF,$5D,$FE,$98,$04
         .byte   $D4,$02,$00,$03,$76,$FC,$8A,$00
         .byte   $20
 find_empty_entity_slot:  ldx     #$0F
-find_slot_loop:  lda     $0430,x
+find_slot_loop:  lda     ent_spawn_flags,x
         bpl     find_slot_found
         dex
         bpl     find_slot_loop
@@ -3206,24 +3210,24 @@ find_slot_found:  clc
 
         lda     $F9
         bne     *+23
-        ldx     $A9
+        ldx     current_weapon
         beq     *+6
         lda     $9B,x
         beq     *+15
         lda     weapon_dispatch_lo_tbl,x
         sta     jump_ptr
         lda     weapon_dispatch_hi_tbl,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
         sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     fire_weapon_no_slot
         ldx     #$04
-fire_weapon_scan_slot:  lda     $0420,x
+fire_weapon_scan_slot:  lda     ent_flags,x
         bpl     fire_weapon_found_slot
         dex
         cpx     #$01
@@ -3237,41 +3241,41 @@ fire_weapon_set_timer:  lda     #$0F
         sta     $36
         lda     #$01
 fire_weapon_set_dir:  sta     $3D
-        ldx     $2C
+        ldx     game_substate
         clc
         adc     weapon_base_type_tbl,x
-        sta     $0400
+        sta     ent_type
         clc
         rts
 
 fire_weapon_no_slot:  sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     *+14
         ldx     #$02
         ldy     #$01
         jsr     weapon_spawn_projectile
         lda     #$82
-        sta     $0420,x
+        sta     ent_flags,x
         sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     fire_weapon_multi_fail
         ldx     #$04
-fire_weapon_multi_scan:  lda     $0420,x
+fire_weapon_multi_scan:  lda     ent_flags,x
         bmi     fire_weapon_multi_fail
         dex
         cpx     #$01
         bne     fire_weapon_multi_scan
         ldx     #$04
-fire_weapon_multi_loop:  stx     $01
+fire_weapon_multi_loop:  stx     temp_01
         ldy     #$02
         jsr     weapon_spawn_projectile
-        ldx     $01
+        ldx     temp_01
         dex
         cpx     #$01
         bne     fire_weapon_multi_loop
@@ -3286,7 +3290,7 @@ fire_weapon_multi_loop:  stx     $01
 fire_weapon_multi_fail:  sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     *+30
         lda     $0422
@@ -3296,21 +3300,21 @@ fire_weapon_multi_fail:  sec
         sbc     #$03
         bcc     *+18
         ldx     #$05
-fire_weapon_spread_loop:  stx     $02
+fire_weapon_spread_loop:  stx     temp_02
         ldy     #$03
         jsr     weapon_spawn_projectile
-        ldx     $02
+        ldx     temp_02
         dex
         cpx     #$01
         bne     fire_weapon_spread_loop
         sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     fire_weapon_bubble_fail
         ldx     #$03
-fire_weapon_bubble_scan:  lda     $0420,x
+fire_weapon_bubble_scan:  lda     ent_flags,x
         bpl     fire_weapon_bubble_fire
         dex
         cpx     #$01
@@ -3332,7 +3336,7 @@ fire_weapon_bubble_done:  jmp     fire_weapon_set_timer
 fire_weapon_bubble_fail:  sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         bne     *+12
         lda     $AB
@@ -3342,7 +3346,7 @@ fire_weapon_bubble_fail:  sec
         clc
         rts
         ldx     #$05
-fire_weapon_leaf_scan:  lda     $0420,x
+fire_weapon_leaf_scan:  lda     ent_flags,x
         bpl     fire_weapon_leaf_fire
         dex
         cpx     #$01
@@ -3366,7 +3370,7 @@ fire_weapon_leaf_reset:  lda     #$00
 fire_weapon_leaf_fail:  sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     *+31
         lda     $0422
@@ -3385,11 +3389,11 @@ fire_weapon_leaf_fail:  sec
         sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     fire_weapon_crash_fail
         ldx     #$04
-fire_weapon_crash_scan:  lda     $0420,x
+fire_weapon_crash_scan:  lda     ent_flags,x
         bpl     fire_weapon_crash_fire
         dex
         cpx     #$01
@@ -3406,7 +3410,7 @@ fire_weapon_crash_fire:  ldy     #$07
         lda     #$00
         sta     $AC
         dec     $A2
-fire_weapon_crash_aim:  lda     $23
+fire_weapon_crash_aim:  lda     controller_1
         and     #$F0
         lsr     a
         lsr     a
@@ -3414,13 +3418,13 @@ fire_weapon_crash_aim:  lda     $23
         lsr     a
         tay
         lda     crash_yvel_sub_tbl,y
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     crash_yvel_tbl,y
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     crash_xvel_sub_tbl,y
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         lda     crash_xvel_tbl,y
-        sta     $0600,x
+        sta     ent_x_vel,x
         jmp     fire_weapon_finish
 
 fire_weapon_crash_fail:  sec
@@ -3434,7 +3438,7 @@ crash_xvel_sub_tbl:  .byte   $00,$00,$00,$00,$00,$D4,$D4,$00
         .byte   $00,$D4,$D4,$00,$00,$00,$00,$00
 crash_xvel_tbl:  .byte   $04,$00,$00,$00,$04,$02,$02,$00
         .byte   $04,$02,$02,$00,$00,$00,$00,$00
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     *+33
         ldx     #$02
@@ -3454,11 +3458,11 @@ fire_weapon_finish:  lda     #$0F
         sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     *-6
         ldx     #$04
-fire_weapon_star_scan:  lda     $0420,x
+fire_weapon_star_scan:  lda     ent_flags,x
         bpl     fire_weapon_star_fire
         dex
         cpx     #$01
@@ -3475,7 +3479,7 @@ fire_weapon_star_fire:  ldy     #$09
 fire_weapon_star_fail:  sec
         rts
 
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     *+27
         lda     $0422
@@ -3489,7 +3493,7 @@ fire_weapon_star_fail:  sec
         sta     $06C2
         jmp     fire_weapon_finish
         rts
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         beq     *+22
         lda     $0422
@@ -3510,17 +3514,17 @@ weapon_dispatch_hi_tbl:  .byte   $DA,$DA,$DA,$DA,$DB,$DB,$DC,$DB
 ; update_entity_positions — Update screen-relative positions for all active entities ($DCD0)
 ; =============================================================================
 update_entity_positions:  ldx     #$0F  ; start at entity slot 15
-update_entity_loop:  stx     $2B
-        lda     $0420,x                 ; check if entity is active
+update_entity_loop:  stx     current_entity_slot
+        lda     ent_flags,x                 ; check if entity is active
         bpl     update_entity_next
         and     #$02
         bne     update_entity_special
         sec
-        lda     $0460,x
-        sbc     $1F                     ; subtract scroll X for screen pos
+        lda     ent_x_px,x
+        sbc     scroll_x                     ; subtract scroll X for screen pos
         sta     $06E0,x                 ; store screen-relative X
         jsr     apply_entity_physics    ; apply velocity and gravity
-update_entity_next:  ldx     $2B
+update_entity_next:  ldx     current_entity_slot
         dex
         cpx     #$01
         bne     update_entity_loop
@@ -3531,29 +3535,29 @@ update_entity_special:  lda     #$DC
         lda     #$E8
         pha
         sec
-        lda     $0460,x
-        sbc     $1F
+        lda     ent_x_px,x
+        sbc     scroll_x
         sta     $06E0,x
         sec
-        lda     $0400,x
+        lda     ent_type,x
         sbc     #$2F
         tay
         lda     entity_special_dispatch_lo,y
         sta     jump_ptr
         lda     entity_special_dispatch_hi,y
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
 entity_special_dispatch_lo:  .byte   $34,$34,$48,$74,$6F,$CE,$16,$58
         .byte   $58,$90,$10,$DD,$71,$E4,$E4,$E8
 entity_special_dispatch_hi:  .byte   $DD,$DD,$DE,$DE,$DF,$DF,$E0,$E1
         .byte   $E1,$E1,$E2,$E2,$E4,$E4,$E4,$E4
-        lda     $04E0,x
+        lda     ent_state,x
         beq     *+5
         jmp     $DDEC
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
         lda     $AC
         cmp     #$FF
         beq     etank_check_threshold
@@ -3568,19 +3572,19 @@ etank_check_threshold:  ldy     #$02
         bcc     etank_set_anim
         iny
         iny
-etank_set_anim:  sty     $00
-        lda     $1C
+etank_set_anim:  sty     temp_00
+        lda     frame_counter
         and     #$04
         bne     etank_animate
         ldy     #$00
 etank_animate:  jsr     etank_update_palette
-        lda     $04A0
-        sta     $04A0,x
-        lda     $0460
-        sta     $0460,x
-        lda     $0440
-        sta     $0440,x
-        lda     $00
+        lda     ent_y_px
+        sta     ent_y_px,x
+        lda     ent_x_px
+        sta     ent_x_px,x
+        lda     ent_x_screen
+        sta     ent_x_screen,x
+        lda     temp_00
         lsr     a
         tay
         lda     etank_cost_tbl,y
@@ -3590,10 +3594,10 @@ etank_animate:  jsr     etank_update_palette
         ldy     #$00
         sty     $AC
         jsr     etank_update_palette
-        lsr     $0420,x
+        lsr     ent_flags,x
         rts
 
-etank_check_fire:  lda     $23
+etank_check_fire:  lda     controller_1
         and     #$02
         beq     etank_reset_counter
         rts
@@ -3603,7 +3607,7 @@ etank_reset_counter:  ldy     #$00
         jsr     etank_update_palette
         lsr     $0422
         ldx     #$04
-etank_find_projectile:  lda     $0420,x
+etank_find_projectile:  lda     ent_flags,x
         bpl     etank_spawn_projectile
         dex
         cpx     #$02
@@ -3614,16 +3618,16 @@ etank_spawn_projectile:  lda     $F9
         bne     etank_deduct_ammo
         ldy     #$01
         jsr     weapon_spawn_projectile
-        lda     $00
+        lda     temp_00
         lsr     a
-        sta     $04E0,x
+        sta     ent_state,x
         sta     $0590,x
         tay
         lda     etank_anim_frame_tbl,y
-        sta     $06A0,x
+        sta     ent_anim_id,x
         sec
-        lda     $0460,x
-        sbc     $1F
+        lda     ent_x_px,x
+        sbc     scroll_x
         sta     $06E0,x
 etank_deduct_ammo:  sec
         lda     $9C
@@ -3632,29 +3636,29 @@ etank_deduct_ammo:  sec
         lda     #$38
         jsr     bank_switch_enqueue
         lda     #$04
-        sta     $0600,x
-        lda     $2C
+        sta     ent_x_vel,x
+        lda     game_substate
         beq     etank_done
         jmp     fire_weapon_set_timer
 
         cmp     #$02
         bcs     etank_weapon_mid
-        lda     $06A0,x
+        lda     ent_anim_id,x
         cmp     #$03
         bne     etank_apply_physics
         lda     #$01
         bne     etank_weapon_set_anim
 etank_weapon_mid:  bne     etank_weapon_high
-        lda     $06A0,x
+        lda     ent_anim_id,x
         cmp     #$06
         bne     etank_apply_physics
         lda     #$04
         bne     etank_weapon_set_anim
-etank_weapon_high:  lda     $06A0,x
+etank_weapon_high:  lda     ent_anim_id,x
         cmp     #$09
         bne     etank_apply_physics
         lda     #$07
-etank_weapon_set_anim:  sta     $06A0,x
+etank_weapon_set_anim:  sta     ent_anim_id,x
 etank_apply_physics:  jsr     apply_entity_physics
         rts
 
@@ -3662,10 +3666,10 @@ etank_update_palette:  lda     etank_palette_lo_tbl,y
         sta     $0367
         lda     etank_palette_hi_tbl,y
         sta     $0369
-        lda     $1C
+        lda     frame_counter
         and     #$07
         bne     etank_palette_done
-        lda     $00
+        lda     temp_00
         lsr     a
         tay
         lda     etank_sound_bank_tbl,y
@@ -3689,30 +3693,30 @@ etank_cost_tbl:  .byte   $07,$01,$06,$0A,$8A,$38,$E9,$02
         .byte   $60,$04,$AD,$40,$04,$E9,$00,$4C
         .byte   $AC,$DE
         clc
-        lda     $0460
-        adc     $01
-        sta     $0460,x
-        lda     $0440
+        lda     ent_x_px
+        adc     temp_01
+        sta     ent_x_px,x
+        lda     ent_x_screen
         adc     #$00
-        sta     $0440,x
-        lda     $00
+        sta     ent_x_screen,x
+        lda     temp_00
         and     #$02
         bne     crash_bomb_add_y
         sec
-        lda     $04A0
-        sbc     $01
+        lda     ent_y_px
+        sbc     temp_01
         jmp     crash_bomb_store_y
 
 crash_bomb_add_y:  clc
-        lda     $04A0
-        adc     $01
-crash_bomb_store_y:  sta     $04A0,x
-        lda     $01
+        lda     ent_y_px
+        adc     temp_01
+crash_bomb_store_y:  sta     ent_y_px,x
+        lda     temp_01
         cmp     #$0C
         beq     crash_bomb_explode
         clc
         adc     #$02
-        sta     $06C0,x
+        sta     ent_hp,x
         rts
 
 crash_bomb_explode:  lsr     $0423
@@ -3730,35 +3734,35 @@ crash_bomb_explode:  lsr     $0423
         beq     bubble_check_anim
         lda     #$06
         bne     bubble_set_anim
-bubble_check_anim:  lda     $06A0,x
+bubble_check_anim:  lda     ent_anim_id,x
         cmp     #$05
         bcc     bubble_check_state
         lda     #$01
-bubble_set_anim:  sta     $06A0,x
-bubble_check_state:  lda     $04E0,x
+bubble_set_anim:  sta     ent_anim_id,x
+bubble_check_state:  lda     ent_state,x
         cmp     #$01
         bne     bubble_apply_physics
-        lda     $1C
+        lda     frame_counter
         and     #$07
         bne     bubble_track_player
         lda     #$31
         jsr     bank_switch_enqueue
-bubble_track_player:  lda     $0460
-        sta     $0460,x
-        lda     $0440
-        sta     $0440,x
-        lda     $04A0
-        sta     $04A0,x
+bubble_track_player:  lda     ent_x_px
+        sta     ent_x_px,x
+        lda     ent_x_screen
+        sta     ent_x_screen,x
+        lda     ent_y_px
+        sta     ent_y_px,x
         lda     $F9
         beq     bubble_check_input
         lda     #$00
-        sta     $04A0,x
-bubble_check_input:  lda     $23
+        sta     ent_y_px,x
+bubble_check_input:  lda     controller_1
         and     #$F0
         beq     bubble_done
         ldy     $F9
         beq     bubble_check_direction
-        lsr     $0420,x
+        lsr     ent_flags,x
         rts
 
 bubble_check_direction:  and     #$C0
@@ -3766,22 +3770,22 @@ bubble_check_direction:  and     #$C0
         lsr     a
         and     #$40
         ora     #$83
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$04
-        sta     $0600,x
+        sta     ent_x_vel,x
         bne     bubble_deduct_ammo
 bubble_check_up_down:  ldy     #$00
-        lda     $23
+        lda     controller_1
         and     #$10
         bne     bubble_set_yvel
         iny
 bubble_set_yvel:  lda     bubble_yvel_tbl,y
-        sta     $0640,x
+        sta     ent_y_vel,x
 bubble_deduct_ammo:  sec
         lda     $9E
         sbc     #$03
         sta     $9E
-        inc     $04E0,x
+        inc     ent_state,x
 bubble_done:  rts
 
 bubble_apply_physics:  jsr     apply_entity_physics
@@ -3789,44 +3793,44 @@ bubble_apply_physics:  jsr     apply_entity_physics
 
 bubble_yvel_tbl:  .byte   $04,$FC
         lda     #$07
-        sta     $01
+        sta     temp_01
         lda     #$07
-        sta     $02
+        sta     temp_02
         jsr     check_horiz_tile_collision
-        lda     $04E0,x
+        lda     ent_state,x
         bne     *+34
-        lda     $00
+        lda     temp_00
         beq     metal_blade_physics
-        inc     $04E0,x
-        lda     $0420,x
+        inc     ent_state,x
+        lda     ent_flags,x
         and     #$FB
-        sta     $0420,x
+        sta     ent_flags,x
 metal_blade_launch:  lda     #$C0
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$FF
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$02
-        sta     $0600,x
+        sta     ent_x_vel,x
         bne     metal_blade_physics
         cmp     #$01
         bne     metal_blade_check_stop
-        lda     $03
+        lda     temp_03
         beq     metal_blade_check_wall
-        lsr     $0420,x
+        lsr     ent_flags,x
         rts
 
-metal_blade_check_wall:  lda     $00
+metal_blade_check_wall:  lda     temp_00
         bne     metal_blade_physics
         lda     #$00
-        sta     $0600,x
-        sta     $0660,x
+        sta     ent_x_vel,x
+        sta     ent_y_vel_sub,x
         lda     #$FE
-        sta     $0640,x
-        inc     $04E0,x
+        sta     ent_y_vel,x
+        inc     ent_state,x
         bne     metal_blade_physics
-metal_blade_check_stop:  lda     $00
+metal_blade_check_stop:  lda     temp_00
         beq     metal_blade_physics
-        dec     $04E0,x
+        dec     ent_state,x
         bne     metal_blade_launch
 metal_blade_physics:  jsr     apply_entity_physics
         rts
@@ -3840,57 +3844,57 @@ metal_blade_physics:  jsr     apply_entity_physics
         .byte   $00
         .byte   $9D,$40,$06,$4C,$0F,$E0
         bne     metal_blade_check_despawn
-        lda     $0420,x
+        lda     ent_flags,x
         eor     #$40
-        sta     $0420,x
-metal_blade_check_despawn:  lda     $04E0,x
+        sta     ent_flags,x
+metal_blade_check_despawn:  lda     ent_state,x
         cmp     #$23
         bne     metal_blade_accelerate
-        lsr     $0420,x
+        lsr     ent_flags,x
         rts
 
 metal_blade_accelerate:  clc
-        lda     $0660,x
+        lda     ent_y_vel_sub,x
         adc     #$4B
-        sta     $0660,x
-        lda     $0640,x
+        sta     ent_y_vel_sub,x
+        lda     ent_y_vel,x
         adc     #$00
-        sta     $0640,x
-        inc     $04E0,x
+        sta     ent_y_vel,x
+        inc     ent_state,x
         jsr     apply_entity_physics
         rts
 
-        lda     $04E0,x
+        lda     ent_state,x
         bne     *+121
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
         sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$08
         sta     $0A
         lda     #$00
         sta     $0B
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$40
         bne     *+18
         sec
-        lda     $0460,x
+        lda     ent_x_px,x
         sbc     #$06
-        sta     $08
-        lda     $0440,x
+        sta     jump_ptr
+        lda     ent_x_screen,x
         sbc     #$00
         jmp     $E053
         clc
-        lda     $0460,x
+        lda     ent_x_px,x
         adc     #$06
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         adc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         jsr     lookup_cached_tile
-        ldy     $00
-        ldx     $2B
+        ldy     temp_00
+        ldx     current_entity_slot
         lda     tile_solid_flag_tbl,y
         bne     quick_boomerang_hit
         clc
@@ -3898,8 +3902,8 @@ metal_blade_accelerate:  clc
         adc     #$10
         sta     $0A
         jsr     lookup_cached_tile
-        ldy     $00
-        ldx     $2B
+        ldy     temp_00
+        ldx     current_entity_slot
         lda     tile_solid_flag_tbl,y
         bne     quick_boomerang_hit
         jsr     apply_entity_physics
@@ -3907,73 +3911,73 @@ metal_blade_accelerate:  clc
 
 quick_boomerang_hit:  lda     #$2E
         jsr     bank_switch_enqueue
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$FE
-        sta     $0420,x
-        inc     $06A0,x
-        inc     $04E0,x
+        sta     ent_flags,x
+        inc     ent_anim_id,x
+        inc     ent_state,x
         lda     #$7E
-        sta     $06C0,x
+        sta     ent_hp,x
         bne     quick_boomerang_bounds
         cmp     #$01
         bne     quick_boomerang_phase2
-        lda     $06A0,x
+        lda     ent_anim_id,x
         cmp     #$04
         bne     quick_boomerang_phase1
         lda     #$02
-        sta     $06A0,x
-quick_boomerang_phase1:  dec     $06C0,x
+        sta     ent_anim_id,x
+quick_boomerang_phase1:  dec     ent_hp,x
         bne     quick_boomerang_bounds
         lda     #$05
-        sta     $06A0,x
+        sta     ent_anim_id,x
         lda     #$00
-        sta     $0680,x
+        sta     ent_anim_frame,x
         lda     #$38
-        sta     $06C0,x
-        inc     $04E0,x
+        sta     ent_hp,x
+        inc     ent_state,x
 quick_boomerang_bounds:  jsr     check_entity_on_screen
         rts
 
 quick_boomerang_phase2:  lda     #$00
-        sta     $0680,x
-        lda     $06C0,x
+        sta     ent_anim_frame,x
+        lda     ent_hp,x
         and     #$07
         bne     quick_boomerang_dec_hp
         lda     #$2B
         jsr     bank_switch_enqueue
-        lda     $06C0,x
+        lda     ent_hp,x
         lsr     a
         and     #$0C
-        sta     $02
+        sta     temp_02
         lda     #$06
-        sta     $01
-quick_boomerang_scatter:  lda     $01
+        sta     temp_01
+quick_boomerang_scatter:  lda     temp_01
         cmp     #$02
         beq     quick_boomerang_dec_hp
-        sta     $00
+        sta     temp_00
         ldy     #$0C
         jsr     spawn_weapon_from_entity
-        ldy     $00
-        ldx     $02
+        ldy     temp_00
+        ldx     temp_02
         clc
-        lda     $04A0,y
+        lda     ent_y_px,y
         adc     scatter_offset_y_tbl,x
-        sta     $04A0,y
+        sta     ent_y_px,y
         clc
-        lda     $0460,y
+        lda     ent_x_px,y
         adc     scatter_offset_x_lo_tbl,x
-        sta     $0460,y
-        lda     $0440,y
+        sta     ent_x_px,y
+        lda     ent_x_screen,y
         adc     scatter_offset_x_hi_tbl,x
-        sta     $0440,y
-        ldx     $2B
-        inc     $02
-        dec     $01
+        sta     ent_x_screen,y
+        ldx     current_entity_slot
+        inc     temp_02
+        dec     temp_01
         bne     quick_boomerang_scatter
-quick_boomerang_dec_hp:  ldx     $2B
-        dec     $06C0,x
+quick_boomerang_dec_hp:  ldx     current_entity_slot
+        dec     ent_hp,x
         bpl     quick_boomerang_check
-        lsr     $0420,x
+        lsr     ent_flags,x
         rts
 
 quick_boomerang_check:  jsr     check_entity_on_screen
@@ -3999,13 +4003,13 @@ scatter_offset_x_hi_2:  .byte   $00,$00,$FF,$00,$FF,$00
 scatter_offset_x_hi_3:  .byte   $FF,$00
 tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         .byte   $01
-        dec     $0620,x
+        dec     ent_x_vel_sub,x
         bne     *+23
         lda     #$0F
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         dec     $A1
         bne     *+14
-        lsr     $0420,x
+        lsr     ent_flags,x
         lda     #$00
         sta     $AA
         lda     #$01
@@ -4017,64 +4021,64 @@ tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         sta     $50
         sta     $4F
         lda     #$80
-        sta     $04A0,x
+        sta     ent_y_px,x
         clc
-        adc     $1F
-        sta     $0460,x
-        lda     $0440
+        adc     scroll_x
+        sta     ent_x_px,x
+        lda     ent_x_screen
         adc     #$00
-        sta     $0440,x
+        sta     ent_x_screen,x
         rts
 
-        lda     $04E0,x
+        lda     ent_state,x
         bne     *+37
-        inc     $06C0,x
-        lda     $06C0,x
+        inc     ent_hp,x
+        lda     ent_hp,x
         cmp     #$BB
         beq     *+17
-        lda     $06A0,x
+        lda     ent_anim_id,x
         cmp     #$02
         bne     *+7
         lda     #$00
-        sta     $06A0,x
+        sta     ent_anim_id,x
         jmp     air_shooter_collision
 
         lda     #$3E
-        sta     $06C0,x
-        inc     $04E0,x
+        sta     ent_hp,x
+        inc     ent_state,x
         bne     air_shooter_collision
         cmp     #$01
         bne     air_shooter_physics
-        lda     $06A0,x
+        lda     ent_anim_id,x
         cmp     #$07
         bne     air_shooter_dec_timer
         lda     #$03
-        sta     $06A0,x
-air_shooter_dec_timer:  dec     $06C0,x
+        sta     ent_anim_id,x
+air_shooter_dec_timer:  dec     ent_hp,x
         beq     air_shooter_end_phase
 air_shooter_collision:  sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$04
         sta     $05A1,x
         lda     #$14
         sta     $059E,x
         lda     #$0B
-        sta     $01
+        sta     temp_01
         lda     #$1D
-        sta     $02
+        sta     temp_02
         lda     #$04
-        sta     $03
+        sta     temp_03
         jsr     check_wall_collision
-        lda     $00
+        lda     temp_00
         beq     air_shooter_physics
         lda     #$00
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
 air_shooter_end_phase:  lda     #$02
-        sta     $04E0,x
+        sta     ent_state,x
         lda     #$08
-        sta     $06A0,x
+        sta     ent_anim_id,x
         lda     #$00
-        sta     $0680,x
+        sta     ent_anim_frame,x
         sta     $059E,x
 air_shooter_physics:  jsr     apply_entity_physics
         bcc     air_shooter_done
@@ -4082,92 +4086,92 @@ air_shooter_physics:  jsr     apply_entity_physics
         sta     $059E,x
 air_shooter_done:  rts
 
-        lda     $04E0,x
+        lda     ent_state,x
         beq     *+7
-        dec     $04E0,x
+        dec     ent_state,x
         bne     leaf_shield_wall_check
-        dec     $06C0,x
+        dec     ent_hp,x
         bne     leaf_shield_accel
         lda     #$13
-        sta     $06C0,x
+        sta     ent_hp,x
         dec     $A5
         bne     leaf_shield_accel
 leaf_shield_deactivate:  lda     #$05
-        sta     $06A0,x
+        sta     ent_anim_id,x
         lda     #$00
         sta     $05A0
-        sta     $0600,x
-        sta     $0620,x
-        sta     $0680,x
+        sta     ent_x_vel,x
+        sta     ent_x_vel_sub,x
+        sta     ent_anim_frame,x
         lda     #$80
-        sta     $0420,x
+        sta     ent_flags,x
         beq     leaf_shield_accel
         jmp     leaf_shield_physics
 
-leaf_shield_accel:  lda     $0600,x
+leaf_shield_accel:  lda     ent_x_vel,x
         cmp     #$02
         beq     leaf_shield_wall_check
         clc
-        lda     $0620,x
+        lda     ent_x_vel_sub,x
         adc     #$08
-        sta     $0620,x
-        lda     $0600,x
+        sta     ent_x_vel_sub,x
+        lda     ent_x_vel,x
         adc     #$00
-        sta     $0600,x
+        sta     ent_x_vel,x
         cmp     #$02
         bne     leaf_shield_wall_check
         lda     #$00
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
 leaf_shield_wall_check:  lda     #$0F
-        sta     $01
+        sta     temp_01
         lda     #$08
-        sta     $02
+        sta     temp_02
         jsr     check_horiz_tile_collision
-        lda     $03
+        lda     temp_03
         bne     leaf_shield_deactivate
         sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$20
         sta     $0A
         lda     #$00
         sta     $0B
         sec
-        lda     $0460,x
+        lda     ent_x_px,x
         sbc     #$10
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         sbc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         jsr     lookup_cached_tile
-        ldx     $2B
-        ldy     $00
+        ldx     current_entity_slot
+        ldy     temp_00
         lda     tile_solid_flag_tbl,y
         bne     leaf_shield_fail
         clc
         lda     jump_ptr
         adc     #$20
         sta     jump_ptr
-        lda     $09
+        lda     jump_ptr_hi
         adc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         jsr     lookup_cached_tile
-        ldx     $2B
-        ldy     $00
+        ldx     current_entity_slot
+        ldy     temp_00
         lda     tile_solid_flag_tbl,y
         beq     leaf_shield_hitbox
 leaf_shield_fail:  jmp     leaf_shield_deactivate
 
 leaf_shield_hitbox:  sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$04
         sta     $05A1,x
         lda     #$18
         sta     $059E,x
-        lda     $06A0,x
+        lda     ent_anim_id,x
         cmp     #$04
         bne     leaf_shield_physics
         lda     #$00
-        sta     $06A0,x
+        sta     ent_anim_id,x
 leaf_shield_physics:  jsr     apply_entity_physics
         bcc     leaf_shield_done
         lda     #$00
@@ -4181,111 +4185,111 @@ leaf_shield_done:  rts
         asl     $85
         .byte   $04
         lda     #$0A
-        sta     $01
+        sta     temp_01
         lda     #$08
-        sta     $02
+        sta     temp_02
         jsr     check_horiz_tile_collision
-        lda     $03
+        lda     temp_03
         beq     time_stopper_check_down
         lda     #$62
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$00
-        sta     $0640,x
-        sta     $0620,x
-        sta     $0600,x
-        lda     $0420,x
+        sta     ent_y_vel,x
+        sta     ent_x_vel_sub,x
+        sta     ent_x_vel,x
+        lda     ent_flags,x
         and     #$FB
-        sta     $0420,x
-        inc     $04E0,x
+        sta     ent_flags,x
+        inc     ent_state,x
         bne     time_stopper_clear_dmg
-time_stopper_check_down:  lda     $04
+time_stopper_check_down:  lda     temp_04
         bpl     time_stopper_clear_dmg
-        lda     $00
+        lda     temp_00
         beq     time_stopper_clear_dmg
         lda     #$03
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$76
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
 time_stopper_clear_dmg:  lda     #$00
         sta     $0590,x
-        lda     $06A0,x
+        lda     ent_anim_id,x
         cmp     #$04
         bne     time_stopper_dec_timer
         lda     #$00
-        sta     $06A0,x
-time_stopper_dec_timer:  dec     $06C0,x
+        sta     ent_anim_id,x
+time_stopper_dec_timer:  dec     ent_hp,x
         bne     time_stopper_physics_jmp
         lda     #$1F
-        sta     $06C0,x
+        sta     ent_hp,x
         dec     $A6
         beq     time_stopper_finish
 time_stopper_physics_jmp:  jmp     time_stopper_physics
 
         sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$08
         sta     $05A1,x
         lda     #$14
         sta     $059E,x
         lda     #$0C
-        sta     $01
+        sta     temp_01
         lda     #$21
-        sta     $02
+        sta     temp_02
         lda     #$08
-        sta     $03
+        sta     temp_03
         jsr     check_wall_collision
-        lda     $04E0,x
+        lda     ent_state,x
         and     #$0F
         cmp     #$02
         bcs     time_stopper_alt_state
-        lda     $04E0,x
+        lda     ent_state,x
         bpl     time_stopper_check_done
-        inc     $04E0,x
+        inc     ent_state,x
         bne     time_stopper_check_done
-time_stopper_check_done:  lda     $00
+time_stopper_check_done:  lda     temp_00
         bne     time_stopper_finish
-        lda     $03
+        lda     temp_03
         bne     time_stopper_clear_dmg
         lda     #$00
-        sta     $0640,x
-        sta     $0660,x
-        lda     $06A0,x
+        sta     ent_y_vel,x
+        sta     ent_y_vel_sub,x
+        lda     ent_anim_id,x
         cmp     #$09
         bne     time_stopper_inc_dmg
         lda     #$05
-        sta     $06A0,x
+        sta     ent_anim_id,x
 time_stopper_inc_dmg:  inc     $0590,x
         lda     $0590,x
         cmp     #$3E
         bcc     time_stopper_dec_timer
 time_stopper_finish:  lda     #$0A
-        sta     $06A0,x
+        sta     ent_anim_id,x
         lda     #$00
-        sta     $0640,x
-        sta     $0660,x
-        sta     $0680,x
+        sta     ent_y_vel,x
+        sta     ent_y_vel_sub,x
+        sta     ent_anim_frame,x
         sta     $059E,x
         lda     #$80
-        sta     $0420,x
+        sta     ent_flags,x
         rts
 
-time_stopper_alt_state:  lda     $04E0,x
+time_stopper_alt_state:  lda     ent_state,x
         bpl     time_stopper_check_fall
         and     #$0F
-        sta     $04E0,x
+        sta     ent_state,x
         lda     #$62
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$00
-        sta     $0640,x
+        sta     ent_y_vel,x
         beq     time_stopper_check_done
-time_stopper_check_fall:  lda     $0640,x
+time_stopper_check_fall:  lda     ent_y_vel,x
         bpl     time_stopper_set_vel
-        lda     $00
+        lda     temp_00
         bne     time_stopper_finish
 time_stopper_set_vel:  lda     #$9E
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$FF
-        sta     $0640,x
+        sta     ent_y_vel,x
         jmp     time_stopper_check_done
 
 time_stopper_physics:  jsr     apply_entity_physics
@@ -4294,111 +4298,111 @@ time_stopper_physics:  jsr     apply_entity_physics
         sta     $059E,x
 time_stopper_done:  rts
 
-check_wall_collision:  lda     $0420,x
+check_wall_collision:  lda     ent_flags,x
         and     #$40
         bne     wall_coll_facing_right
         sec
-        lda     $0460,x
-        sbc     $01
+        lda     ent_x_px,x
+        sbc     temp_01
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         sbc     #$00
         jmp     wall_coll_store_screen
 
 wall_coll_facing_right:  clc
-        lda     $0460,x
-        adc     $01
+        lda     ent_x_px,x
+        adc     temp_01
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         adc     #$00
-wall_coll_store_screen:  sta     $09
+wall_coll_store_screen:  sta     jump_ptr_hi
         sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$08
         sta     $0A
         lda     #$00
         sbc     #$00
         sta     $0B
         jsr     lookup_cached_tile
-        ldx     $2B
-        ldy     $00
+        ldx     current_entity_slot
+        ldy     temp_00
         lda     wall_solid_flag_tbl,y
         pha
-        lda     $0640,x
+        lda     ent_y_vel,x
         bpl     wall_coll_check_below
         clc
-        lda     $04A0,x
-        adc     $03
+        lda     ent_y_px,x
+        adc     temp_03
         sta     $0A
         lda     #$00
         adc     #$00
         jmp     wall_coll_store_y
 
 wall_coll_check_below:  sec
-        lda     $04A0,x
-        sbc     $02
+        lda     ent_y_px,x
+        sbc     temp_02
         sta     $0A
         lda     #$00
         sbc     #$00
 wall_coll_store_y:  sta     $0B
-        lda     $0460,x
+        lda     ent_x_px,x
         sta     jump_ptr
-        lda     $0440,x
-        sta     $09
+        lda     ent_x_screen,x
+        sta     jump_ptr_hi
         jsr     lookup_cached_tile
-        ldx     $2B
-        ldy     $00
+        ldx     current_entity_slot
+        ldy     temp_00
         lda     wall_solid_flag_tbl,y
-        sta     $00
+        sta     temp_00
         pla
-        sta     $03
+        sta     temp_03
         rts
 
 wall_solid_flag_tbl:  .byte   $00,$01,$00,$01,$00,$01,$01,$01 ; wall collision solid flags
         .byte   $01
         lda     #$00
-        sta     $0680,x
-        lda     $04E0,x
+        sta     ent_anim_frame,x
+        lda     ent_state,x
         bne     crash_entity_accelerate
-        lda     $06C0,x
+        lda     ent_hp,x
         bne     crash_entity_dec_timer
-        lda     $0420,x
+        lda     ent_flags,x
         eor     #$40
-        sta     $0420,x
-        inc     $06A0,x
+        sta     ent_flags,x
+        inc     ent_anim_id,x
         and     #$40
         beq     crash_entity_reset_vel
-        inc     $06A0,x
+        inc     ent_anim_id,x
 crash_entity_reset_vel:  lda     #$00
-        sta     $0620,x
-        sta     $0660,x
+        sta     ent_x_vel_sub,x
+        sta     ent_y_vel_sub,x
         lda     #$FE
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$01
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     #$10
-        sta     $06C0,x
-        inc     $04E0,x
+        sta     ent_hp,x
+        inc     ent_state,x
         bne     crash_entity_dec_timer
 crash_entity_accelerate:  clc
-        lda     $0620,x
+        lda     ent_x_vel_sub,x
         adc     #$40
-        sta     $0620,x
-        lda     $0600,x
+        sta     ent_x_vel_sub,x
+        lda     ent_x_vel,x
         adc     #$00
-        sta     $0600,x
-        lda     $06C0,x
+        sta     ent_x_vel,x
+        lda     ent_hp,x
         bne     crash_entity_dec_timer
         lda     #$00
-        sta     $06A0,x
-        sta     $0620,x
-        sta     $0600,x
-        sta     $0660,x
-        sta     $0640,x
+        sta     ent_anim_id,x
+        sta     ent_x_vel_sub,x
+        sta     ent_x_vel,x
+        sta     ent_y_vel_sub,x
+        sta     ent_y_vel,x
         lda     #$02
-        sta     $06C0,x
-        dec     $04E0,x
-crash_entity_dec_timer:  dec     $06C0,x
+        sta     ent_hp,x
+        dec     ent_state,x
+crash_entity_dec_timer:  dec     ent_hp,x
         jsr     apply_entity_physics
         rts
 
@@ -4407,61 +4411,61 @@ crash_entity_dec_timer:  dec     $06C0,x
 
         rts
 check_entity_on_screen:  sec
-        lda     $0460,x
-        sbc     $1F
-        lda     $0440,x
-        sbc     $20
+        lda     ent_x_px,x
+        sbc     scroll_x
+        lda     ent_x_screen,x
+        sbc     nametable_select
         bcc     entity_off_screen_deactivate
         bne     entity_off_screen_deactivate
         clc
         rts
 
-entity_off_screen_deactivate:  lsr     $0420,x
+entity_off_screen_deactivate:  lsr     ent_flags,x
         sec
         rts
 
-spawn_weapon_from_entity:  lda     $0460,x
+spawn_weapon_from_entity:  lda     ent_x_px,x
         sta     jump_ptr
-        lda     $0440,x
-        sta     $09
-        lda     $04A0,x
+        lda     ent_x_screen,x
+        sta     jump_ptr_hi
+        lda     ent_y_px,x
         sta     $0A
-        ldx     $00
+        ldx     temp_00
         lda     projectile_type_tbl,y
-        sta     $0400,x
+        sta     ent_type,x
         lda     projectile_flags_tbl,y
-        sta     $0420,x
+        sta     ent_flags,x
         lda     jump_ptr
-        sta     $0460,x
-        lda     $09
-        sta     $0440,x
+        sta     ent_x_px,x
+        lda     jump_ptr_hi
+        sta     ent_x_screen,x
         lda     $0A
-        sta     $04A0,x
+        sta     ent_y_px,x
         lda     projectile_xvel_sub_tbl,y
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         lda     projectile_xvel_tbl,y
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     projectile_yvel_sub_tbl,y
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     projectile_yvel_tbl,y
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
-        sta     $04E0,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
+        sta     ent_state,x
         sec
-        lda     $0460,x
-        sbc     $1F
+        lda     ent_x_px,x
+        sbc     scroll_x
         sta     $06E0,x
-        ldx     $2B
+        ldx     current_entity_slot
         rts
 
 ; =============================================================================
 ; check_player_collision — Check if an enemy entity touches the player (contact damage) ($E55A)
 ; =============================================================================
 check_player_collision:  lda     #$00
-        sta     $01
-        lda     $2C                     ; weapon select (0=no weapon out)
+        sta     temp_01
+        lda     game_substate                     ; weapon select (0=no weapon out)
         beq     player_collision_done
         lda     $BD
         bne     player_collision_done
@@ -4477,47 +4481,47 @@ player_coll_check_range:  ldy     $06E0,x ; entity screen-relative X
         cmp     contact_damage_range_x_tbl,y ; compare to hitbox width
         bcs     player_collision_done
         sec
-        lda     $04A0
-        sbc     $04A0,x
+        lda     ent_y_px
+        sbc     ent_y_px,x
         bcs     player_coll_check_y
         eor     #$FF
         adc     #$01
 player_coll_check_y:  cmp     contact_damage_range_y_tbl,y ; compare to hitbox height
         bcs     player_collision_done
-        ldy     $0400,x
+        ldy     ent_type,x
         cpy     #$76
         bcs     player_collision_item
-        lda     $4B
+        lda     invincibility_timer
         bne     player_collision_done
         sec
-        lda     $06C0
+        lda     ent_hp
         sbc     contact_damage_to_player_tbl,y
-        sta     $06C0
+        sta     ent_hp
         beq     player_coll_kill
         bcs     player_coll_knockback
 player_coll_kill:  lda     #$00
-        sta     $2C
-        sta     $06C0
+        sta     game_substate
+        sta     ent_hp
         jmp     boss_death_sequence     ; player died — run death seq
 
-player_coll_knockback:  lda     $0420
+player_coll_knockback:  lda     ent_flags
         and     #$BF
-        sta     $0420
-        lda     $0420,x
+        sta     ent_flags
+        lda     ent_flags,x
         and     #$40
         eor     #$40
-        ora     $0420
-        sta     $0420
+        ora     ent_flags
+        sta     ent_flags
         jsr     fire_weapon_buster
-        inc     $01
+        inc     temp_01
 player_collision_done:  rts
 
 player_collision_item:  lda     $AD
         bne     player_collision_return
-        lsr     $0420,x
+        lsr     ent_flags,x
         sty     $AD
-        inc     $01
-        lda     $04E0,x
+        inc     temp_01
+        lda     ent_state,x
         bne     player_collision_return
         lda     #$FF
         sta     $0120,x
@@ -4530,16 +4534,16 @@ player_collision_return:  rts
 ; =============================================================================
 ; check_weapon_collision — Check if a weapon projectile hits an enemy entity ($E5EC)
 ; =============================================================================
-check_weapon_collision:  lda     $04A0,x
-        sta     $00
+check_weapon_collision:  lda     ent_y_px,x
+        sta     temp_00
         lda     $06E0,x
         sta     jump_ptr
         ldx     #$09                    ; start scanning from weapon slot 9
-        lda     $1C
+        lda     frame_counter
         and     #$01
         bne     weapon_coll_check_slot
         dex
-weapon_coll_check_slot:  lda     $0420,x
+weapon_coll_check_slot:  lda     ent_flags,x
         bpl     weapon_coll_next_slot
         and     #$01
         beq     weapon_coll_next_slot
@@ -4557,8 +4561,8 @@ weapon_coll_check_slot:  lda     $0420,x
 weapon_coll_check_range_x:  cmp     contact_damage_range_x_tbl,y ; compare X distance to hitbox
         bcs     weapon_coll_next_slot
         sec
-        lda     $00
-        sbc     $04A0,x
+        lda     temp_00
+        sbc     ent_y_px,x
         bcs     weapon_coll_check_range_y
         eor     #$FF
         adc     #$01
@@ -4568,67 +4572,67 @@ weapon_coll_next_slot:  dex
         dex
         cpx     #$02
         bcs     weapon_coll_check_slot
-        ldx     $2B
+        ldx     current_entity_slot
         lda     #$00
         sta     $0100,x
         clc
         rts
 
-weapon_collision_dispatch:  ldy     $A9 ; current weapon ID for handler
+weapon_collision_dispatch:  ldy     current_weapon ; current weapon ID for handler
         lda     weapon_handler_ptr_lo,y ; dispatch to weapon handler
         sta     jump_ptr
         lda     weapon_handler_ptr_hi,y
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)              ; indirect jump to handler
 
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     *+54
-        lda     $0400,y
+        lda     ent_type,y
         tay
         lda     weapon_damage_table,y
-        sta     $00
+        sta     temp_00
         beq     *+43
         jsr     apply_difficulty_modifier
-        lsr     $0420,x
+        lsr     ent_flags,x
         lda     #$2B
         jsr     bank_switch_enqueue
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     *+50
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     *+4
         bcs     *+34
         lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
-        lda     $0420,x
+        lda     ent_flags,x
         eor     #$40
         and     #$FE
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$05
-        sta     $0640,x
-        sta     $0600,x
+        sta     ent_y_vel,x
+        sta     ent_x_vel,x
         lda     #$2D
         jsr     bank_switch_enqueue
-        ldx     $2B
+        ldx     current_entity_slot
         clc
         rts
 
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     weapon_damage_zero
-        lda     $0400,y
+        lda     ent_type,y
         tay
-        lda     $04E0,x
+        lda     ent_state,x
         cmp     #$02
         bcc     *+21
         beq     *+8
@@ -4641,7 +4645,7 @@ weapon_collision_dispatch:  ldy     $A9 ; current weapon ID for handler
         jmp     weapon_damage_apply
 
         lda     weapon_damage_table,y
-weapon_damage_apply:  sta     $00
+weapon_damage_apply:  sta     temp_00
         beq     weapon_damage_zero
         jsr     apply_difficulty_modifier
         txa
@@ -4650,40 +4654,40 @@ weapon_damage_apply:  sta     $00
         jsr     bank_switch_enqueue
         pla
         tay
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     weapon_damage_done
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     weapon_damage_killed
         bcs     weapon_damage_deactivate_wpn
 weapon_damage_killed:  lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
 weapon_damage_zero:  lda     #$2D
         jsr     bank_switch_enqueue
-        lsr     $0420,x
+        lsr     ent_flags,x
         jmp     weapon_damage_done
 
 weapon_damage_deactivate_wpn:  lda     #$00
-        sta     $0420,y
-weapon_damage_done:  ldx     $2B
+        sta     ent_flags,y
+weapon_damage_done:  ldx     current_entity_slot
         clc
         rts
 
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     *+55
-        lda     $0400,y
+        lda     ent_type,y
         tay
         lda     $EA8C,y
-        sta     $00
+        sta     temp_00
         .byte   $F0
         rol     a
         jsr     apply_difficulty_modifier
@@ -4693,43 +4697,43 @@ weapon_damage_done:  ldx     $2B
         jsr     bank_switch_enqueue
         pla
         tay
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     weapon_damage_return
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     weapon_damage_killed_alt
         bcs     weapon_damage_deactivate_wpn
 weapon_damage_killed_alt:  lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
         lda     #$2D
         jsr     bank_switch_enqueue
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$FE
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$3D
-        sta     $0400,x
+        sta     ent_type,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
-        ldx     $2B
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
+        ldx     current_entity_slot
 weapon_damage_return:  clc
         rts
 
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     *+55
-        lda     $0400,y
+        lda     ent_type,y
         tay
         lda     $EB04,y
-        sta     $00
+        sta     temp_00
         beq     *+44
         jsr     apply_difficulty_modifier
         txa
@@ -4738,48 +4742,48 @@ weapon_damage_return:  clc
         jsr     bank_switch_enqueue
         pla
         tay
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     *+59
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     *+4
         bcs     weapon_coll_deactivate
         lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
         lda     #$2D
         jsr     bank_switch_enqueue
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$F2
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$3B
-        sta     $0400,x
+        sta     ent_type,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
-        sta     $04E0,x
-        sta     $06C0,x
-weapon_coll_handler_done:  ldx     $2B
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
+        sta     ent_state,x
+        sta     ent_hp,x
+weapon_coll_handler_done:  ldx     current_entity_slot
         clc
         rts
 
 weapon_coll_deactivate:  lda     #$00
-        sta     $0420,y
+        sta     ent_flags,y
         beq     weapon_coll_handler_done
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     weapon_coll_rebound
-        lda     $0400,y
+        lda     ent_type,y
         tay
         lda     weapon_damage_table_2,y
-        sta     $00
+        sta     temp_00
         beq     weapon_coll_rebound
         jsr     apply_difficulty_modifier
         txa
@@ -4788,43 +4792,43 @@ weapon_coll_deactivate:  lda     #$00
         jsr     bank_switch_enqueue
         pla
         tay
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     weapon_coll_rebound_done
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     weapon_coll_hp_zero
         bcs     weapon_coll_deactivate
 weapon_coll_hp_zero:  lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
 weapon_coll_rebound:  lda     #$00
-        sta     $0600,x
-        sta     $0620,x
-        sta     $0660,x
+        sta     ent_x_vel,x
+        sta     ent_x_vel_sub,x
+        sta     ent_y_vel_sub,x
         lda     #$04
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$80
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$2D
         jsr     bank_switch_enqueue
-        ldx     $2B
+        ldx     current_entity_slot
 weapon_coll_rebound_done:  clc
         rts
 
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     *+55
-        lda     $0400,y
+        lda     ent_type,y
         tay
         lda     $EBF4,y
-        sta     $00
+        sta     temp_00
         beq     *+44
         jsr     apply_difficulty_modifier
         txa
@@ -4833,54 +4837,54 @@ weapon_coll_rebound_done:  clc
         jsr     bank_switch_enqueue
         pla
         tay
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     *+73
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     *+4
         bcs     weapon_coll_deactivate_2
         lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
         lda     #$3C
-        sta     $0400,x
-        lda     $0420,x
+        sta     ent_type,x
+        lda     ent_flags,x
         and     #$C0
         eor     #$40
         ora     #$04
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
-        sta     $0600,x
-        sta     $0660,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
+        sta     ent_x_vel,x
+        sta     ent_y_vel_sub,x
         lda     #$C0
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         lda     #$04
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$2D
         jsr     bank_switch_enqueue
-weapon_coll_handler_2_done:  ldx     $2B
+weapon_coll_handler_2_done:  ldx     current_entity_slot
         clc
         rts
 
 weapon_coll_deactivate_2:  lda     #$00
-        sta     $0420,y
+        sta     ent_flags,y
         beq     weapon_coll_handler_2_done
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     weapon_coll_stun
-        lda     $0400,y
+        lda     ent_type,y
         tay
         lda     weapon_damage_table_3,y
-        sta     $00
+        sta     temp_00
         beq     weapon_coll_stun
         jsr     apply_difficulty_modifier
         txa
@@ -4889,48 +4893,48 @@ weapon_coll_deactivate_2:  lda     #$00
         jsr     bank_switch_enqueue
         pla
         tay
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     weapon_coll_stun_done
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     weapon_coll_hp_zero_2
         bcs     weapon_coll_deactivate_2
 weapon_coll_hp_zero_2:  lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
-weapon_coll_stun:  lda     $0400,x
+weapon_coll_stun:  lda     ent_type,x
         cmp     #$2F
         beq     weapon_coll_stun_done
-        lda     $04E0,x
+        lda     ent_state,x
         cmp     #$02
         beq     weapon_coll_stun_done
         lda     #$05
-        sta     $06A0,x
+        sta     ent_anim_id,x
         lda     #$00
-        sta     $0680,x
+        sta     ent_anim_frame,x
         lda     #$38
-        sta     $06C0,x
-        inc     $04E0,x
+        sta     ent_hp,x
+        inc     ent_state,x
         lda     #$2D
         jsr     bank_switch_enqueue
-weapon_coll_stun_done:  ldx     $2B
+weapon_coll_stun_done:  ldx     current_entity_slot
         clc
         rts
 
-        ldy     $2B
-        lda     $0420,y
+        ldy     current_entity_slot
+        lda     ent_flags,y
         and     #$08
         bne     *+55
-        lda     $0400,y
+        lda     ent_type,y
         tay
         lda     $ECE4,y
-        sta     $00
+        sta     temp_00
         beq     *+44
         jsr     apply_difficulty_modifier
         txa
@@ -4939,44 +4943,44 @@ weapon_coll_stun_done:  ldx     $2B
         jsr     bank_switch_enqueue
         pla
         tay
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0100,x
         bne     *+60
         inc     $0100,x
         sec
-        lda     $06C0,x
-        sbc     $00
-        sta     $06C0,x
+        lda     ent_hp,x
+        sbc     temp_00
+        sta     ent_hp,x
         beq     *+4
         bcs     *+46
         lda     #$00
-        sta     $06C0,x
+        sta     ent_hp,x
         sec
         rts
 
         lda     #$03
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$B2
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$01
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     #$87
-        sta     $0620,x
-        lda     $0420,x
+        sta     ent_x_vel_sub,x
+        lda     ent_flags,x
         and     #$F0
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$2D
         jsr     bank_switch_enqueue
-weapon_coll_handler_3_done:  ldx     $2B
+weapon_coll_handler_3_done:  ldx     current_entity_slot
         clc
         rts
 
         lda     #$00
-        sta     $0420,y
+        sta     ent_flags,y
         beq     weapon_coll_handler_3_done
 apply_difficulty_modifier:  lda     $CB
         bne     difficulty_done
-        asl     $00
+        asl     temp_00
 difficulty_done:  rts
 
 weapon_handler_ptr_lo:  .byte   $52,$AA,$16,$72,$DB,$37,$7F,$15 ; collision handler ptr low bytes
@@ -5126,7 +5130,7 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         lda     #$00
         sta     $0150,x
         sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$04
         sta     $0160,x
         rts
@@ -5138,7 +5142,7 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         lda     #$00
         sta     $0150,x
         sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$08
         sta     $0160,x
         rts
@@ -5150,65 +5154,65 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         lda     #$00
         sta     $0150,x
         sec
-        lda     $04A0,x
+        lda     ent_y_px,x
         sbc     #$08
         sta     $0160,x
         rts
 
         jsr     $EFEE
         sec
-        lda     $0400,x
+        lda     ent_type,x
         sbc     #$40
         tay
         lda     $AF79,y
-        sta     $01
-        lda     $0420,x
+        sta     temp_01
+        lda     ent_flags,x
         and     #$20
         beq     *+29
-        ldy     $01
+        ldy     temp_01
         lda     #$15
         cmp     $0358,y
         bne     *+9
         lda     #$04
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         bne     *+8
-        lda     $00
+        lda     temp_00
         cmp     #$60
         bcs     collision_apply_physics
         lda     #$82
-        sta     $0420,x
-        lda     $0620,x
+        sta     ent_flags,x
+        lda     ent_x_vel_sub,x
         cmp     #$04
         bcs     collision_apply_physics
-        lda     $04E0,x
+        lda     ent_state,x
         and     #$03
         bne     collision_inc_state
-        sta     $04E0,x
-        lda     $0620,x
-        inc     $0620,x
+        sta     ent_state,x
+        lda     ent_x_vel_sub,x
+        inc     ent_x_vel_sub,x
         asl     a
         asl     a
         tay
-        ldx     $01
+        ldx     temp_01
         jsr     banked_0B_item_spawn
-        ldx     $2B
-collision_inc_state:  inc     $04E0,x
+        ldx     current_entity_slot
+collision_inc_state:  inc     ent_state,x
 collision_apply_physics:  jsr     apply_entity_physics_alt
         rts
 
-        lda     $0620,x
+        lda     ent_x_vel_sub,x
         bne     *+36
         lda     #$6E
-        sta     $04E0,x
-        inc     $0620,x
+        sta     ent_state,x
+        inc     ent_x_vel_sub,x
         lda     #$00
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$01
-        sta     $01
+        sta     temp_01
         lda     #$23
         jsr     $96CF
         lda     #$83
-        sta     $0420,x
+        sta     ent_flags,x
         bcs     *+7
         lda     #$26
         jsr     spawn_entity_from_parent
@@ -5226,7 +5230,7 @@ collision_done:  rts
         bne     *+4
         lda     #$00
         sta     $4E
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$03
         beq     apply_entity_physics
         pha
@@ -5240,78 +5244,78 @@ collision_check_contact:  pla
         bcc     apply_entity_physics
         jsr     item_drop_rng
         lda     #$06
-        sta     $0400,x
+        sta     ent_type,x
         lda     #$80
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$00
-        sta     $0680,x
-        sta     $06A0,x
+        sta     ent_anim_frame,x
+        sta     ent_anim_id,x
         jmp     physics_despawn_check
 
 ; =============================================================================
 ; apply_entity_physics — Apply velocity to entity position, handle bounds checking ($EEEF)
 ; =============================================================================
 apply_entity_physics:  sec
-        lda     $04C0,x                 ; Y sub-pixel position
-        sbc     $0660,x                 ; subtract Y velocity (sub-pixel)
-        sta     $04C0,x
-        lda     $04A0,x                 ; Y pixel position
-        sbc     $0640,x                 ; subtract Y velocity (whole)
-        sta     $04A0,x
+        lda     ent_y_sub,x                 ; Y sub-pixel position
+        sbc     ent_y_vel_sub,x                 ; subtract Y velocity (sub-pixel)
+        sta     ent_y_sub,x
+        lda     ent_y_px,x                 ; Y pixel position
+        sbc     ent_y_vel,x                 ; subtract Y velocity (whole)
+        sta     ent_y_px,x
         cmp     #$F0
         bcc     physics_check_gravity
         jmp     physics_out_of_bounds
 
-physics_check_gravity:  lda     $0420,x ; check entity flags
+physics_check_gravity:  lda     ent_flags,x ; check entity flags
         and     #$04                    ; bit 2 = gravity enabled
         beq     physics_move_left
         clc
-        lda     $0660,x
+        lda     ent_y_vel_sub,x
         sbc     $30
-        sta     $0660,x
-        lda     $0640,x
+        sta     ent_y_vel_sub,x
+        lda     ent_y_vel,x
         sbc     $31
-        sta     $0640,x
-physics_move_left:  lda     $0420,x     ; check facing direction
+        sta     ent_y_vel,x
+physics_move_left:  lda     ent_flags,x     ; check facing direction
         and     #$40                    ; bit 6 = facing right
         bne     physics_move_right
         sec
-        lda     $0480,x
-        sbc     $0620,x
-        sta     $0480,x
-        lda     $0460,x
-        sbc     $0600,x
-        sta     $0460,x
-        lda     $0440,x
+        lda     ent_x_sub,x
+        sbc     ent_x_vel_sub,x
+        sta     ent_x_sub,x
+        lda     ent_x_px,x
+        sbc     ent_x_vel,x
+        sta     ent_x_px,x
+        lda     ent_x_screen,x
         sbc     #$00
-        sta     $0440,x
+        sta     ent_x_screen,x
         sec
-        lda     $0460,x
-        sbc     $1F
+        lda     ent_x_px,x
+        sbc     scroll_x
         sta     jump_ptr
-        lda     $0440,x
-        sbc     $20
+        lda     ent_x_screen,x
+        sbc     nametable_select
         bne     physics_out_of_bounds
         lda     jump_ptr
         cmp     #$08
         bcc     physics_out_of_bounds
         bcs     physics_in_bounds
 physics_move_right:  clc
-        lda     $0480,x
-        adc     $0620,x
-        sta     $0480,x
-        lda     $0460,x
-        adc     $0600,x
-        sta     $0460,x
-        lda     $0440,x
+        lda     ent_x_sub,x
+        adc     ent_x_vel_sub,x
+        sta     ent_x_sub,x
+        lda     ent_x_px,x
+        adc     ent_x_vel,x
+        sta     ent_x_px,x
+        lda     ent_x_screen,x
         adc     #$00
-        sta     $0440,x
+        sta     ent_x_screen,x
         sec
-        lda     $0460,x
-        sbc     $1F
+        lda     ent_x_px,x
+        sbc     scroll_x
         sta     jump_ptr
-        lda     $0440,x
-        sbc     $20
+        lda     ent_x_screen,x
+        sbc     nametable_select
         bne     physics_out_of_bounds
         lda     jump_ptr
         cmp     #$F8
@@ -5319,7 +5323,7 @@ physics_move_right:  clc
 physics_in_bounds:  clc
         rts
 
-physics_out_of_bounds:  lsr     $0420,x ; deactivate entity (clear bit 7)
+physics_out_of_bounds:  lsr     ent_flags,x ; deactivate entity (clear bit 7)
 physics_despawn_check:  cpx     #$10
         bcc     physics_despawn_return
         lda     $4E
@@ -5333,7 +5337,7 @@ physics_despawn_secondary:  lda     #$FF
         sta     $0120,x
         lda     $0110,x
         tay
-        lda     $06C0,x
+        lda     ent_hp,x
         sta     $0140,y
         sec
         rts
@@ -5346,7 +5350,7 @@ physics_despawn_secondary:  lda     #$FF
 ; =============================================================================
 apply_entity_physics_alt:  lda     #$00
         sta     $4E
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$03                    ; check contact/weapon bits
         beq     physics_alt_check_offscreen
         pha
@@ -5360,12 +5364,12 @@ physics_alt_check_contact:  pla
         bcc     physics_alt_check_offscreen
         jsr     item_drop_rng           ; roll for item drop
         lda     #$06
-        sta     $0400,x
+        sta     ent_type,x
         lda     #$80
-        sta     $0420,x
+        sta     ent_flags,x
         lda     #$00
-        sta     $0680,x
-        sta     $06A0,x
+        sta     ent_anim_frame,x
+        sta     ent_anim_id,x
         jmp     physics_despawn_check
 
 physics_alt_check_offscreen:  lda     $2F
@@ -5373,34 +5377,34 @@ physics_alt_check_offscreen:  lda     $2F
         clc
         rts
 
-        lda     $0420,x
+        lda     ent_flags,x
         and     #$BF
-        sta     $0420,x
+        sta     ent_flags,x
         sec
         lda     $2E
         sbc     $2D
-        sta     $00
+        sta     temp_00
         bcs     entity_face_player_done
-        lda     $00
+        lda     temp_00
         eor     #$FF
         adc     #$01
-        sta     $00
+        sta     temp_00
         lda     #$40
-        ora     $0420,x
-        sta     $0420,x
+        ora     ent_flags,x
+        sta     ent_flags,x
 entity_face_player_done:  rts
 
-find_entity_by_type:  sta     $00
+find_entity_by_type:  sta     temp_00
         ldy     #$0F
-find_entity_scan:  lda     $00
-find_entity_compare:  cmp     $0410,y
+find_entity_scan:  lda     temp_00
+find_entity_compare:  cmp     ent_spawn_type,y
         beq     find_entity_check_active
         dey
         bpl     find_entity_compare
         sec
         rts
 
-find_entity_check_active:  lda     $0430,y
+find_entity_check_active:  lda     ent_spawn_flags,y
         bmi     find_entity_not_found
         dey
         bpl     find_entity_scan
@@ -5415,53 +5419,53 @@ find_entity_not_found:  clc
 ; =============================================================================
 check_vert_tile_collision:  lda     #$00
         sta     $0B
-        lda     $0640,x                 ; Y velocity (direction)
+        lda     ent_y_vel,x                 ; Y velocity (direction)
         php
         bpl     vert_coll_falling
         clc
-        lda     $04A0,x
-        adc     $02
+        lda     ent_y_px,x
+        adc     temp_02
         jmp     vert_coll_store_pos
 
 vert_coll_falling:  sec
-        lda     $04A0,x
-        sbc     $02
+        lda     ent_y_px,x
+        sbc     temp_02
 vert_coll_store_pos:  sta     $0A
         clc
-        lda     $0460,x
-        adc     $01
+        lda     ent_x_px,x
+        adc     temp_01
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         adc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         cpx     #$0F
         bcs     vert_coll_lookup_uncached
         jsr     lookup_cached_tile
         jmp     vert_coll_process
 
 vert_coll_lookup_uncached:  jsr     lookup_tile_from_map
-vert_coll_process:  ldy     $00
+vert_coll_process:  ldy     temp_00
         lda     tile_solid_lookup_tbl,y ; check if tile is solid
-        sta     $02
-        ldx     $2B
+        sta     temp_02
+        ldx     current_entity_slot
         sec
-        lda     $0460,x
-        sbc     $01
+        lda     ent_x_px,x
+        sbc     temp_01
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         sbc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         cpx     #$0F
         bcs     vert_coll_left_uncached
         jsr     lookup_cached_tile
         jmp     vert_coll_left_process
 
 vert_coll_left_uncached:  jsr     lookup_tile_from_map
-vert_coll_left_process:  ldx     $2B
-        ldy     $00
+vert_coll_left_process:  ldx     current_entity_slot
+        ldy     temp_00
         lda     tile_solid_lookup_tbl,y
-        ora     $02
-        sta     $00
+        ora     temp_02
+        sta     temp_00
         beq     vert_coll_no_hit
         plp
         bmi     vert_coll_snap_up
@@ -5469,27 +5473,27 @@ vert_coll_left_process:  ldx     $2B
         and     #$0F
         eor     #$0F
         sec
-        adc     $04A0,x
+        adc     ent_y_px,x
         jmp     vert_coll_store_y
 
-vert_coll_snap_up:  lda     $04A0,x     ; get entity Y position
+vert_coll_snap_up:  lda     ent_y_px,x     ; get entity Y position
         pha
         lda     $0A
         and     #$0F
-        sta     $02
+        sta     temp_02
         pla
         sec
-        sbc     $02
-vert_coll_store_y:  sta     $04A0,x
+        sbc     temp_02
+vert_coll_store_y:  sta     ent_y_px,x
         lda     #$00
-        sta     $04C0,x
-        lda     $0420,x
+        sta     ent_y_sub,x
+        lda     ent_flags,x
         and     #$04
         beq     vert_coll_done
         lda     #$C0
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$FF
-        sta     $0640,x
+        sta     ent_y_vel,x
 vert_coll_done:  rts
 
 vert_coll_no_hit:  plp
@@ -5498,63 +5502,63 @@ vert_coll_no_hit:  plp
 ; =============================================================================
 ; check_horiz_tile_collision — Check horizontal tile collision and snap to surface ($F0CF)
 ; =============================================================================
-check_horiz_tile_collision:  lda     $04A0,x ; entity Y position
+check_horiz_tile_collision:  lda     ent_y_px,x ; entity Y position
         sta     $0A
         lda     #$00
         sta     $0B
-        lda     $0420,x                 ; check facing direction
+        lda     ent_flags,x                 ; check facing direction
         and     #$40                    ; bit 6 = facing right
         php
         beq     horiz_coll_left
         sec
-        lda     $0460,x
-        adc     $01
+        lda     ent_x_px,x
+        adc     temp_01
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         adc     #$00
         jmp     horiz_coll_store_screen
 
 horiz_coll_left:  clc
-        lda     $0460,x
-        sbc     $01
+        lda     ent_x_px,x
+        sbc     temp_01
         sta     jump_ptr
-        lda     $0440,x
+        lda     ent_x_screen,x
         sbc     #$00
-horiz_coll_store_screen:  sta     $09
+horiz_coll_store_screen:  sta     jump_ptr_hi
         cpx     #$0F
         bcs     horiz_coll_lookup_uncached
         jsr     lookup_cached_tile
         jmp     horiz_coll_process
 
 horiz_coll_lookup_uncached:  jsr     lookup_tile_from_map
-horiz_coll_process:  ldx     $2B
-        ldy     $00
+horiz_coll_process:  ldx     current_entity_slot
+        ldy     temp_00
         lda     tile_solid_lookup_tbl,y ; check if tile is solid
-        sta     $03
+        sta     temp_03
         beq     horiz_coll_no_hit
         plp
         beq     horiz_coll_snap_right
         lda     jump_ptr
         and     #$0F
-        sta     $00
+        sta     temp_00
         sec
-        lda     $0460,x
-        sbc     $00
-        sta     $0460,x
-        lda     $0440,x
+        lda     ent_x_px,x
+        sbc     temp_00
+        sta     ent_x_px,x
+        lda     ent_x_screen,x
         sbc     #$00
-        sta     $0440,x
+        sta     ent_x_screen,x
         jmp     check_vert_tile_collision
 
 horiz_coll_snap_right:  lda     jump_ptr
         and     #$0F
         eor     #$0F
         sec
-        adc     $0460,x
-        sta     $0460,x
-        lda     $0440,x
+        adc     ent_x_px,x
+        sta     ent_x_px,x
+        lda     ent_x_screen,x
         adc     #$00
-        sta     $0440,x
+        sta     ent_x_screen,x
         jmp     check_vert_tile_collision
 
 horiz_coll_no_hit:  plp
@@ -5569,26 +5573,26 @@ spawn_entity_from_parent:  pha
 spawn_entity_init:  jsr     entity_init_from_type
         txa
         tay
-        ldx     $2B
-        lda     $0420,x
+        ldx     current_entity_slot
+        lda     ent_flags,x
         and     #$40
-        ora     $0430,y
-        sta     $0430,y
-        lda     $0480,x
+        ora     ent_spawn_flags,y
+        sta     ent_spawn_flags,y
+        lda     ent_x_sub,x
         sta     $0490,y
-        lda     $0460,x
-        sta     $0470,y
-        lda     $0440,x
-        sta     $0450,y
-        lda     $04C0,x
+        lda     ent_x_px,x
+        sta     ent_x_spawn_px,y
+        lda     ent_x_screen,x
+        sta     ent_x_spawn_scr,y
+        lda     ent_y_sub,x
         sta     $04D0,y
-        lda     $04A0,x
-        sta     $04B0,y
+        lda     ent_y_px,x
+        sta     ent_y_spawn_px,y
         clc
         rts
 
 spawn_entity_no_slot:  pla
-        ldx     $2B
+        ldx     current_entity_slot
         sec
         rts
 
@@ -5596,36 +5600,36 @@ spawn_entity_no_slot:  pla
         sec
         lda     $2D
         sbc     $2E
-        sta     $00
+        sta     temp_00
         bcs     *+12
-        lda     $00
+        lda     temp_00
         eor     #$FF
         adc     #$01
         ldy     #$00
-        sta     $00
-        lda     $0420,x
+        sta     temp_00
+        lda     ent_flags,x
         and     #$BF
-        sta     $0420,x
+        sta     ent_flags,x
         tya
-        ora     $0420,x
-        sta     $0420,x
+        ora     ent_flags,x
+        sta     ent_flags,x
         sec
-        lda     $04A0
-        sbc     $04A0,x
+        lda     ent_y_px
+        sbc     ent_y_px,x
         php
         bcs     calc_entity_velocity
         eor     #$FF
         adc     #$01
-calc_entity_velocity:  sta     $01
-        cmp     $00
+calc_entity_velocity:  sta     temp_01
+        cmp     temp_00
         bcs     calc_vel_y_greater
-        lda     $09
+        lda     jump_ptr_hi
         sta     $0D
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     jump_ptr
         sta     $0C
-        sta     $0620,x
-        lda     $00
+        sta     ent_x_vel_sub,x
+        lda     temp_00
         sta     $0B
         lda     #$00
         sta     $0A
@@ -5634,25 +5638,25 @@ calc_entity_velocity:  sta     $01
         sta     $0D
         lda     $0E
         sta     $0C
-        lda     $01
+        lda     temp_01
         sta     $0B
         lda     #$00
         sta     $0A
         jsr     divide_16bit
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0F
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     $0E
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         jmp     calc_vel_negate_y
 
-calc_vel_y_greater:  lda     $09
+calc_vel_y_greater:  lda     jump_ptr_hi
         sta     $0D
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     jump_ptr
         sta     $0C
-        sta     $0660,x
-        lda     $01
+        sta     ent_y_vel_sub,x
+        lda     temp_01
         sta     $0B
         lda     #$00
         sta     $0A
@@ -5661,26 +5665,26 @@ calc_vel_y_greater:  lda     $09
         sta     $0D
         lda     $0E
         sta     $0C
-        lda     $00
+        lda     temp_00
         sta     $0B
         lda     #$00
         sta     $0A
         jsr     divide_16bit
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0F
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     $0E
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
 calc_vel_negate_y:  plp
         bcc     calc_vel_done
-        lda     $0660,x
+        lda     ent_y_vel_sub,x
         eor     #$FF
         adc     #$01
-        sta     $0660,x
-        lda     $0640,x
+        sta     ent_y_vel_sub,x
+        lda     ent_y_vel,x
         eor     #$FF
         adc     #$00
-        sta     $0640,x
+        sta     ent_y_vel,x
 calc_vel_done:  rts
 
 ; =============================================================================
@@ -5690,14 +5694,14 @@ item_drop_rng:  lda     $B1             ; check boss state (no drops during boss
         beq     item_drop_calc
         rts
 
-item_drop_calc:  lda     $4A            ; read RNG seed
-        sta     $01
+item_drop_calc:  lda     rng_seed            ; read RNG seed
+        sta     temp_01
         lda     #$64
-        sta     $02
+        sta     temp_02
         jsr     divide_8bit             ; divide RNG by 100
         lda     $CB                     ; check difficulty flag
         beq     item_drop_normal_mode
-        lda     $04
+        lda     temp_04
         cmp     #$30
         bcc     item_drop_nothing
         cmp     #$49
@@ -5727,14 +5731,14 @@ item_drop_extra_life:  lda     #$7B
 item_drop_spawn:  jsr     spawn_entity_from_parent
         bcs     item_drop_failed
         lda     #$84
-        sta     $0430,y
+        sta     ent_spawn_flags,y
         lda     #$02
         sta     $0650,y
         lda     #$01
         sta     $04F0,y
 item_drop_failed:  rts
 
-item_drop_normal_mode:  lda     $04
+item_drop_normal_mode:  lda     temp_04
         cmp     #$1C
         bcc     item_drop_nothing
         cmp     #$26
@@ -5755,9 +5759,9 @@ item_drop_normal_mode:  lda     $04
 ; =============================================================================
 cold_boot_init:                         ; Cold boot: init PPU, switch to bank $0E, start game
         lda     #$10                    ; NMI enable, bg pattern $1000
-        sta     $2000                   ; PPUCTRL
+        sta     PPUCTRL                   ; PPUCTRL
         lda     #$06                    ; Show bg+sprites on left edge
-        sta     $2001                   ; PPUMASK
+        sta     PPUMASK                   ; PPUMASK
         lda     #$0E                    ; Switch to bank $0E (game engine)
         jsr     bank_switch
         jmp     banked_entry            ; Jump to $8000 in bank $0E
@@ -6235,7 +6239,7 @@ sprite_data_FE02:  .byte   $93,$93,$09,$0A,$22,$20,$20,$1F
 ; =============================================================================
 reset_handler:                          ; Reset vector entry point
         sei                             ; Disable interrupts
-LFFE1:  inc     LFFE1                   ; Self-modifying: resets MMC1 shift register
+reset_mmc1_shift:  inc     reset_mmc1_shift                   ; Self-modifying: resets MMC1 shift register
         jmp     cold_boot_init          ; Jump to initialization
 
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF

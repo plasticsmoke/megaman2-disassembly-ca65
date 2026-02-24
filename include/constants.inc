@@ -43,6 +43,19 @@ PPUMASK_BG_LEFT8    = $02       ; Show bg in leftmost 8px
 PPUMASK_SPR_LEFT8   = $04       ; Show sprites in leftmost 8px
 PPUMASK_RENDERING   = $1E       ; All rendering on
 
+; ─── HP / Energy ───────────────────────────────────────────────────────────
+MAX_HP              = $1C       ; 28 — max player/boss HP and weapon energy
+
+; ─── Entity flag bitmasks ($0420,x / $0430,x) ─────────────────────────────
+ENT_FLAG_ACTIVE     = $80       ; bit 7: entity is alive/spawned
+ENT_FLAG_FLIP_H     = $40       ; bit 6: facing left (horizontally flipped)
+ENT_FLAG_NO_COLLIDE = $20       ; bit 5: skip collision checks
+ENT_FLAG_WEAPON_HIT = $02       ; bit 1: was hit by weapon this frame
+ENT_FLAG_CONTACT_DMG = $01      ; bit 0: deals contact damage
+
+; ─── Stage thresholds ──────────────────────────────────────────────────────
+WILY_STAGE_START    = $08       ; stages $08+ are Wily fortress
+
 ; ─── Stage indices ($2A) ────────────────────────────────────────────────────
 ; Stage select cursor → stage index mapping (from stage_select_index_table)
 STAGE_HEAT_MAN      = $00       ; Bank $03

@@ -14,9 +14,11 @@
 
         .setcpu "6502"
 
-zp_temp_00           := $0000
-jump_ptr           := $0008
-entity_flags_base           := $0420
+.include "include/hardware.inc"
+.include "include/ram.inc"
+.include "include/zeropage.inc"
+.include "include/constants.inc"
+
 addr_0508           := $0508
 addr_0917           := $0917
 ppu_addr_2020           := $2020
@@ -39,7 +41,7 @@ fixed_DA43           := $DA43
         jmp     boss_init
 
         lda     #$01
-        sta     $2B
+        sta     current_entity_slot
         ldy     $B3
         lda     $AA
         and     #$01
@@ -60,7 +62,7 @@ fixed_DA43           := $DA43
 enemy_ai_dispatch:  lda     enemy_ai_routine_lo,y; Dispatch to AI routine via pointer table
         sta     jump_ptr
         lda     enemy_ai_routine_hi,y
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
 enemy_spawn_timer_table:  .byte   $0F,$0F,$0F,$0F,$1E,$0F,$0F,$0F
@@ -74,7 +76,7 @@ enemy_ai_routine_hi:  .byte   $80,$82,$84,$86,$87,$89,$8B,$8C
         lda     #$00
         sta     $0681
         jsr     setup_ppu_normal
-        lda     $A9
+        lda     current_weapon
         cmp     #$06
         bne     boss_spawn_done
         lda     $0422
@@ -87,7 +89,7 @@ enemy_ai_routine_hi:  .byte   $80,$82,$84,$86,$87,$89,$8B,$8C
         beq     boss_spawn_special_type
         cmp     #$0D
         bne     boss_spawn_inc_timer
-boss_spawn_special_type:  lda     #$1C
+boss_spawn_special_type:  lda     #MAX_HP
         sta     $06C1
         bne     boss_spawn_done
 boss_spawn_inc_timer:  inc     $05A6
@@ -119,17 +121,17 @@ boss_spawn_done:  rts
         lda     $82D9,x
         sta     jump_ptr
         lda     $82DE,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     $04E1
         bne     *+44
         ldy     $B3
         lda     $813E,y
-        sta     $01
+        sta     temp_01
         lda     $8146,y
-        sta     $02
+        sta     temp_02
         jsr     boss_floor_collision_check
-        lda     zp_temp_00
+        lda     temp_00
         bne     *+14
         lda     #$00
         sta     $06A1
@@ -149,7 +151,7 @@ boss_frame_update_rts:  jsr     boss_apply_movement_physics
         lda     #$00
         sta     $0681
         lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         bne     boss_palette_timer_tick
 boss_activate_phase:  lda     #$02
         sta     $B1
@@ -161,7 +163,7 @@ boss_activate_phase:  lda     #$02
         jsr     play_sound_and_reset_anim
         rts
 
-boss_palette_timer_tick:  lda     $1C
+boss_palette_timer_tick:  lda     frame_counter
         and     #$03
         bne     boss_palette_tick_rts
         inc     $06C1                   ; increment health bar fill
@@ -188,28 +190,28 @@ enemy_spawn_sound_ids:  .byte   $51,$67,$6D
         cmp     #$02
         bne     heatman_frame_update
         jsr     calc_player_boss_distance
-        lda     zp_temp_00
-        sta     $03
+        lda     temp_00
+        sta     temp_03
         clc
         adc     #$20
-        sta     $02
+        sta     temp_02
         sec
         sbc     #$40
         bcs     heatman_store_aim_low
         lda     #$00
-heatman_store_aim_low:  sta     $04
+heatman_store_aim_low:  sta     temp_04
         lda     #$02
-        sta     $01
+        sta     temp_01
 
 
 ; =============================================================================
 ; Boss AI: Heat Man — projectile spawning and movement patterns ($8194)
 ; =============================================================================
-heatman_spawn_projectile_loop:  ldx     $01
+heatman_spawn_projectile_loop:  ldx     temp_01
         lda     #$00
         sta     $0A
         sta     $0C
-        lda     $02,x
+        lda     temp_02,x
         sta     $0B
         lda     heatman_proj_speed_table,x
         sta     $0D
@@ -217,7 +219,7 @@ heatman_spawn_projectile_loop:  ldx     $01
         ldx     #$01
         lda     #$58
         jsr     spawn_entity_from_boss
-        ldx     $01
+        ldx     temp_01
         lda     heatman_proj_hitbox_y,x
         sta     $0670,y
         lda     heatman_proj_hitbox_mask,x
@@ -226,14 +228,14 @@ heatman_spawn_projectile_loop:  ldx     $01
         sta     $0630,y
         lda     $0F
         sta     $0610,y
-        lda     $0430,y
+        lda     ent_spawn_flags,y
         ora     #$04
-        sta     $0430,y
-        dec     $01
+        sta     ent_spawn_flags,y
+        dec     temp_01
         bpl     heatman_spawn_projectile_loop
 heatman_frame_update:  ldx     #$01
         jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     heatman_attack_rts
         bne     heatman_attack_rts
@@ -246,10 +248,10 @@ heatman_frame_update:  ldx     #$01
 heatman_attack_rts:  rts
 
         .byte   $0F,$15,$0F,$0F,$0F
-heatman_proj_hitbox_y:  rol     $A8,x
+heatman_proj_hitbox_y:  rol     current_lives,x
         .byte   $76
 heatman_proj_hitbox_mask:  .byte   $07
-        ora     $03
+        ora     temp_03
 heatman_proj_speed_table:  .byte   $3A,$2E,$1C
         lda     $04E1
         bne     *+55
@@ -267,7 +269,7 @@ heatman_proj_speed_table:  .byte   $3A,$2E,$1C
         lda     #$11
         sta     $06E1
         jsr     calc_player_boss_distance
-        lda     zp_temp_00
+        lda     temp_00
         lsr     a
         lsr     a
         clc
@@ -309,7 +311,7 @@ heatman_check_death_anim:  lda     $06A1
         lda     #$83
         sta     $0421
         jsr     calc_player_boss_distance
-        inc     $06A0,x
+        inc     ent_anim_id,x
         lda     #$05
         sta     $B1
 heatman_jmp_frame_update:  jmp     heatman_frame_update
@@ -327,12 +329,12 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         lda     #$00
         sta     $04E1
         sta     $B4
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$03
-        sta     $02
+        sta     temp_02
         jsr     divide_8bit
-        ldx     $04
+        ldx     temp_04
         lda     heatman_random_delay_table,x
         sta     $B2
         lda     #$52
@@ -354,7 +356,7 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         lda     $84F3,x
         sta     jump_ptr
         lda     $84F7,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     #$00
         sta     $40
@@ -375,22 +377,22 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         lda     #$FF
         sta     $0641
         bne     *+97
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$05
-        sta     $02
+        sta     temp_02
         jsr     divide_8bit
-        ldx     $04
+        ldx     temp_04
         lda     airman_leaf_count_table,x
         sta     $04E1
-        lda     $04
+        lda     temp_04
         asl     a
-        sta     $01
+        sta     temp_01
         asl     a
-        adc     $01
-        sta     $01
+        adc     temp_01
+        sta     temp_01
         lda     #$06
-        sta     $02
+        sta     temp_02
 
 
 ; =============================================================================
@@ -399,7 +401,7 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
 airman_spawn_leaf_loop:  lda     #$5D
         ldx     #$01
         jsr     spawn_entity_from_boss
-        ldx     $01
+        ldx     temp_01
         lda     enemy_sprite_ids,x
         sta     $0670,y
         lda     enemy_palette_data,x
@@ -410,8 +412,8 @@ airman_spawn_leaf_loop:  lda     #$5D
         sta     $0610,y
         lda     enemy_damage_values,x
         sta     $04F0,y
-        inc     $01
-        dec     $02
+        inc     temp_01
+        dec     temp_02
         bne     airman_spawn_leaf_loop
         lda     #$3F
         jsr     bank_switch_enqueue
@@ -484,7 +486,7 @@ airman_shield_active:  lda     #$01
         sta     $4F
 airman_update_scroll_lock:  ldy     #$0F
         lda     #$5D
-        sta     zp_temp_00
+        sta     temp_00
 airman_sprite_scan_loop:  jsr     collision_check_sprite
         bcs     airman_check_anim_state
         lda     $4F
@@ -503,7 +505,7 @@ airman_frame_update:  ldx     #$01
         rts
 
         .byte   $20,$D9
-        sty     $A9
+        sty     current_weapon
         .byte   $0B,$85,$01,$A9,$10,$85,$02,$20
         .byte   $D4,$A2,$A5,$00,$F0,$3A,$A6,$B2
         .byte   $BD,$CD,$84,$8D,$61,$06,$BD,$D0
@@ -521,7 +523,7 @@ boss_update_with_sound:  lda     $05A8
         jmp     boss_update_rts
 
 boss_update_collision_check:  jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     boss_update_rts
         lda     #$12
@@ -534,7 +536,7 @@ boss_update_rts:  rts
         .byte   $85
         php
         lda     bubbleman_ai_table_hi,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
         jsr     calc_player_boss_distance
@@ -568,16 +570,16 @@ woodman_spawn_multi_tornado:  lda     #$62
         jsr     find_entity_by_type
         bcc     woodman_frame_update
         lda     #$03
-        sta     $02
+        sta     temp_02
 woodman_tornado_loop:  lda     #$62
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     woodman_advance_phase
-        ldx     $02
+        ldx     temp_02
         lda     #$C1
-        sta     $0430,y
+        sta     ent_spawn_flags,y
         lda     #$20
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$01
         sta     $04F0,y
         lda     #$FE
@@ -585,8 +587,8 @@ woodman_tornado_loop:  lda     #$62
         lda     #$02
         sta     $0610,y
         lda     woodman_tornado_x_offset,x
-        sta     $0470,y
-        dec     $02
+        sta     ent_x_spawn_px,y
+        dec     temp_02
         bpl     woodman_tornado_loop
 woodman_advance_phase:  inc     $B1
         lda     #$6F
@@ -597,7 +599,7 @@ woodman_frame_update:  jsr     woodman_update_with_sound
 woodman_tornado_x_offset:  .byte   $40
         bvs     woodman_inc_timer
         bne     woodman_spawn_tornado
-        lda     ($06,x)
+        lda     (temp_06,x)
         cmp     #$02
         bcc     woodman_jmp_frame_update_2
         bne     woodman_phase3_sound
@@ -612,11 +614,11 @@ woodman_bcc_frame_update:  bcs     woodman_jmp_frame_update_2
         .byte   $30
 woodman_data_byte:  .byte   $04
         and     #$BF
-        sta     zp_temp_00
+        sta     temp_00
         lda     $0421
         and     #$40
-        ora     zp_temp_00
-        sta     $0430,y
+        ora     temp_00
+        sta     ent_spawn_flags,y
         bne     woodman_jmp_frame_update_2
 woodman_phase3_sound:  lda     #$6E
         jsr     play_sound_and_reset_anim
@@ -644,13 +646,13 @@ woodman_jmp_frame_update_2:  jsr     woodman_update_with_sound
         lda     $0641
         php
         lda     #$0F
-        sta     $01
+        sta     temp_01
         lda     #$10
-        sta     $02
+        sta     temp_02
         jsr     boss_wall_collision_check
         plp
         bpl     woodman_collision_rts
-        lda     zp_temp_00
+        lda     temp_00
         beq     woodman_collision_rts
         lda     #$03
         sta     $06A1
@@ -684,7 +686,7 @@ woodman_update_with_sound:  lda     $05A8
         rts
 
 woodman_collision_check:  jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     woodman_update_rts
         lda     #$12
@@ -697,19 +699,19 @@ bubbleman_ai_table_hi:  .byte   $80,$85,$85,$85
         lda     $8796,x
         sta     jump_ptr
         lda     $879A,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     #$83
         sta     $0421
         jsr     calc_player_boss_distance
-        lda     $06A0,x
+        lda     ent_anim_id,x
         bne     *+5
         sta     $0681
         lda     $04E1
         bne     bubbleman_dec_aim_timer
         sec
         lda     $04A1
-        sbc     $04A0
+        sbc     ent_y_px
         bcs     bubbleman_aim_check_dist
         eor     #$FF
         adc     #$01
@@ -720,13 +722,13 @@ bubbleman_ai_table_hi:  .byte   $80,$85,$85,$85
 ; =============================================================================
 bubbleman_aim_check_dist:  cmp     #$03
         bcs     bubbleman_frame_update
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$03
-        sta     $02
+        sta     temp_02
         jsr     divide_8bit
-        inc     $04
-        lda     $04
+        inc     temp_04
+        lda     temp_04
         sta     $04E1
         lda     #$01
         sta     $B2
@@ -741,19 +743,19 @@ bubbleman_dec_aim_timer:  dec     $B2
         sta     $06A1
         dec     $04E1
         bne     bubbleman_frame_update
-        lda     $04A0
+        lda     ent_y_px
         pha
         lda     #$50
-        sta     $04A0
+        sta     ent_y_px
         lda     #$01
-        sta     $09
+        sta     jump_ptr_hi
         lda     #$60
         sta     jump_ptr
         ldx     #$01
-        stx     $2B
+        stx     current_entity_slot
         jsr     calc_velocity_toward_player
         pla
-        sta     $04A0
+        sta     ent_y_px
         lda     #$00
         sta     $B2
         lda     $0421
@@ -783,7 +785,7 @@ bubbleman_frame_update:  jsr     bubbleman_update_with_sound
         bne     bubbleman_dec_shot_timer
         sec
         lda     $04A1
-        sbc     $04A0
+        sbc     ent_y_px
         bcs     bubbleman_check_dist_2
         eor     #$FF
         adc     #$01
@@ -811,7 +813,7 @@ bubbleman_check_anim_reset:  lda     $06A1
 bubbleman_anim_rts:  rts
 
         jsr     bubbleman_update_with_sound
-        lda     zp_temp_00
+        lda     temp_00
         beq     *-75
         lda     #$02
         sta     $B1
@@ -828,15 +830,15 @@ bubbleman_update_with_sound:  lda     $05A8
         jmp     bubbleman_collision_params
 
 bubbleman_collision_check:  jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     bubbleman_collision_params
         lda     #$12
         sta     $05A8
 bubbleman_collision_params:  lda     #$09
-        sta     $01
+        sta     temp_01
         lda     #$0C
-        sta     $02
+        sta     temp_02
         jsr     boss_wall_collision_check
         rts
 
@@ -845,7 +847,7 @@ bubbleman_collision_params:  lda     #$09
         lda     $894C,x
         sta     jump_ptr
         lda     $8951,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
         lda     $04E1
@@ -853,26 +855,26 @@ bubbleman_collision_params:  lda     #$09
         lda     #$87
         sta     $0421
         jsr     calc_player_boss_distance
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$03
-        sta     $02
+        sta     temp_02
         jsr     $C84E
-        ldx     $04
-        lda     zp_temp_00
+        ldx     temp_04
+        lda     temp_00
         clc
         adc     #$20
-        sta     $01
+        sta     temp_01
         sec
         sbc     #$40
         bcs     *+4
         lda     #$00
-        sta     $02
+        sta     temp_02
         lda     #$00
         sta     $0661
         lda     quickman_y_vel_table,x
         sta     $0641
-        lda     zp_temp_00,x
+        lda     temp_00,x
         sta     $0B
         lda     quickman_sec_flag,x
         sta     $0D
@@ -887,15 +889,15 @@ bubbleman_collision_params:  lda     #$09
         inc     $04E1
         inc     $B2
         lda     #$08
-        sta     $01
+        sta     temp_01
         lda     #$0C
-        sta     $02
+        sta     temp_02
         lda     $0641
         php
         jsr     boss_wall_collision_check
         plp
         bpl     quickman_check_anim
-        lda     zp_temp_00
+        lda     temp_00
         beq     quickman_check_anim
         dec     $04E1
         lda     $B2
@@ -928,13 +930,13 @@ quickman_check_y_vel:  lda     $0641
         sta     $0681
         lda     #$01
         sta     $06A1
-        lda     $04A0
+        lda     ent_y_px
         pha
         sec
         sbc     #$18
-        sta     $04A0
+        sta     ent_y_px
         lda     #$03
-        sta     $02
+        sta     temp_02
 quickman_spawn_boomerang_loop:  lda     #$59
         ldx     #$01
         jsr     spawn_entity_from_boss
@@ -943,22 +945,22 @@ quickman_spawn_boomerang_loop:  lda     #$59
         clc
         adc     #$10
         tax
-        sta     $2B
+        sta     current_entity_slot
         lda     #$25
-        sta     $04E0,x
+        sta     ent_state,x
         lda     #$04
-        sta     $09
+        sta     jump_ptr_hi
         lda     #$00
         sta     jump_ptr
         jsr     calc_velocity_toward_player
         clc
-        lda     $04A0
+        lda     ent_y_px
         adc     #$18
-        sta     $04A0
-        dec     $02
+        sta     ent_y_px
+        dec     temp_02
         bne     quickman_spawn_boomerang_loop
 quickman_restore_y:  pla
-        sta     $04A0
+        sta     ent_y_px
 quickman_frame_rts:  rts
 
 quickman_y_vel_table:  .byte   $07,$08,$04
@@ -1005,16 +1007,16 @@ quickman_state2_frame_update:  jsr     quickman_hitbox_params
         lda     #$56
         jsr     play_sound_and_reset_anim
         lda     #$0B
-        sta     $01
+        sta     temp_01
         lda     #$0C
-        sta     $02
+        sta     temp_02
         jsr     boss_flip_and_check_wall
         rts
 
 quickman_hitbox_params:  lda     #$08
-        sta     $01
+        sta     temp_01
         lda     #$0C
-        sta     $02
+        sta     temp_02
         jsr     boss_wall_collision_check
 quickman_update_with_sound:  lda     $05A8
         beq     quickman_collision_check
@@ -1022,7 +1024,7 @@ quickman_update_with_sound:  lda     $05A8
         jmp     quickman_update_rts
 
 quickman_collision_check:  jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         beq     quickman_update_rts
         cmp     #$01
         bne     quickman_hit_response
@@ -1050,7 +1052,7 @@ quickman_update_rts:  rts
         lda     $8B16,x
         sta     jump_ptr
         lda     $8B1B,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     $0421
         ora     #$04
@@ -1077,7 +1079,7 @@ quickman_update_rts:  rts
         rts
 
         jsr     flashman_update_with_sound
-        lda     $03
+        lda     temp_03
         beq     flashman_rts
         lda     $B1
         cmp     #$06
@@ -1154,19 +1156,19 @@ flashman_data_overlap:cmp     #$02
         bne     flashman_frame_update
         lda     #$06
         sta     $B2
-        lda     $04A0
+        lda     ent_y_px
         pha
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$50
-        sta     $02
+        sta     temp_02
         jsr     divide_8bit
         sec
         lda     $04A1
         sbc     #$28
         clc
-        adc     $04
-        sta     $04A0
+        adc     temp_04
+        sta     ent_y_px
         lda     #$35
         ldx     #$01
         jsr     spawn_entity_from_boss
@@ -1175,9 +1177,9 @@ flashman_data_overlap:cmp     #$02
         tya
         adc     #$10
         tax
-        stx     $2B
+        stx     current_entity_slot
         lda     #$08
-        sta     $09
+        sta     jump_ptr_hi
         lda     #$00
         sta     jump_ptr
         ldy     #$00
@@ -1187,18 +1189,18 @@ flashman_data_overlap:cmp     #$02
         bne     flashman_aim_adjust_x
         iny
 flashman_aim_adjust_x:  clc
-        lda     $0460,x
+        lda     ent_x_px,x
         adc     flashman_aim_offset_table,y
-        sta     $0460,x
+        sta     ent_x_px,x
         pla
         tay
         lda     #$60
-        sta     zp_temp_00
+        sta     temp_00
         jsr     calc_velocity_set_facing
         lda     #$01
-        sta     $2B
+        sta     current_entity_slot
 flashman_restore_y_pos:  pla
-        sta     $04A0
+        sta     ent_y_px
         ldx     #$01
         dec     $04E1
         bne     flashman_jmp_frame_update
@@ -1236,7 +1238,7 @@ flashman_update_with_sound:  lda     $05A8
         jmp     flashman_hitbox_params
 
 flashman_collision_check:  jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     flashman_hitbox_params
         lda     #$12
@@ -1244,15 +1246,15 @@ flashman_collision_check:  jsr     boss_check_weapon_hit
         rts
 
 flashman_hitbox_params:  lda     #$08
-        sta     $01
+        sta     temp_01
         lda     #$0C
-        sta     $02
+        sta     temp_02
         lda     $0641
         php
         jsr     boss_wall_collision_check
         plp
         bpl     flashman_no_hit
-        lda     zp_temp_00
+        lda     temp_00
         rts
 
 flashman_no_hit:  lda     #$00
@@ -1264,27 +1266,27 @@ flashman_no_hit:  lda     #$00
         lda     $8CBB,x
         sta     jump_ptr
         lda     $8CBF,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     #$87
         sta     $0421
         jsr     calc_player_boss_distance
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         bne     *+8
         lda     $B2
         cmp     #$BB
         bne     *+21
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$03
-        sta     $02
+        sta     temp_02
         jsr     divide_8bit
-        ldx     $04
+        ldx     temp_04
         jsr     metalman_fire_blade
         jmp     metalman_inc_timer
 
-        lda     zp_temp_00
+        lda     temp_00
         cmp     #$48
         bcs     metalman_inc_timer
         lda     #$87
@@ -1341,7 +1343,7 @@ metalman_phase_table:  .byte   $03,$03,$03,$04,$AD,$E1,$04,$8D
         sta     $0421
         lda     #$01
         sta     $06A1
-        lda     zp_temp_00
+        lda     temp_00
         beq     metalman_check_anim
         lda     #$00
         sta     $B2
@@ -1366,11 +1368,11 @@ metalman_check_anim_2:  cmp     #$02
         tya
         adc     #$10
         tax
-        stx     $2B
+        stx     current_entity_slot
         lda     #$00
         sta     jump_ptr
         lda     #$04
-        sta     $09
+        sta     jump_ptr_hi
         jsr     calc_velocity_toward_player
         lda     $0421
         ora     #$04
@@ -1397,7 +1399,7 @@ metalman_palette_flash:  lda     #$0F
         lda     #$00
         sta     $05A7
         sta     $05A9
-        lda     $2A
+        lda     current_stage
         cmp     #$0C
         beq     metalman_update_with_sound
         lda     #$30
@@ -1425,15 +1427,15 @@ metalman_update_with_sound:  lda     $05A8
         jmp     metalman_hitbox_params
 
 metalman_collision_check:  jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     metalman_hitbox_params
         lda     #$12
         sta     $05A8
 metalman_hitbox_params:  lda     #$07
-        sta     $01
+        sta     temp_01
         lda     #$0C
-        sta     $02
+        sta     temp_02
         jsr     boss_wall_collision_check
         rts
 
@@ -1442,7 +1444,7 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         .byte   $08,$8E
         sta     jump_ptr
         lda     crashman_ai_table_hi,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
         lda     $04E1
@@ -1460,7 +1462,7 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         inc     $B1
         jsr     crashman_update_with_sound
         rts
-        lda     $27
+        lda     p1_new_presses
         and     #$02
         bne     *+12
         lda     $05A7
@@ -1478,10 +1480,10 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         lda     #$06
         sta     $0641
         clc
-        lda     zp_temp_00
+        lda     temp_00
         adc     #$20
         sta     $0B
-        lda     $4A
+        lda     rng_seed
         and     #$01
         beq     crashman_setup_velocity
         sec
@@ -1534,9 +1536,9 @@ crashman_frame_update:  jsr     crashman_update_with_sound
         php
         jsr     crashman_update_with_sound
         lda     #$0B
-        sta     $01
+        sta     temp_01
         lda     #$0C
-        sta     $02
+        sta     temp_02
         jsr     boss_wall_collision_check
         plp
         bmi     crashman_hit_response
@@ -1545,7 +1547,7 @@ crashman_frame_update:  jsr     crashman_update_with_sound
         lda     #$01
         sta     $06A1
         bne     crashman_check_anim_state
-crashman_hit_response:  lda     zp_temp_00
+crashman_hit_response:  lda     temp_00
         beq     crashman_check_anim_fire
         lda     #$02
         sta     $B1
@@ -1568,11 +1570,11 @@ crashman_check_anim_fire:  lda     $06A1
         tya
         adc     #$10
         tax
-        stx     $2B
+        stx     current_entity_slot
         lda     #$24
         sta     jump_ptr
         lda     #$06
-        sta     $09
+        sta     jump_ptr_hi
         jsr     calc_velocity_toward_player
 crashman_check_anim_state:  lda     $06A1
         bne     crashman_jmp_aim
@@ -1586,7 +1588,7 @@ crashman_update_with_sound:  lda     $05A8
         rts
 
 crashman_collision_check:  jsr     boss_check_weapon_hit
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     crashman_update_rts
         lda     #$12
@@ -1599,7 +1601,7 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
         lda     $9205,x
         sta     jump_ptr
         lda     $920C,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     $04E1
         bne     *+29
@@ -1621,12 +1623,12 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
         bne     dragon_phase2_check
         ldx     $B2
         lda     dragon_column_addr_hi_table,x
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     dragon_column_addr_lo_table,x
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     dragon_column_length_table,x
         sta     $47
-        sta     zp_temp_00
+        sta     temp_00
         ldy     #$00
 
 
@@ -1634,10 +1636,10 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
 ; Boss AI: Wily 1 — Mecha Dragon nametable setup and column fill ($8E59)
 ; =============================================================================
 dragon_fill_column_loop:  lda     $05A7
-        sta     $03B8,y
+        sta     col_update_tiles,y
         iny
         inc     $05A7
-        dec     zp_temp_00
+        dec     temp_00
         bne     dragon_fill_column_loop
         inx
         stx     $B2
@@ -1654,14 +1656,14 @@ dragon_phase2_check:  cmp     #$02
         cpx     #$10
         beq     dragon_phase3_setup
         lda     #$23
-        sta     $03B6
+        sta     col_update_addr_hi
         txa
         asl     a
         adc     #$D0
-        sta     $03B7
+        sta     col_update_addr_lo
         ldy     #$00
 dragon_attr_copy_loop:  lda     dragon_attr_data,x
-        sta     $03B8,y
+        sta     col_update_tiles,y
         inx
         iny
         cpy     #$04
@@ -1672,24 +1674,24 @@ dragon_attr_copy_loop:  lda     dragon_attr_data,x
 
 dragon_phase3_setup:  inc     $04E1
         lda     #$23
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$E0
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$1E
         sta     $B2
 dragon_clear_attr_loop_outer:  lda     #$00
         ldx     #$1F
-dragon_clear_attr_loop_inner:  sta     $03B8,x
+dragon_clear_attr_loop_inner:  sta     col_update_tiles,x
         dex
         bpl     dragon_clear_attr_loop_inner
         clc
         lda     #$20
         sta     $47
-        adc     $03B7
-        sta     $03B7
-        lda     $03B6
+        adc     col_update_addr_lo
+        sta     col_update_addr_lo
+        lda     col_update_addr_hi
         adc     #$00
-        sta     $03B6
+        sta     col_update_addr_hi
         dec     $B2
         bne     dragon_phase_rts
         inc     $B1
@@ -1715,12 +1717,12 @@ dragon_attr_data:  .byte   $FF,$FF,$FF,$FF,$FF,$5F,$FF,$F3
         lda     #$67
         ldx     #$01
         jsr     spawn_entity_from_boss
-        lda     $20
-        sta     $0450,y
+        lda     nametable_select
+        sta     ent_x_spawn_scr,y
         lda     #$30
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     #$E0
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         inc     $04E1
         rts
         cmp     #$02
@@ -1730,7 +1732,7 @@ dragon_attr_data:  .byte   $FF,$FF,$FF,$FF,$FF,$5F,$FF,$F3
 dragon_phase2_entry:  bne     dragon_palette_done
         ldx     #$0F
 dragon_load_palette:  lda     dragon_palette_data,x
-        sta     $0356,x
+        sta     palette_ram,x
         dex
         bpl     dragon_load_palette
         jsr     boss_init
@@ -1742,16 +1744,16 @@ dragon_load_palette:  lda     dragon_palette_data,x
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     #$40
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     #$87
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$66
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     #$38
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     #$BF
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$2C
         jsr     bank_switch_enqueue
 dragon_palette_done:  rts
@@ -1759,7 +1761,7 @@ dragon_palette_done:  rts
 dragon_palette_data:  .byte   $0F,$30,$29,$19,$0F,$27,$11,$19
         .byte   $0F,$11,$29,$19,$0F,$27,$29,$19
         lda     #$63
-        sta     zp_temp_00
+        sta     temp_00
         ldy     #$0F
 
 
@@ -1768,15 +1770,15 @@ dragon_palette_data:  .byte   $0F,$30,$29,$19,$0F,$27,$11,$19
 ; =============================================================================
 dragon_sprite_collision_loop:  jsr     collision_check_sprite
         bcs     dragon_movement_update
-        lda     $0430,y
+        lda     ent_spawn_flags,y
         and     #$04
         bne     dragon_sprite_next
-        lda     $0470,y
+        lda     ent_x_spawn_px,y
         cmp     #$60
         bcs     dragon_sprite_next
         lda     #$C4
-        sta     $0430,y
-        lda     $4A
+        sta     ent_spawn_flags,y
+        lda     rng_seed
         and     #$03
         sta     $0610,y
 dragon_sprite_next:  dey
@@ -1817,25 +1819,25 @@ dragon_y_set_rising:  lda     $04A1
         rts
 
         lda     #$63
-        sta     zp_temp_00
+        sta     temp_00
         ldy     #$0F
 dragon_sprite_scan_2:  jsr     collision_check_sprite
         bcs     dragon_movement_update_2
-        lda     $0430,y
+        lda     ent_spawn_flags,y
         and     #$04
         bne     dragon_sprite_next_2
-        lda     $0470,y
+        lda     ent_x_spawn_px,y
         cmp     #$90
         bcs     dragon_sprite_next_2
         lda     #$C4
-        sta     $0430,y
+        sta     ent_spawn_flags,y
 dragon_sprite_next_2:  dey
         bpl     dragon_sprite_scan_2
 dragon_movement_update_2:  jsr     dragon_y_bounds_check
         jsr     dragon_update_position
         jsr     boss_health_bar_tick
         lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         bne     dragon_health_check_rts
         lda     #$00
         sta     $04E1
@@ -1851,18 +1853,18 @@ dragon_fire_breath:  lda     #$2C
         jsr     spawn_entity_from_boss
         bcs     dragon_fire_done
         clc
-        lda     $04B0,y
+        lda     ent_y_spawn_px,y
         adc     #$10
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$02
-dragon_fire_setup_velocity:  sta     $09
+dragon_fire_setup_velocity:  sta     jump_ptr_hi
         lda     #$00
         sta     jump_ptr
         tya
         clc
         adc     #$10
         tax
-        stx     $2B
+        stx     current_entity_slot
         jsr     calc_velocity_toward_player
 dragon_fire_done:  rts
 
@@ -1908,19 +1910,19 @@ dragon_apply_facing:  lda     $05A7
         rts
 
         lda     #$00
-        sta     $09
+        sta     jump_ptr_hi
         lda     #$C4
         sta     jump_ptr
         ldx     #$01
-        stx     $2B
-        lda     $0460
+        stx     current_entity_slot
+        lda     ent_x_px
         pha
-        sty     $0460
+        sty     ent_x_px
         jsr     calc_velocity_toward_player
         lda     #$C3
         sta     $05A7
         pla
-        sta     $0460
+        sta     ent_x_px
         rts
 
         lda     $04E1
@@ -1940,7 +1942,7 @@ dragon_phase2_reset:  lda     #$00
 dragon_jmp_vel_check:  jmp     dragon_velocity_check
 
 dragon_check_fire_range:  sec
-        lda     $04A0
+        lda     ent_y_px
         sbc     $04A1
         bcs     dragon_fire_range_check_2
         eor     #$FF
@@ -1960,16 +1962,16 @@ dragon_no_fire:  clc
         sta     $0366
         jmp     fortress_post_defeat
         jsr     picopico_palette_flash
-        lda     $1C
+        lda     frame_counter
         and     #$0F
         bne     dragon_fade_rts
         ldx     #$0F
 dragon_palette_fade_loop:  sec
-        lda     $0356,x
+        lda     palette_ram,x
         sbc     #$10
         bpl     dragon_palette_store
         lda     #$0F
-dragon_palette_store:  sta     $0356,x
+dragon_palette_store:  sta     palette_ram,x
         dex
         bpl     dragon_palette_fade_loop
         ldx     #$07
@@ -1991,7 +1993,7 @@ dragon_fade_rts:  rts
 ; =============================================================================
 ; Mecha Dragon Movement — position update and scroll tracking ($9165)
 ; =============================================================================
-dragon_update_position:  lda     $04A0
+dragon_update_position:  lda     ent_y_px
         cmp     #$B0
         bcc     dragon_update_palette_and_hit
         lda     #$00
@@ -2012,7 +2014,7 @@ dragon_update_palette_and_hit:  lda     #$0F
         lda     #$07
         sta     $B1
         bne     dragon_apply_movement
-dragon_check_hit_flash:  lda     $02
+dragon_check_hit_flash:  lda     temp_02
         cmp     #$01
         bne     dragon_apply_movement
         lda     #$30
@@ -2074,7 +2076,7 @@ dragon_move_facing_left:  sec
         lda     $9395,x
         sta     jump_ptr
         lda     $9398,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     $B2
         bne     *+9
@@ -2083,7 +2085,7 @@ dragon_move_facing_left:  sec
         jsr     $C051
         jsr     boss_health_bar_tick
         lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         bne     picopico_phase_rts
         lda     #$6F
         sta     $04E1
@@ -2117,29 +2119,29 @@ picopico_copy_data_loop:  lda     picopico_spawn_data,y
         bne     picopico_copy_data_loop
         lda     $B2
         asl     a
-        sta     $01
+        sta     temp_01
         ldx     #$00
-picopico_spawn_entity_loop:  stx     $02
+picopico_spawn_entity_loop:  stx     temp_02
         lda     #$6A
         ldx     #$01
         jsr     spawn_entity_from_boss
-        ldx     $01
+        ldx     temp_01
         lda     picopico_y_pos_table,x
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     picopico_x_pos_table,x
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     picopico_phase_id_table,x
         sta     $04F0,y
-        ldx     $02
+        ldx     temp_02
         lda     jump_ptr,x
         sta     $0650,y
         lda     $0A,x
         sta     $0610,y
         lda     $0C,x
-        sta     $0430,y
+        sta     ent_spawn_flags,y
         lda     $0E,x
         sta     $0120,y
-        inc     $01
+        inc     temp_01
         inx
         cpx     #$02
         bne     picopico_spawn_entity_loop
@@ -2147,8 +2149,8 @@ picopico_spawn_entity_loop:  stx     $02
         asl     a
         sta     $0C
 picopico_attr_update_loop:  ldx     $0C
-        lda     $0440
-        sta     $09
+        lda     ent_x_screen
+        sta     jump_ptr_hi
         lda     picopico_x_pos_table,x
         and     #$F0
         sta     jump_ptr
@@ -2236,7 +2238,7 @@ picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
 ; Picopico-kun Palette — flash effect on hit ($9382)
 ; =============================================================================
 picopico_palette_flash:  ldx     #$0F
-        lda     $1C
+        lda     frame_counter
         and     #$07
         bne     picopico_palette_store
         lda     #$2B
@@ -2250,7 +2252,7 @@ picopico_palette_store:  stx     $0366
         .byte   $92,$92,$93,$CA,$BD,$62,$96
         sta     jump_ptr
         lda     gutsdozer_ai_table_hi,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
         jsr     boss_health_bar_tick
@@ -2265,9 +2267,9 @@ picopico_palette_store:  stx     $0366
         lda     #$00
         sta     $05A9
         lda     #$10
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$E0
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$69
         sta     $B2
         inc     $04E1
@@ -2295,14 +2297,14 @@ gutsdozer_phase2_check:  cmp     #$02
         cpx     #$0B
         beq     gutsdozer_column_done
         lda     gutsdozer_nt_addr_hi_table,x
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     gutsdozer_nt_addr_lo_table,x
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     gutsdozer_nt_length_table,x
         sta     $47
         ldy     #$00
 gutsdozer_fill_column_loop:  lda     $05A7
-        sta     $03B8,y
+        sta     col_update_tiles,y
         inc     $05A7
         iny
         cpy     $47
@@ -2312,9 +2314,9 @@ gutsdozer_fill_column_loop:  lda     $05A7
         rts
 
 gutsdozer_column_done:  lda     #$21
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$E0
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$00
         sta     $B2
         inc     $04E1
@@ -2324,17 +2326,17 @@ gutsdozer_phase3_check:  lda     $04E1
         clc
         lda     #$20
         sta     $47
-        adc     $03B7
-        sta     $03B7
-        lda     $03B6
+        adc     col_update_addr_lo
+        sta     col_update_addr_lo
+        lda     col_update_addr_hi
         adc     #$00
-        sta     $03B6
+        sta     col_update_addr_hi
         ldx     $B2
         cpx     #$B0
         beq     gutsdozer_tile_done
         ldy     #$00
 gutsdozer_tile_copy_loop:  lda     gutsdozer_nt_tile_data,x
-        sta     $03B8,y
+        sta     col_update_tiles,y
         inx
         iny
         cpy     #$16
@@ -2343,19 +2345,19 @@ gutsdozer_tile_copy_loop:  lda     gutsdozer_nt_tile_data,x
         rts
 
 gutsdozer_tile_done:  lda     #$23
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$C0
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$00
         sta     $B2
         inc     $04E1
 gutsdozer_attr_update:  clc
-        lda     $03B7
+        lda     col_update_addr_lo
         adc     #$08
-        sta     $03B7
-        lda     $03B6
+        sta     col_update_addr_lo
+        lda     col_update_addr_hi
         adc     #$00
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$06
         sta     $47
         ldx     $B2
@@ -2363,7 +2365,7 @@ gutsdozer_attr_update:  clc
         beq     gutsdozer_setup_complete
         ldy     #$00
 gutsdozer_attr_copy_loop:  lda     gutsdozer_attr_data,x
-        sta     $03B8,y
+        sta     col_update_tiles,y
         inx
         iny
         cpy     #$06
@@ -2400,19 +2402,19 @@ gutsdozer_setup_complete:  lda     #$00
 ; Guts-Dozer Battle — turret spawning and phase management ($94D2)
 ; =============================================================================
 gutsdozer_spawn_turret:  lda     gutsdozer_turret_y_table,x
-        sta     $01
+        sta     temp_01
         lda     gutsdozer_turret_ai_table,x
-        sta     $02
+        sta     temp_02
         lda     gutsdozer_turret_type_table,x
         ldx     #$01
         jsr     spawn_entity_from_boss
-        lda     $01
-        sta     $04B0,y
+        lda     temp_01
+        sta     ent_y_spawn_px,y
         lda     #$FF
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     $B7
         sta     $0490,y
-        lda     $02
+        lda     temp_02
         sta     $06F0,y
 gutsdozer_advance_turret:  inc     $04E1
         lda     $04E1
@@ -2454,10 +2456,10 @@ gutsdozer_set_facing:  sta     $05A7
         lda     #$05
         bne     gutsdozer_dec_phase_timer
         lda     #$03
-gutsdozer_dec_phase_timer:  sta     zp_temp_00
+gutsdozer_dec_phase_timer:  sta     temp_00
         dec     $B2
         bne     gutsdozer_clear_velocity
-        lda     zp_temp_00
+        lda     temp_00
         sta     $B1
 gutsdozer_clear_velocity:  lda     #$00
         sta     $0601
@@ -2476,7 +2478,7 @@ gutsdozer_spawn_tick:  dec     $04E1
 gutsdozer_spawn_setup:  lda     #$3F
         sta     $04E1
         jsr     calc_player_boss_distance
-        lda     zp_temp_00
+        lda     temp_00
         cmp     #$38
         bcc     gutsdozer_calc_aim_angle
         lda     #$69
@@ -2484,13 +2486,13 @@ gutsdozer_spawn_setup:  lda     #$3F
         lda     #$01
         sta     $04F0,y
         lda     #$02
-        sta     $02
+        sta     temp_02
         lda     #$34
-        sta     zp_temp_00
+        sta     temp_00
         ldy     #$0F
 gutsdozer_sprite_scan_loop:  jsr     collision_check_sprite
         bcs     gutsdozer_spawn_shot
-        dec     $02
+        dec     temp_02
         beq     gutsdozer_check_anim_state
         dey
         bpl     gutsdozer_sprite_scan_loop
@@ -2499,11 +2501,11 @@ gutsdozer_spawn_shot:  lda     #$34
         jsr     spawn_entity_from_boss
         bcs     gutsdozer_check_anim_state
         lda     #$87
-        sta     $0430,y
+        sta     ent_spawn_flags,y
         clc
-        lda     $04B0,y
+        lda     ent_y_spawn_px,y
         adc     #$30
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$C4
         sta     $0630,y
         lda     #$01
@@ -2514,7 +2516,7 @@ gutsdozer_spawn_shot:  lda     #$34
         sta     $0670,y
         bne     gutsdozer_check_anim_state
 gutsdozer_calc_aim_angle:  sec
-        lda     zp_temp_00
+        lda     temp_00
         sbc     #$10
         bcs     gutsdozer_aim_shift
         lda     #$00
@@ -2526,7 +2528,7 @@ gutsdozer_aim_shift:  sta     jump_ptr
         rol     a
         asl     jump_ptr
         rol     a
-        sta     $09
+        sta     jump_ptr_hi
         lda     #$69
         jsr     find_entity_by_type
         lda     #$00
@@ -2536,14 +2538,14 @@ gutsdozer_aim_shift:  sta     jump_ptr
         jsr     spawn_entity_from_boss
         bcs     gutsdozer_check_anim_state
         lda     #$85
-        sta     $0430,y
+        sta     ent_spawn_flags,y
         clc
-        lda     $04B0,y
+        lda     ent_y_spawn_px,y
         adc     #$10
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$04
         sta     $0650,y
-        lda     $09
+        lda     jump_ptr_hi
         sta     $0610,y
         lda     jump_ptr
         sta     $0630,y
@@ -2570,7 +2572,7 @@ gutsdozer_death_fade:  lda     #$00
         lda     #$07
         sta     $B1
         bne     gutsdozer_apply_facing
-gutsdozer_check_hit_flash:  lda     $02
+gutsdozer_check_hit_flash:  lda     temp_02
         cmp     #$01
         bne     gutsdozer_apply_facing
         lda     #$30
@@ -2588,15 +2590,15 @@ gutsdozer_ai_table_hi:  .byte   $93,$94,$95,$95,$95,$95
         lda     $96BC,x
         sta     jump_ptr
         lda     $96BE,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         jsr     boss_health_bar_tick
         lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         beq     *+3
         rts
         lda     #$04
-        sta     $02
+        sta     temp_02
 
 
 ; =============================================================================
@@ -2605,14 +2607,14 @@ gutsdozer_ai_table_hi:  .byte   $93,$94,$95,$95,$95,$95
 gutsdozer_spawn_part_loop:  lda     #$6D
         ldx     #$01
         jsr     spawn_entity_from_boss
-        ldx     $02
+        ldx     temp_02
         lda     gutsdozer_part_x_table,x
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     gutsdozer_part_y_table,x
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     gutsdozer_part_flags_table,x
-        sta     $0430,y
-        dec     $02
+        sta     ent_spawn_flags,y
+        dec     temp_02
         bpl     gutsdozer_spawn_part_loop
         inc     $B1
         rts
@@ -2625,7 +2627,7 @@ gutsdozer_part_flags_table:  .byte   $C3,$C3,$83,$83,$83,$7C,$57,$96
         lda     $9B1C,x
         sta     jump_ptr
         lda     $9B23,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     #$00
         sta     $0681
@@ -2652,9 +2654,9 @@ boobeam_fill_palette_loop:  sta     $035A,x
         dex
         bpl     boobeam_fill_palette_loop
         lda     #$15
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$A0
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$52
         sta     $B2
         inc     $04E1
@@ -2671,9 +2673,9 @@ boobeam_advance_phase:  inc     $04E1
         lda     #$00
         sta     $B2
         lda     #$27
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$CB
-        sta     $03B7
+        sta     col_update_addr_lo
         rts
 
 boobeam_phase2_check:  cmp     #$02
@@ -2699,7 +2701,7 @@ boobeam_phase3_entry:  ldx     $B2
 
 boobeam_palette_anim_check:  cpx     #$13
         bcs     boobeam_health_check
-        lda     $1C
+        lda     frame_counter
         and     #$03
         bne     boobeam_health_check
         lda     #$04
@@ -2715,18 +2717,18 @@ boobeam_palette_anim_check:  cpx     #$13
 
 boobeam_health_check:  jsr     boss_health_bar_tick
         lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         bne     boobeam_health_rts
         inc     $B1
         lda     #$56
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     #$AB
-        sta     $0430,y
+        sta     ent_spawn_flags,y
         lda     #$B0
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     #$80
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$3E
         sta     $B2
 boobeam_health_rts:  rts
@@ -2735,8 +2737,8 @@ boobeam_health_rts:  rts
 ; =============================================================================
 ; Boobeam Palette Blend — smooth color transition for trap room ($979B)
 ; =============================================================================
-boobeam_palette_blend:  sta     zp_temp_00
-boobeam_palette_blend_loop:  lda     $0356,x
+boobeam_palette_blend:  sta     temp_00
+boobeam_palette_blend_loop:  lda     palette_ram,x
         cmp     #$0F
         bne     boobeam_palette_add
         lda     boobeam_target_palette,y
@@ -2748,10 +2750,10 @@ boobeam_palette_add:  clc
         cmp     boobeam_target_palette,y
         beq     boobeam_palette_store
         bcs     boobeam_palette_loop_end
-boobeam_palette_store:  sta     $0356,x
+boobeam_palette_store:  sta     palette_ram,x
 boobeam_palette_loop_end:  dex
         dey
-        cpx     zp_temp_00
+        cpx     temp_00
         bne     boobeam_palette_blend_loop
         rts
 
@@ -2759,14 +2761,14 @@ boobeam_target_palette:  .byte   $0F,$15,$17,$35,$0F,$27,$17,$07
         .byte   $0F,$15,$17,$07,$0F,$0F,$11,$2C
         .byte   $0F,$0F,$25,$15
 boobeam_column_fill:  lda     projectile_x_velocity,x
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     projectile_y_velocity,x
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     projectile_timing,x
         sta     $47
         ldy     #$00
 boobeam_column_fill_loop:  lda     $05A7
-        sta     $03B8,y
+        sta     col_update_tiles,y
         inc     $05A7
         iny
         cpy     $47
@@ -2776,7 +2778,7 @@ boobeam_column_fill_loop:  lda     $05A7
 
 boobeam_tile_row_copy:  ldy     #$00
 boobeam_tile_row_loop:  lda     projectile_anim_frames,x
-        sta     $03B8,y
+        sta     col_update_tiles,y
         inx
         iny
         cpy     #$05
@@ -2784,9 +2786,9 @@ boobeam_tile_row_loop:  lda     projectile_anim_frames,x
         sty     $47
         stx     $B2
         clc
-        lda     $03B7
+        lda     col_update_addr_lo
         adc     #$08
-        sta     $03B7
+        sta     col_update_addr_lo
         rts
 
         lda     $0461
@@ -2816,7 +2818,7 @@ wily_machine_apply_facing:  sta     $0421
         jsr     calc_player_boss_distance
         pla
         sta     $0461
-        lda     zp_temp_00
+        lda     temp_00
         sta     $0B
         lda     #$1A
         sta     $0D
@@ -2831,11 +2833,11 @@ wily_machine_apply_facing:  sta     $0421
         clc
         lda     $0461
         adc     #$28
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         clc
         lda     $04A1
         adc     #$36
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     $0F
         sta     $0610,y
         lda     $0E
@@ -2843,9 +2845,9 @@ wily_machine_apply_facing:  sta     $0421
         lda     $B1
         cmp     #$04
         bcc     wily_machine_store_facing
-        lda     $0430,y
+        lda     ent_spawn_flags,y
         ora     #$04
-        sta     $0430,y
+        sta     ent_spawn_flags,y
         lda     #$00
         sta     $0650,y
         sta     $0670,y
@@ -2872,20 +2874,20 @@ wily_machine_store_facing:  lda     #$83
         bne     *+67
         lda     #$0C
         sta     $05AB
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$18
-        sta     $02
+        sta     temp_02
         jsr     $C84E
-        lda     $04
+        lda     temp_04
         sta     jump_ptr
-        lda     $4A
-        sta     $01
+        lda     rng_seed
+        sta     temp_01
         lda     #$30
-        sta     $02
+        sta     temp_02
         jsr     $C84E
-        lda     $04
-        sta     $09
+        lda     temp_04
+        sta     jump_ptr_hi
         lda     #$6C
         ldx     #$01
         jsr     spawn_entity_from_boss
@@ -2894,20 +2896,20 @@ wily_machine_store_facing:  lda     #$83
         lda     $04A1
         sbc     #$18
         clc
-        adc     $09
-        sta     $04B0,y
+        adc     jump_ptr_hi
+        sta     ent_y_spawn_px,y
         clc
         lda     $0461
         adc     jump_ptr
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     $04E1
         bne     wily_machine_phase_check
         lda     #$73
         sta     $0401
         lda     #$27
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$CB
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$14
         sta     $B2
         inc     $04E1
@@ -2929,15 +2931,15 @@ wily_machine_phase2:  ldx     $B2
         cpx     #$16
         bcs     wily_machine_health_check
         lda     projectile_x_velocity,x
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     projectile_y_velocity,x
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     projectile_timing,x
         sta     $47
         ldy     #$00
         ldx     $05A9
 wily_machine_tile_copy_loop:  lda     projectile_tile_ids,x
-        sta     $03B8,y
+        sta     col_update_tiles,y
         inx
         iny
         cpy     $47
@@ -2947,7 +2949,7 @@ wily_machine_tile_copy_loop:  lda     projectile_tile_ids,x
         rts
 
 wily_machine_health_check:  lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         beq     wily_machine_advance_phase
         rts
 
@@ -2960,15 +2962,15 @@ wily_machine_advance_phase:  inc     $B1
 
         lda     $04E1
         beq     *+30
-        lda     $04A0
+        lda     ent_y_px
         cmp     #$E0
         bcs     wily_machine_clear_flags
-        inc     $04A0
-        inc     $04A0
+        inc     ent_y_px
+        inc     ent_y_px
         rts
 
 wily_machine_clear_flags:  lda     #$00
-        sta     entity_flags_base
+        sta     ent_flags
         dec     $B2
         bne     wily_machine_scroll_rts
         lda     #$FF
@@ -2987,28 +2989,28 @@ wily_machine_scroll_rts:  rts
         sta     $04A1
         bne     wily_machine_rng_spawn
         sta     $0421
-wily_machine_rng_spawn:  lda     $4A
-        sta     $01
+wily_machine_rng_spawn:  lda     rng_seed
+        sta     temp_01
         lda     #$20
-        sta     $02
+        sta     temp_02
         jsr     divide_8bit
         lda     #$06
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     wily_machine_inc_timer
-        lda     $4A
+        lda     rng_seed
         asl     a
-        lda     $4A
+        lda     rng_seed
         rol     a
         rol     a
         rol     a
         rol     a
         ora     #$08
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         clc
-        lda     $04
+        lda     temp_04
         adc     #$C8
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
 wily_machine_inc_timer:  inc     $B2
         lda     $B2
         cmp     #$FD
@@ -3017,17 +3019,17 @@ wily_machine_inc_timer:  inc     $B2
 
 wily_machine_palette_reset:  lda     #$0F
         ldx     #$10
-wily_machine_palette_loop:  sta     $0356,x
+wily_machine_palette_loop:  sta     palette_ram,x
         dex
         bpl     wily_machine_palette_loop
         inc     $04E1
         lda     #$0B
-        sta     $2C
+        sta     game_substate
         lda     #$00
-        sta     $06A0
-        sta     $0680
+        sta     ent_anim_id
+        sta     ent_anim_frame
         lda     #$0C
-        sta     $0400
+        sta     ent_type
         lda     #$3E
         sta     $B2
         rts
@@ -3041,13 +3043,13 @@ wily_machine_hit_check:  lda     #$0F
         lda     $B1
         cmp     #$04
         bcs     wily_machine_invincible_check
-        lda     $A9
+        lda     current_weapon
         cmp     #$02
         beq     wily_machine_set_invincible
         cmp     #$05
         beq     wily_machine_set_invincible
         bne     wily_machine_collision_test
-wily_machine_invincible_check:  lda     $A9
+wily_machine_invincible_check:  lda     current_weapon
         cmp     #$01
         bne     wily_machine_collision_test
 wily_machine_set_invincible:  lda     $0421
@@ -3086,7 +3088,7 @@ wily_machine_death_explosion:  lda     #$74
 wily_machine_data_byte:  .byte   $04
 wily_machine_death_jmp:  jmp     gutsdozer_death_fade
 
-wily_machine_check_flash:  lda     $02
+wily_machine_check_flash:  lda     temp_02
         cmp     #$01
         bne     wily_machine_jmp_movement
         lda     #$30
@@ -3094,17 +3096,17 @@ wily_machine_check_flash:  lda     $02
 wily_machine_jmp_movement:  jsr     dragon_apply_movement
         rts
 
-projectile_x_velocity:  and     $25
-        and     $25
-        and     $25
-        and     $25
-        rol     $26
-        rol     $26
-        rol     $26
-        and     $25
-        and     $25
-        rol     $26
-        rol     $26
+projectile_x_velocity:  and     p1_prev_buttons
+        and     p1_prev_buttons
+        and     p1_prev_buttons
+        and     p1_prev_buttons
+        rol     p2_prev_buttons
+        rol     p2_prev_buttons
+        rol     p2_prev_buttons
+        and     p1_prev_buttons
+        and     p1_prev_buttons
+        rol     p2_prev_buttons
+        rol     p2_prev_buttons
 projectile_y_velocity:  .byte   $17
         rol     $56,x
         adc     ($90),y
@@ -3114,7 +3116,7 @@ projectile_y_velocity:  .byte   $17
         .byte   $93,$B4,$90,$B0,$D0,$F0,$0E,$2E
         .byte   $4E,$6E
 projectile_timing:  .byte   $04
-wily_machine_proj_timing_data:  ora     $06
+wily_machine_proj_timing_data:  ora     temp_06
         .byte   $0B,$0D,$0D,$0D,$0D,$0F,$0E,$0D
         .byte   $0C,$04,$02,$04,$04,$04,$04,$06
         .byte   $07,$05,$04
@@ -3140,7 +3142,7 @@ projectile_tile_ids:  .byte   $00,$E6,$E7,$E8,$00,$00,$E9,$EA
         lda     woodman_data_byte,x
         php
         lda     alien_phase_ptr_hi_table,x
-        sta     $09
+        sta     jump_ptr_hi
 
 
 ; =============================================================================
@@ -3235,7 +3237,7 @@ alien_movement_update:  lda     $0461
         sta     $0461
 alien_health_check:  jsr     boss_health_bar_tick
         lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         bne     alien_palette_inc_rts
         inc     $B1
         lda     #$0E
@@ -3247,19 +3249,19 @@ alien_health_check:  jsr     boss_health_bar_tick
         lda     #$30
         sta     $035F
         lda     #$01
-        sta     $2B
+        sta     current_entity_slot
         ldx     #$0C
-alien_spawn_part_loop:  stx     $02
+alien_spawn_part_loop:  stx     temp_02
         lda     #$70
         jsr     spawn_entity_init_type
-        ldx     $02
+        ldx     temp_02
 alien_part_setup_loop:  lda     alien_part_y_table,x
-        sta     $04B0,x
+        sta     ent_y_spawn_px,x
         lda     alien_part_x_flags_table,x
         pha
         and     #$F0
         ora     #$04
-        sta     $0470,x
+        sta     ent_x_spawn_px,x
         pla
         and     #$0F
         sta     $06B0,x
@@ -3272,7 +3274,7 @@ alien_part_y_table:  .byte   $34,$34,$64,$94,$B4,$D4,$24,$44
 alien_part_x_flags_table:  jsr     fixed_D0B0
         bvs     alien_facing_store
         beq     alien_part_setup_loop
-        eor     ($01),y
+        eor     (temp_01),y
         lda     ($31,x)
         sbc     ($11,x)
 alien_palette_table:  bmi     alien_palette_data_byte
@@ -3287,7 +3289,7 @@ alien_palette_block_2:  .byte   $0F,$16,$29,$19
         jsr     $9CD8
         jsr     boss_check_weapon_hit
         ldx     #$0F
-        lda     $02
+        lda     temp_02
         cmp     #$01
         bne     alien_facing_store
         lda     $05AA
@@ -3329,7 +3331,7 @@ alien_move_x_hi_table:  .byte   $00,$00,$01,$00,$00,$00,$01,$00
         dec     $B2
         bne     alien_movement_pattern
         inc     $05A9
-        lda     #$1C
+        lda     #MAX_HP
         sta     $B2
 
 
@@ -3359,9 +3361,9 @@ alien_facing_store_2:  stx     $0421
         ldx     $04E1
         bne     alien_phase_dispatch
         lda     #$E0
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     #$0F
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$00
         sta     $05A9
         lda     #$94
@@ -3375,24 +3377,24 @@ alien_facing_store_2:  stx     $0421
         lsr     $0421
 alien_phase_dispatch:  dex
         lda     alien_phase_dispatch_hi,x
-        sta     $09
+        sta     jump_ptr_hi
         lda     alien_phase_ptr_lo,x
         sta     jump_ptr
         jmp     (jump_ptr)
 
-alien_palette_flash_tick:  lda     $1C
+alien_palette_flash_tick:  lda     frame_counter
         and     #$0F
         bne     alien_palette_set_colors
         lda     #$2B
         jsr     bank_switch_enqueue
 alien_palette_set_colors:  ldx     #$10
         ldy     #$0F
-        lda     $1C
+        lda     frame_counter
         and     #$04
         bne     alien_palette_alt_color
         ldy     #$30
 alien_palette_alt_color:  tya
-alien_palette_fill_loop:  sta     $0356,x
+alien_palette_fill_loop:  sta     palette_ram,x
         dex
         bpl     alien_palette_fill_loop
         rts
@@ -3424,7 +3426,7 @@ alien_palette_fill_loop:  sta     $0356,x
         sta     $05A9
         lda     #$00
         sta     $1A
-        sta     $1B
+        sta     ppu_buffer_count
         beq     alien_scroll_update
         jsr     alien_palette_flash_tick
         lda     $05A7
@@ -3436,14 +3438,14 @@ alien_palette_fill_loop:  sta     $0356,x
 ; Alien Scroll — stage background scrolling during battle ($9DAC)
 ; =============================================================================
 alien_scroll_update:  lda     #$0C
-        sta     $2A
+        sta     current_stage
         lda     $05A7
         sta     jump_ptr
         lda     $05A9
-        sta     $09
+        sta     jump_ptr_hi
         jsr     scroll_attr_update
         lda     #$0D
-        sta     $2A
+        sta     current_stage
         inc     $05A7
         inc     $1A
         rts
@@ -3453,15 +3455,15 @@ alien_scroll_update:  lda     #$0C
 ; Alien Stage Setup — entity spawn and palette initialization ($9DC7)
 ; =============================================================================
 alien_scroll_setup_entities:  inc     $04E1
-        inc     $20
-        inc     $0440
+        inc     nametable_select
+        inc     ent_x_screen
         inc     $0441
         lda     #$00
         sta     $B8
         sta     $B9
         ldx     #$10
 alien_load_palette_loop:  lda     alien_stage_palette,x
-        sta     $0356,x
+        sta     palette_ram,x
         dex
         bpl     alien_load_palette_loop
         ldy     #$10
@@ -3504,7 +3506,7 @@ alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
         cmp     #$24
         beq     *+11
         jsr     $9CD8
-        stx     $03
+        stx     temp_03
         jsr     $A157
         rts
         lda     #$84
@@ -3519,7 +3521,7 @@ alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
         rts
 
         ldx     #$2C
-        lda     $1C
+        lda     frame_counter
         and     #$04
         bne     alien_sprite_flash_store
         ldx     #$00
@@ -3531,13 +3533,13 @@ alien_fade_palette_data:  .byte   $0F,$20,$0F,$0F,$0F,$20,$0C,$0F
         .byte   $0F,$20,$11,$01
         jsr     $9E6D
         lda     #$80
-        sta     $03
+        sta     temp_03
         jsr     $A157
         lda     #$04
-        sta     $01
-        sta     $02
+        sta     temp_01
+        sta     temp_02
         jsr     boss_floor_collision_check
-        lda     zp_temp_00
+        lda     temp_00
         beq     alien_aim_rts
         ldx     $B2
         cpx     #$02
@@ -3563,7 +3565,7 @@ alien_deactivate_sprites:  lsr     $042E
         inc     $04E1
         lsr     $042D
         ldx     #$0F
-alien_deactivate_loop:  lsr     $0430,x
+alien_deactivate_loop:  lsr     ent_spawn_flags,x
         dex
         bpl     alien_deactivate_loop
         lda     #$30
@@ -3576,13 +3578,13 @@ alien_vel_y_data:  .byte   $76,$00
 alien_vel_y_hi_data:  .byte   $03,$02
         lda     $B2
         beq     *+29
-        lda     $1C
+        lda     frame_counter
         and     #$07
         bne     *+7
         lda     #$2B
         jsr     $C051
         ldx     #$0F
-        lda     $1C
+        lda     frame_counter
         and     #$04
         bne     alien_palette_flash_store
         ldx     #$30
@@ -3625,22 +3627,22 @@ alien_advance_phase:  inc     $04E1
         rts
 
         lda     #$84
-        sta     $03
+        sta     temp_03
         jsr     $A157
         lda     #$0C
-        sta     $01
-        sta     $02
+        sta     temp_01
+        sta     temp_02
         jsr     boss_floor_collision_check
-        lda     zp_temp_00
+        lda     temp_00
         bne     *+3
         rts
-        lda     entity_flags_base
+        lda     ent_flags
         and     #$BF
-        ldx     $0460
+        ldx     ent_x_px
         cpx     #$B0
         bcs     alien_facing_update
         ora     #$40
-alien_facing_update:  sta     entity_flags_base
+alien_facing_update:  sta     ent_flags
         lda     #$7B
         jsr     play_sound_and_reset_anim
         inc     $04E1
@@ -3688,7 +3690,7 @@ enemy_ai_fallback:  sec
         lda     fortress_boss_ptr_lo,x
         sta     jump_ptr
         lda     fortress_boss_ptr_hi,x
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
 fortress_enemy_no_boss:  lda     #$00
@@ -3702,28 +3704,28 @@ fortress_spawn_check_odd:  and     #$01
         bne     fortress_inc_spawn_timer
         lda     $05A7
         and     #$07
-        sta     $02
+        sta     temp_02
         ldx     #$01
-fortress_spawn_entity_loop:  stx     $01
+fortress_spawn_entity_loop:  stx     temp_01
         lda     #$60
         jsr     spawn_entity_init_type
-        ldx     $02
+        ldx     temp_02
         clc
         lda     $0461
         adc     $C1E0,x
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     $0441
         adc     $C1E8,x
-        sta     $0450,y
+        sta     ent_x_spawn_scr,y
         clc
         lda     $04A1
         adc     $C1D8,x
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         lda     #$01
         sta     $06B0,y
         inx
-        stx     $02
-        ldx     $01
+        stx     temp_02
+        ldx     temp_01
         dex
         bpl     fortress_spawn_entity_loop
 fortress_inc_spawn_timer:  inc     $05A7
@@ -3734,7 +3736,7 @@ fortress_inc_spawn_timer:  inc     $05A7
         lda     $0461
         sta     jump_ptr
         lda     $0441
-        sta     $09
+        sta     jump_ptr_hi
         lda     $04A1
         sta     $0A
         lda     #$60
@@ -3744,7 +3746,7 @@ fortress_inc_spawn_timer:  inc     $05A7
         jsr     bank_switch_enqueue
         lda     #$FF
         jsr     bank_switch_enqueue
-        lda     $2A
+        lda     current_stage
         cmp     #$0C
         bne     fortress_spawn_rts
         lda     #$76
@@ -3795,25 +3797,25 @@ fortress_defeat_check_timer:  lda     $05A9
         bne     fortress_defeat_dec_timer
         dec     $05A9
         lda     #$26
-        sta     $0400
+        sta     ent_type
         lda     #$00
-        sta     $06A0
-        sta     $0680
+        sta     ent_anim_id
+        sta     ent_anim_frame
         lda     #$0B
-        sta     $2C
+        sta     game_substate
         lda     #$3A
         jsr     bank_switch_enqueue
-fortress_defeat_spawn_entity:  lda     $06A0
+fortress_defeat_spawn_entity:  lda     ent_anim_id
         cmp     #$03
         bne     fortress_defeat_done
-        lda     entity_flags_base
+        lda     ent_flags
         bpl     fortress_defeat_dec_timer
         sec
-        lda     $04A0
+        lda     ent_y_px
         sbc     #$08
-        sta     $04A0
+        sta     ent_y_px
         bcs     fortress_defeat_done
-        lsr     entity_flags_base
+        lsr     ent_flags
 fortress_defeat_dec_timer:  dec     $05A9
         bne     fortress_defeat_done
         lda     #$FF
@@ -3837,11 +3839,11 @@ play_sound_and_reset_anim:  sta     $0401; queue sound effect ID
 ; =============================================================================
 ; Boss Health Bar — increment health bar fill during intro ($A118)
 ; =============================================================================
-boss_health_bar_tick:  lda     $1C      ; frame counter for timing
+boss_health_bar_tick:  lda     frame_counter      ; frame counter for timing
         and     #$03
         bne     boss_health_bar_rts
         lda     $06C1
-        cmp     #$1C
+        cmp     #MAX_HP
         beq     boss_health_bar_rts
         inc     $06C1                   ; increment health bar fill
         lda     #$28
@@ -3853,7 +3855,7 @@ boss_flip_and_check_wall:  lda     $0421
         sta     $0421
         jsr     boss_wall_collision_check
         lda     $0421
-        sta     $03
+        sta     temp_03
         eor     #$40
         sta     $0421
         jmp     boss_movement_physics_inner
@@ -3868,7 +3870,7 @@ boss_check_weapon_hit:  jsr     weapon_boss_collision_check
 ; Boss Movement Physics — apply velocity to position with clamping ($A14F)
 ; =============================================================================
 boss_apply_movement_physics:  lda     $0421
-        sta     $03
+        sta     temp_03
 boss_movement_physics_inner:  jsr     setup_ppu_normal
         sec
         lda     $04C1
@@ -3891,7 +3893,7 @@ boss_clamp_y_position:  lda     $0421
         lda     $0641
         sbc     $31
         sta     $0641
-boss_check_facing_right:  lda     $03
+boss_check_facing_right:  lda     temp_03
         and     #$40
         bne     boss_move_facing_right
         sec
@@ -3906,16 +3908,16 @@ boss_check_facing_right:  lda     $03
         sta     $0441
         sec
         lda     $0461
-        sbc     $1F
+        sbc     scroll_x
         sta     jump_ptr
         lda     $0441
-        sbc     $20
+        sbc     nametable_select
         bne     boss_clamp_x_left
         lda     jump_ptr
         cmp     #$08
         bcs     boss_movement_done
-boss_clamp_x_left:  lda     $20
-        sta     $0440
+boss_clamp_x_left:  lda     nametable_select
+        sta     ent_x_screen
         lda     #$08
         sta     $0461
         bne     boss_movement_done
@@ -3931,15 +3933,15 @@ boss_move_facing_right:  clc
         sta     $0441
         sec
         lda     $0461
-        sbc     $1F
+        sbc     scroll_x
         sta     jump_ptr
         lda     $0441
-        sbc     $20
+        sbc     nametable_select
         bne     boss_clamp_x_right
         lda     jump_ptr
         cmp     #$F8
         bcc     boss_movement_done
-boss_clamp_x_right:  lda     $20
+boss_clamp_x_right:  lda     nametable_select
         sta     $0441
         lda     #$F8
         sta     $0461
@@ -3957,13 +3959,13 @@ calc_player_boss_distance:  lda     $0421; boss entity flags
         .byte   $AD
         .byte   $61
 calc_distance_data_byte:  .byte   $04
-        sbc     $0460
-        sta     zp_temp_00
+        sbc     ent_x_px
+        sta     temp_00
         bcs     calc_distance_done
-        lda     zp_temp_00
+        lda     temp_00
         eor     #$FF
         adc     #$01
-        sta     zp_temp_00
+        sta     temp_00
         lda     #$40
         ora     $0421
         sta     $0421
@@ -3973,17 +3975,17 @@ calc_distance_done:  rts
 ; =============================================================================
 ; Find Entity by Type — scan entity slots for matching type ID ($A22D)
 ; =============================================================================
-find_entity_by_type:  sta     zp_temp_00; store target type ID
+find_entity_by_type:  sta     temp_00; store target type ID
         ldy     #$0F
-collision_check_sprite:  lda     zp_temp_00; Check collision between player and sprite
-find_entity_scan_loop:  cmp     $0410,y
+collision_check_sprite:  lda     temp_00; Check collision between player and sprite
+find_entity_scan_loop:  cmp     ent_spawn_type,y
         beq     find_entity_check_active
         dey
         bpl     find_entity_scan_loop
         sec
         rts
 
-find_entity_check_active:  lda     $0430,y
+find_entity_check_active:  lda     ent_spawn_flags,y
         bmi     find_entity_found
         dey
         bpl     collision_check_sprite
@@ -4004,36 +4006,36 @@ boss_floor_collision_check:  lda     #$00
         bpl     boss_floor_check_above
         clc
         lda     $04A1
-        adc     $02
+        adc     temp_02
         jmp     boss_floor_store_y
 
 boss_floor_check_above:  sec
         lda     $04A1
-        sbc     $02
+        sbc     temp_02
 boss_floor_store_y:  sta     $0A
         clc
         lda     $0461
-        adc     $01
+        adc     temp_01
         sta     jump_ptr
         lda     $0441
         adc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         jsr     tile_lookup
-        ldy     zp_temp_00
+        ldy     temp_00
         lda     tile_solidity_table,y
-        sta     $02
+        sta     temp_02
         sec
         lda     $0461
-        sbc     $01
+        sbc     temp_01
         sta     jump_ptr
         lda     $0441
         sbc     #$00
-        sta     $09
+        sta     jump_ptr_hi
         jsr     tile_lookup
-        ldy     zp_temp_00
+        ldy     temp_00
         lda     tile_solidity_table,y
-        ora     $02
-        sta     zp_temp_00
+        ora     temp_02
+        sta     temp_00
         beq     boss_floor_rts
         plp
         bmi     boss_floor_snap_down
@@ -4048,10 +4050,10 @@ boss_floor_snap_down:  lda     $04A1
         pha
         lda     $0A
         and     #$0F
-        sta     $02
+        sta     temp_02
         pla
         sec
-        sbc     $02
+        sbc     temp_02
 boss_floor_store_y_pos:  sta     $04A1
         lda     #$00
         sta     $04C1
@@ -4081,7 +4083,7 @@ boss_wall_collision_check:  lda     $04A1
         beq     boss_wall_check_left
         sec
         lda     $0461
-        adc     $01
+        adc     temp_01
         sta     jump_ptr
         lda     $0441
         adc     #$00
@@ -4089,24 +4091,24 @@ boss_wall_collision_check:  lda     $04A1
 
 boss_wall_check_left:  clc
         lda     $0461
-        sbc     $01
+        sbc     temp_01
         sta     jump_ptr
         lda     $0441
         sbc     #$00
-boss_wall_store_page:  sta     $09
+boss_wall_store_page:  sta     jump_ptr_hi
         jsr     tile_lookup
-        ldy     zp_temp_00
+        ldy     temp_00
         lda     tile_solidity_table,y
-        sta     $03
+        sta     temp_03
         beq     boss_wall_no_snap
         plp
         beq     boss_wall_snap_left
         lda     jump_ptr
         and     #$0F
-        sta     zp_temp_00
+        sta     temp_00
         sec
         lda     $0461
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $0461
         lda     $0441
         sbc     #$00
@@ -4143,18 +4145,18 @@ spawn_entity_init_type:  jsr     fixed_D77C; initialize entity from type table
         tay
         lda     $0421
         and     #$40
-        ora     $0430,y
-        sta     $0430,y
+        ora     ent_spawn_flags,y
+        sta     ent_spawn_flags,y
         lda     $0481
         sta     $0490,y
         lda     $0461
-        sta     $0470,y
+        sta     ent_x_spawn_px,y
         lda     $0441
-        sta     $0450,y
+        sta     ent_x_spawn_scr,y
         lda     $04C1
         sta     $04D0,y
         lda     $04A1
-        sta     $04B0,y
+        sta     ent_y_spawn_px,y
         clc
         rts
 
@@ -4168,38 +4170,38 @@ spawn_entity_fail:  pla
 ; =============================================================================
 calc_velocity_toward_player:  ldy     #$40; default: face right
         sec
-        lda     $0460
-        sbc     $0460,x
-        sta     zp_temp_00
+        lda     ent_x_px
+        sbc     ent_x_px,x
+        sta     temp_00
         bcs     calc_velocity_set_facing
-        lda     zp_temp_00
+        lda     temp_00
         eor     #$FF
         adc     #$01
         ldy     #$00
-        sta     zp_temp_00
-calc_velocity_set_facing:  lda     entity_flags_base,x
+        sta     temp_00
+calc_velocity_set_facing:  lda     ent_flags,x
         and     #$BF
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         tya
-        ora     entity_flags_base,x
-        sta     entity_flags_base,x
+        ora     ent_flags,x
+        sta     ent_flags,x
         sec
-        lda     $04A0
-        sbc     $04A0,x
+        lda     ent_y_px
+        sbc     ent_y_px,x
         php
         bcs     velocity_calc_y_major
         eor     #$FF
         adc     #$01
-velocity_calc_y_major:  sta     $01
-        cmp     zp_temp_00
+velocity_calc_y_major:  sta     temp_01
+        cmp     temp_00
         bcs     velocity_calc_x_major
-        lda     $09
+        lda     jump_ptr_hi
         sta     $0D
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     jump_ptr
         sta     $0C
-        sta     $0620,x
-        lda     zp_temp_00
+        sta     ent_x_vel_sub,x
+        lda     temp_00
         sta     $0B
         lda     #$00
         sta     $0A
@@ -4208,25 +4210,25 @@ velocity_calc_y_major:  sta     $01
         sta     $0D
         lda     $0E
         sta     $0C
-        lda     $01
+        lda     temp_01
         sta     $0B
         lda     #$00
         sta     $0A
         jsr     divide_16bit            ; divide for velocity ratio
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0F
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     $0E
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         jmp     velocity_calc_negate_y
 
-velocity_calc_x_major:  lda     $09
+velocity_calc_x_major:  lda     jump_ptr_hi
         sta     $0D
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     jump_ptr
         sta     $0C
-        sta     $0660,x
-        lda     $01
+        sta     ent_y_vel_sub,x
+        lda     temp_01
         sta     $0B
         lda     #$00
         sta     $0A
@@ -4235,26 +4237,26 @@ velocity_calc_x_major:  lda     $09
         sta     $0D
         lda     $0E
         sta     $0C
-        lda     zp_temp_00
+        lda     temp_00
         sta     $0B
         lda     #$00
         sta     $0A
         jsr     divide_16bit            ; divide for velocity ratio
-        ldx     $2B
+        ldx     current_entity_slot
         lda     $0F
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     $0E
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
 velocity_calc_negate_y:  plp
         bcc     velocity_calc_done
-        lda     $0660,x
+        lda     ent_y_vel_sub,x
         eor     #$FF
         adc     #$01
-        sta     $0660,x
-        lda     $0640,x
+        sta     ent_y_vel_sub,x
+        lda     ent_y_vel,x
         eor     #$FF
         adc     #$00
-        sta     $0640,x
+        sta     ent_y_vel,x
 velocity_calc_done:  rts
 
 
@@ -4264,7 +4266,7 @@ velocity_calc_done:  rts
 ; X = boss ID ($B3), loads AI flags, position, type, etc.
 ; =============================================================================
 boss_init:  ldx     $B3                 ; Initialize boss from property tables (X = boss ID)
-        lda     $20
+        lda     nametable_select
         sta     $0441
         lda     boss_ai_flags,x         ; load AI behavior flags for this boss
         sta     $0421
@@ -4343,15 +4345,15 @@ boss_y_vel_hi_table:  .byte   $F8,$F8
 ; Setup PPU Normal — check player-boss proximity for contact damage ($A52D)
 ; =============================================================================
 setup_ppu_normal:  lda     #$00
-        sta     $01
-        lda     $2C
+        sta     temp_01
+        lda     game_substate
         beq     proximity_check_rts
         lda     $BD
         bne     proximity_check_rts
         lda     $F9
         bne     proximity_check_rts
         sec
-        lda     $0460
+        lda     ent_x_px
         sbc     $0461
         bcs     proximity_calc_x_dist
         eor     #$FF
@@ -4360,37 +4362,37 @@ proximity_calc_x_dist:  ldy     $06E1
         cmp     $D4E4,y
         bcs     proximity_check_rts
         sec
-        lda     $04A0
+        lda     ent_y_px
         sbc     $04A1
         bcs     proximity_check_y_dist
         eor     #$FF
         adc     #$01
 proximity_check_y_dist:  cmp     $D584,y
         bcs     proximity_check_rts
-        lda     $4B
+        lda     invincibility_timer
         bne     proximity_check_rts
         ldy     $B3
         sec
-        lda     $06C0
+        lda     ent_hp
         sbc     boss_contact_damage_table,y
-        sta     $06C0
+        sta     ent_hp
         beq     proximity_boss_defeated
         bcs     proximity_flip_facing
 proximity_boss_defeated:  lda     #$00
-        sta     $2C
-        sta     $06C0
+        sta     game_substate
+        sta     ent_hp
         jmp     boss_death_sequence
 
-proximity_flip_facing:  lda     entity_flags_base
+proximity_flip_facing:  lda     ent_flags
         and     #$BF
-        sta     entity_flags_base
+        sta     ent_flags
         lda     $0421
         and     #$40
         eor     #$40
-        ora     entity_flags_base
-        sta     entity_flags_base
+        ora     ent_flags
+        sta     ent_flags
         jsr     fixed_D332
-        inc     $01
+        inc     temp_01
 proximity_check_rts:  rts
 
 
@@ -4398,11 +4400,11 @@ proximity_check_rts:  rts
 ; Weapon-Boss Collision — check if player weapon hits boss ($A59D)
 ; =============================================================================
 weapon_boss_collision_check:  ldx     #$09; start scanning from slot 9
-        lda     $1C
+        lda     frame_counter
         and     #$01
         bne     weapon_boss_check_slot
         dex
-weapon_boss_check_slot:  lda     entity_flags_base,x
+weapon_boss_check_slot:  lda     ent_flags,x
         bpl     weapon_boss_next_slot
         and     #$01
         beq     weapon_boss_next_slot
@@ -4421,7 +4423,7 @@ weapon_boss_check_x_range:  cmp     $D4E4,y
         bcs     weapon_boss_next_slot
         sec
         lda     $04A1
-        sbc     $04A0,x
+        sbc     ent_y_px,x
         bcs     weapon_boss_check_y_range
         eor     #$FF
         adc     #$01
@@ -4431,10 +4433,10 @@ weapon_boss_next_slot:  dex
         dex
         cpx     #$02
         bcs     weapon_boss_check_slot
-        ldx     $2B
+        ldx     current_entity_slot
         lda     #$00
         sta     $B4
-        sta     $02
+        sta     temp_02
 weapon_boss_no_hit:  clc
         rts
 
@@ -4444,23 +4446,23 @@ weapon_boss_no_hit:  clc
 ; =============================================================================
 weapon_boss_hit_dispatch:  lda     $B4  ; check already-hit flag
         bne     weapon_boss_no_hit
-        ldy     $A9
+        ldy     current_weapon
         lda     weapon_handler_ptr_lo,y
         sta     jump_ptr
         lda     weapon_handler_ptr_hi,y
-        sta     $09
+        sta     jump_ptr_hi
         jmp     (jump_ptr)
 
         .byte   $AD
-        and     ($04,x)
+        and     (temp_04,x)
         and     #$08
         bne     buster_deflect
         ldy     $B3
         lda     weapon_base_damage_table,y
-        sta     zp_temp_00
+        sta     temp_00
         beq     buster_deflect
         php
-        lsr     entity_flags_base,x
+        lsr     ent_flags,x
         plp
         bpl     buster_apply_damage
         jmp     weapon_force_kill_boss
@@ -4473,11 +4475,11 @@ buster_apply_damage:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     buster_boss_killed
         bcs     buster_deflect_done
@@ -4486,17 +4488,17 @@ buster_boss_killed:  lda     #$00
         sec
         rts
 
-buster_deflect:  lda     entity_flags_base,x
+buster_deflect:  lda     ent_flags,x
         eor     #$40
         and     #$FE
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         lda     #$05
-        sta     $0640,x
-        sta     $0600,x
+        sta     ent_y_vel,x
+        sta     ent_x_vel,x
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $02
+        sta     temp_02
 buster_deflect_done:  clc
         rts
 
@@ -4511,7 +4513,7 @@ buster_deflect_done:  clc
         ldy     $B3
         lda     weapon_metal_damage_table,y
         beq     metal_blade_deflect
-        lda     $04E0,x
+        lda     ent_state,x
         cmp     #$02
         bcc     metal_blade_base_damage
         beq     metal_blade_triple_damage
@@ -4529,7 +4531,7 @@ metal_blade_base_damage:  lda     weapon_base_damage_table,y
 ; =============================================================================
 ; Weapon Damage: Metal Blade — variable damage based on boss ($A68D)
 ; =============================================================================
-metal_blade_store_damage:  sta     zp_temp_00
+metal_blade_store_damage:  sta     temp_00
         beq     metal_blade_deflect
         bpl     metal_blade_apply
         jmp     weapon_force_kill_boss
@@ -4538,11 +4540,11 @@ metal_blade_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     metal_blade_killed
         bcs     metal_blade_clear_hit
@@ -4554,12 +4556,12 @@ metal_blade_killed:  lda     #$00
 metal_blade_deflect:  lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $02
-        lsr     entity_flags_base,x
+        sta     temp_02
+        lsr     ent_flags,x
         jmp     metal_blade_done
 
 metal_blade_clear_hit:  lda     #$00
-        sta     entity_flags_base,x
+        sta     ent_flags,x
 metal_blade_done:  clc
         rts
 
@@ -4568,7 +4570,7 @@ metal_blade_done:  clc
         bne     *+50
         ldy     $B3
         lda     $A95E,y
-        sta     zp_temp_00
+        sta     temp_00
         beq     *+41
         bpl     *+5
         jmp     weapon_force_kill_boss
@@ -4576,11 +4578,11 @@ metal_blade_done:  clc
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     air_shooter_killed
         bcs     metal_blade_clear_hit
@@ -4592,15 +4594,15 @@ air_shooter_killed:  lda     #$00
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $02
-        lda     entity_flags_base,x
+        sta     temp_02
+        lda     ent_flags,x
         and     #$FE
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         lda     #$3D
-        sta     $0400,x
+        sta     ent_type,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
         clc
         rts
 
@@ -4609,7 +4611,7 @@ air_shooter_killed:  lda     #$00
         bne     *+50
         ldy     $B3
         lda     $A96C,y
-        sta     zp_temp_00
+        sta     temp_00
         beq     *+41
         bpl     *+5
         jmp     weapon_force_kill_boss
@@ -4617,11 +4619,11 @@ air_shooter_killed:  lda     #$00
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     air_shooter_killed_2
         bcs     air_shooter_clear_hit
@@ -4633,29 +4635,29 @@ air_shooter_killed_2:  lda     #$00
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $02
-        lda     entity_flags_base,x
+        sta     temp_02
+        lda     ent_flags,x
         and     #$F2
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         lda     #$3B
-        sta     $0400,x
+        sta     ent_type,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
-        sta     $04E0,x
-        sta     $06C0,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
+        sta     ent_state,x
+        sta     ent_hp,x
 air_shooter_done:  clc
         rts
 
 air_shooter_clear_hit:  lda     #$00
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         beq     air_shooter_done
         lda     $0421
         and     #$08
         bne     leaf_shield_deflect
         ldy     $B3
         lda     weapon_leaf_damage_table,y
-        sta     zp_temp_00
+        sta     temp_00
         beq     leaf_shield_deflect
         bpl     leaf_shield_apply
         jmp     weapon_force_kill_boss
@@ -4664,11 +4666,11 @@ leaf_shield_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     leaf_shield_killed
         bcs     air_shooter_clear_hit
@@ -4678,17 +4680,17 @@ leaf_shield_killed:  lda     #$00
         rts
 
 leaf_shield_deflect:  lda     #$00
-        sta     $0600,x
-        sta     $0620,x
-        sta     $0660,x
+        sta     ent_x_vel,x
+        sta     ent_x_vel_sub,x
+        sta     ent_y_vel_sub,x
         lda     #$04
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$80
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $02
+        sta     temp_02
         clc
         rts
 
@@ -4697,7 +4699,7 @@ leaf_shield_deflect:  lda     #$00
         bne     crash_bomber_deflect
         ldy     $B3
         lda     $A988,y
-        sta     zp_temp_00
+        sta     temp_00
         beq     crash_bomber_deflect
         bpl     crash_bomber_apply
         jmp     weapon_force_kill_boss
@@ -4706,11 +4708,11 @@ crash_bomber_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     crash_bomber_killed
         bcs     crash_bomber_clear_hit
@@ -4720,38 +4722,38 @@ crash_bomber_killed:  lda     #$00
         rts
 
 crash_bomber_deflect:  lda     #$3C
-        sta     $0400,x
-        lda     entity_flags_base,x
+        sta     ent_type,x
+        lda     ent_flags,x
         and     #$C0
         eor     #$40
         ora     #$04
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         lda     #$00
-        sta     $06A0,x
-        sta     $0680,x
-        sta     $0600,x
-        sta     $0660,x
+        sta     ent_anim_id,x
+        sta     ent_anim_frame,x
+        sta     ent_x_vel,x
+        sta     ent_y_vel_sub,x
         lda     #$C0
-        sta     $0620,x
+        sta     ent_x_vel_sub,x
         lda     #$04
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $02
-crash_bomber_restore_x:  ldx     $2B
+        sta     temp_02
+crash_bomber_restore_x:  ldx     current_entity_slot
         clc
         rts
 
 crash_bomber_clear_hit:  lda     #$00
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         beq     crash_bomber_restore_x
         lda     $0421
         and     #$08
         bne     quick_boomerang_deflect
         ldy     $B3
         lda     weapon_quick_damage_table,y
-        sta     zp_temp_00
+        sta     temp_00
         beq     quick_boomerang_deflect
         bpl     quick_boomerang_apply
         jmp     weapon_force_kill_boss
@@ -4760,11 +4762,11 @@ quick_boomerang_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     quick_boomerang_killed
         bcs     crash_bomber_clear_hit
@@ -4773,23 +4775,23 @@ quick_boomerang_killed:  lda     #$00
         sec
         rts
 
-quick_boomerang_deflect:  lda     $0400,x
+quick_boomerang_deflect:  lda     ent_type,x
         cmp     #$2F
         beq     quick_boomerang_done
-        lda     $04E0,x
+        lda     ent_state,x
         cmp     #$02
         beq     quick_boomerang_done
         lda     #$05
-        sta     $06A0,x
+        sta     ent_anim_id,x
         lda     #$00
-        sta     $0680,x
+        sta     ent_anim_frame,x
         lda     #$38
-        sta     $06C0,x
-        inc     $04E0,x
+        sta     ent_hp,x
+        inc     ent_state,x
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
 quick_boomerang_done:  clc
         rts
 
@@ -4798,7 +4800,7 @@ quick_boomerang_done:  clc
         bne     *+50
         ldy     $B3
         lda     $A9A4,y
-        sta     zp_temp_00
+        sta     temp_00
         beq     *+41
         bpl     *+5
         jmp     weapon_force_kill_boss
@@ -4806,11 +4808,11 @@ quick_boomerang_done:  clc
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
-        sta     $02
+        sta     temp_02
         inc     $B4
         sec
         lda     $06C1
-        sbc     zp_temp_00
+        sbc     temp_00
         sta     $06C1
         beq     atomic_fire_killed
         bcs     atomic_fire_clear_hit
@@ -4820,42 +4822,42 @@ atomic_fire_killed:  lda     #$00
         rts
 
         lda     #$03
-        sta     $0640,x
+        sta     ent_y_vel,x
         lda     #$B2
-        sta     $0660,x
+        sta     ent_y_vel_sub,x
         lda     #$01
-        sta     $0600,x
+        sta     ent_x_vel,x
         lda     #$87
-        sta     $0620,x
-        lda     entity_flags_base,x
+        sta     ent_x_vel_sub,x
+        lda     ent_flags,x
         and     #$F0
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $02
+        sta     temp_02
 atomic_fire_done:  clc
         rts
 
 atomic_fire_clear_hit:  lda     #$00
-        sta     entity_flags_base,x
+        sta     ent_flags,x
         beq     atomic_fire_done
 
 
 ; =============================================================================
 ; Force Kill Boss — instant-kill for weakness weapons (max HP loss) ($A91B)
 ; =============================================================================
-weapon_force_kill_boss:  lda     #$1C   ; set HP to max (instant kill)
+weapon_force_kill_boss:  lda     #MAX_HP   ; set HP to max (instant kill)
         sta     $06C1
         lda     #$00
-        sta     $02
-        lsr     entity_flags_base,x
+        sta     temp_02
+        lsr     ent_flags,x
         clc
         rts
 
 weapon_difficulty_scale:  lda     $CB   ; check difficulty flag
         bne     weapon_difficulty_rts
-        asl     zp_temp_00              ; double damage on normal mode
+        asl     temp_00              ; double damage on normal mode
 weapon_difficulty_rts:  rts
 
 

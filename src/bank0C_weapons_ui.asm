@@ -14,10 +14,13 @@
 
         .setcpu "6502"
 
-zp_temp_02           := $0002
+.include "include/hardware.inc"
+.include "include/ram.inc"
+.include "include/zeropage.inc"
+.include "include/constants.inc"
+
 zp_F4           := $00F4
 data_ref_0604           := $0604
-data_ref_0660           := $0660
 data_ref_1501           := $1501
 data_ref_1F05           := $1F05
 data_ref_2260           := $2260
@@ -112,7 +115,7 @@ chr_ram_tile_copy:  lda     ($E2),y     ; Copy tile data to CHR-RAM shadow at $0
         cpy     #$02
 chr_ram_tile_copy_end:  bne     chr_ram_tile_copy
         .byte   $A0                     ; skip-byte: LDY# eats next byte ($0A=ASL A opcode)
-chr_ram_padding_fill:  asl     a:$A9     ; fill padding bytes in CHR shadow
+chr_ram_padding_fill:  asl     a:current_weapon     ; fill padding bytes in CHR shadow
 chr_ram_padding_byte:  sta     $0500,x
         inx
 chr_ram_padding_loop:  dey
@@ -379,12 +382,12 @@ weapon_shift_e1_right4:  lsr     $E1
 apu_sound_control:  cpy     #$01         ; Y=1: enable channels, else silence
         beq     apu_enable_channels
         lda     #$00
-        sta     $4000,x
-        sta     $4001,x
+        sta     SQ1_VOL,x
+        sta     SQ1_SWEEP,x
         rts
 
 apu_enable_channels:  lda     #$07       ; enable pulse 1+2 + triangle
-        sta     $4015
+        sta     SND_CHN
         rts
 
 
@@ -642,7 +645,7 @@ hud_sweep_compare_slot:  ldy     #$02
         sta     zp_F4
 hud_sound_write_volume:  ldx     $EB
         lda     zp_F4
-        sta     $4000,x
+        sta     SQ1_VOL,x
         lda     $F5
         bpl     hud_sound_sweep_mode_b
         lda     #$90
@@ -774,7 +777,7 @@ hud_frequency_calc:  lda     $F5
         cmp     $EE
         bne     hud_frequency_write
         lda     #$0F
-        sta     $4015
+        sta     SND_CHN
         txa
         and     #$0F
         tax
@@ -791,7 +794,7 @@ hud_frequency_write:  txa
         ldx     $EB
         inx
         inx
-        sta     $4000,x
+        sta     SQ1_VOL,x
         tya
         ldy     #$1C
         cmp     ($EC),y
@@ -800,7 +803,7 @@ hud_frequency_write:  txa
 
 hud_frequency_update_hi:  sta     ($EC),y
         ora     #$08
-        sta     $4001,x
+        sta     SQ1_SWEEP,x
         rts
 
 
@@ -811,15 +814,15 @@ hud_sound_channel_off:  ldy     #$01
         cpy     $EE
         bne     hud_sound_silence_pair
         lda     #$07
-        sta     $4015
+        sta     SND_CHN
         rts
 
 hud_sound_silence_pair:  lda     #$00
         ldx     $EB
         inx
         inx
-        sta     $4000,x
-        sta     $4001,x
+        sta     SQ1_VOL,x
+        sta     SQ1_SWEEP,x
         rts
 
 
