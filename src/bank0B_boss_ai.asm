@@ -4855,9 +4855,9 @@ weapon_force_kill_boss:  lda     #MAX_HP   ; set HP to max (instant kill)
         clc
         rts
 
-weapon_difficulty_scale:  lda     $CB   ; check difficulty flag
-        bne     weapon_difficulty_rts
-        asl     temp_00              ; double damage on normal mode
+weapon_difficulty_scale:  lda     $CB   ; difficulty flag: 0=Normal, 1=Difficult
+        bne     weapon_difficulty_rts ; Difficult: use base damage as-is
+        asl     temp_00              ; Normal: double weapon damage to bosses
 weapon_difficulty_rts:  rts
 
 

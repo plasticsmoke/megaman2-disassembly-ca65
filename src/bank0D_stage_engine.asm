@@ -3366,7 +3366,7 @@ ending_main_loop_init:  lda     #$0D
         sta     $C1
         lda     #$00
         sta     $C0
-        sta     $CB
+        sta     $CB                     ; default to Normal (0) for next playthrough
 ending_main_loop:  lda     p1_new_presses
         and     #$08                    ; Start button = skip
         bne     ending_skip_pressed
@@ -3378,7 +3378,7 @@ ending_draw_cursor:  lda     ending_cursor_oam_data,x
         sta     $0281,x
         dex
         bpl     ending_draw_cursor
-        ldx     $CB
+        ldx     $CB                     ; 0=Normal cursor, 1=Difficult cursor
         ldy     #$F8
         lda     frame_counter
         and     #$08
@@ -3386,10 +3386,10 @@ ending_draw_cursor:  lda     ending_cursor_oam_data,x
         ldy     ending_cursor_y_table,x
 ending_cursor_y:  sty     $0280
         lda     p1_new_presses
-        and     #$34
+        and     #$34                    ; D-pad or A/B = toggle selection
         beq     ending_timer_tick
         txa
-        eor     #$01
+        eor     #$01                    ; flip between Normal (0) and Difficult (1)
         sta     $CB
         lda     #$2F
         jsr     bank_switch_enqueue
@@ -3648,13 +3648,19 @@ password_render_grid:  jsr     password_render_sprites
 password_all_dots_placed:  jsr     password_render_sprites
         lda     #$0F
         sta     $036C
+        ; Decode E-tank count from password grid: scan cells 0-3 for first dot.
+        ; The dot position = number of E-tanks (0-3). This also sets the
+        ; starting offset for the 20-cell boss data region (E-tanks + 5).
         ldx     #$00
-password_find_difficulty:  lda     ent_flags,x
-        bne     password_store_difficulty
+password_find_etanks:  lda     ent_flags,x
+        bne     password_store_etanks
         inx
         cpx     #$04
-        bne     password_find_difficulty
-password_store_difficulty:  stx     temp_04
+        bne     password_find_etanks
+password_store_etanks:  stx     temp_04         ; temp_04 = E-tank count (0-3)
+        ; Start data decode at cell (E-tanks + 5), wrapping 24→5.
+        ; 20 cells encode 16 meaningful bits via scrambled lookup tables:
+        ; 8 bits of beaten boss flags → temp_02, 8 bits complement → temp_03.
         txa
         clc
         adc     #$05
@@ -3676,12 +3682,12 @@ password_decode_loop:  lda     ent_flags,x
 password_decode_next:  inx
         cpx     #$19
         bne     password_decode_inc
-        ldx     #$05
+        ldx     #$05                    ; wrap from cell 24 back to cell 5
 password_decode_inc:  inc     temp_01
         lda     temp_01
-        cmp     #$14
+        cmp     #$14                    ; 20 data positions
         bne     password_decode_loop
-        lda     temp_02
+        lda     temp_02                 ; validation: data OR complement must = $FF
         ora     temp_03
         cmp     #$FF
         bne     password_invalid
@@ -3721,19 +3727,19 @@ password_invalid_wait_2:  jsr     wait_for_vblank_0D
 ; =============================================================================
 ; Password Valid — decode stage data, show beaten bosses
 ; =============================================================================
-password_valid:  lda     temp_02
+password_valid:  lda     temp_02         ; temp_02 = beaten boss flags (8 bits in $9A)
         sta     $9A
-        and     #$03
+        and     #$03                    ; extract $9B: bits 0-1 from $9A
         sta     $9B
         lda     $9A
-        and     #$20
+        and     #$20                    ; bit 5 of $9A → bit 2 of $9B
         lsr     a
         lsr     a
         lsr     a
         ora     $9B
-        sta     $9B
+        sta     $9B                     ; $9B = derived boss flags (3 bits)
         lda     temp_04
-        sta     current_etanks
+        sta     current_etanks          ; restore E-tank count from password
         lda     #$C0
         sta     $FD
         lda     #$8D
@@ -5100,6 +5106,8 @@ password_show_grid:  jsr     palette_fade_out
 password_clear_dots_loop:  sta     ent_flags,x
         dex
         bpl     password_clear_dots_loop
+        ; Encode current progress into 9 dots on the 5x5 grid:
+        ; temp_00 = beaten boss flags, temp_01 = complement (for validation).
         lda     $9A
         sta     temp_00
         eor     #$FF
@@ -5108,8 +5116,8 @@ password_clear_dots_loop:  sta     ent_flags,x
         lda     current_etanks
         tax
         adc     #$05
-        sta     temp_03
-        inc     ent_flags,x
+        sta     temp_03                 ; data region starts at cell (E-tanks + 5)
+        inc     ent_flags,x             ; place E-tank dot in cell 0-3
         ldx     #$00
 password_set_dots_loop:  ldy     password_byte_index_table,x
         lda     temp_00,y

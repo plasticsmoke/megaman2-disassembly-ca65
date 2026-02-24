@@ -152,7 +152,20 @@ Wily stages share entity spawn banks with Robot Master stages — both stages' e
 
 **Skip-byte tricks.** The engine uses intentional instruction overlaps to save bytes. A `LDY #imm` ($A0) or `JMP abs` ($4C) opcode is placed so its operand bytes overlap the next instruction, creating two valid execution paths depending on the entry point. Example in bank $0C: `$A0` (LDY#) eats the next byte ($0A = ASL A opcode), so falling through executes `LDY #$0A` while jumping to the next label executes `ASL A`.
 
-**Difficulty system.** RAM address $CB holds the difficulty flag: 0 = Normal, non-zero = Difficult. Enemy spawn tables and behavior parameters vary based on this flag.
+**Password system.** Passwords use a 5x5 grid with exactly 9 dots. The grid encodes two pieces of state:
+
+- **E-tank count** (cells 0-3, row 0): The column containing a dot indicates E-tanks held (0-3). This also sets the starting offset for the data region.
+- **Beaten boss flags** (cells 5-24, rows 1-4): 20 cells encode 16 meaningful bits via scrambled lookup tables (`password_bit_mask_table` and `password_byte_index_table`). 8 bits store the beaten boss bitfield (`$9A`), and 8 bits store its complement. 4 of the 20 positions are dummy (mask = $00).
+
+Validation: the decoded data byte OR'd with the complement byte must equal $FF. Since any valid progress value and its inverse cover all 8 bits, this catches invalid dot placements. Cell 4 (row 0, column 5) is unused.
+
+The password does **not** encode difficulty — only E-tanks and beaten bosses. Difficulty (`$CB`) persists in RAM and resets to Normal (0) on power cycle.
+
+**Difficulty system.** RAM address `$CB` holds the difficulty flag: 0 = Normal, 1 = Difficult. Selected on the ending screen after completing the game (defaults to Normal on cold boot). Not stored in passwords. Affects exactly three systems:
+
+- **Weapon damage to bosses** — `weapon_difficulty_scale` (bank $0B) doubles damage via ASL on Normal. Called from all 9 weapon-vs-boss handlers (Buster, Metal Blade, Quick Boomerang, Leaf Shield, Crash Bomb, Air Shooter, etc.). Bosses effectively have 2x HP on Difficult.
+- **Enemy collision damage to player** — `apply_difficulty_modifier` (bank $0F) doubles damage via ASL on Normal. Called from 8 enemy collision handlers. Counter-intuitively, Normal mode doubles damage *dealt to enemies*, not damage taken.
+- **Item drop rates** — `item_drop_calc` (bank $0F) uses completely different RNG threshold tables. Normal: 72% total drop rate (30% small health, 20% small weapon, 10% large health, 10% large weapon, 1% extra life). Difficult: 52% total drop rate (25% large weapon, 15% large health, 5% small health, 4% small weapon, 1% extra life).
 
 ## License
 

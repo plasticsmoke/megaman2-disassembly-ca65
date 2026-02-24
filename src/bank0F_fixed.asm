@@ -86,7 +86,7 @@
 ;   $B6         Camera Y offset (screen shake)
 ;   $B8-$B9     Camera X offset
 ;   $BC-$BD     Boss-specific flags
-;   $CB         Difficulty flag (normal/difficult)
+;   $CB         Difficulty flag (0=Normal, 1=Difficult)
 ;   $F7         PPUCTRL shadow
 ;   $F8         PPUMASK shadow
 ;   $F9         Boss fight active flag
@@ -4978,9 +4978,9 @@ weapon_coll_handler_3_done:  ldx     current_entity_slot
         lda     #$00
         sta     ent_flags,y
         beq     weapon_coll_handler_3_done
-apply_difficulty_modifier:  lda     $CB
-        bne     difficulty_done
-        asl     temp_00
+apply_difficulty_modifier:  lda     $CB   ; difficulty flag: 0=Normal, 1=Difficult
+        bne     difficulty_done       ; Difficult: use base damage as-is
+        asl     temp_00              ; Normal: double enemy collision damage to player
 difficulty_done:  rts
 
 weapon_handler_ptr_lo:  .byte   $52,$AA,$16,$72,$DB,$37,$7F,$15 ; collision handler ptr low bytes
@@ -5698,9 +5698,13 @@ item_drop_calc:  lda     rng_seed            ; read RNG seed
         sta     temp_01
         lda     #$64
         sta     temp_02
-        jsr     divide_8bit             ; divide RNG by 100
-        lda     $CB                     ; check difficulty flag
+        jsr     divide_8bit             ; remainder (0-99) in temp_04
+        lda     $CB                     ; difficulty flag: 0=Normal, 1=Difficult
         beq     item_drop_normal_mode
+        ; Difficult mode thresholds (52% total drop rate):
+        ;   0-47: nothing (48%), 48-72: large weapon (25%), 73-87: large health (15%)
+        ;   88-92: small health (5%), 93-96: small weapon (4%), 97: extra life (1%)
+        ;   98-99: nothing (2%)
         lda     temp_04
         cmp     #$30
         bcc     item_drop_nothing
@@ -5738,6 +5742,10 @@ item_drop_spawn:  jsr     spawn_entity_from_parent
         sta     $04F0,y
 item_drop_failed:  rts
 
+        ; Normal mode thresholds (72% total drop rate):
+        ;   0-27: nothing (28%), 28-37: large weapon (10%), 38-47: large health (10%)
+        ;   48-77: small health (30%), 78-97: small weapon (20%), 98: extra life (1%)
+        ;   99: nothing (1%)
 item_drop_normal_mode:  lda     temp_04
         cmp     #$1C
         bcc     item_drop_nothing
