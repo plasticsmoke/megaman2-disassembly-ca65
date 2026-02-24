@@ -2530,16 +2530,18 @@ entity_ai_bank_table:  .byte   $01,$02,$01,$00,$01,$00,$01,$00 ; bank for each A
 entity_special_ai_ptr_lo:  .byte   $B3,$AF,$D8,$F1,$0A,$23,$23,$7C ; special AI pointer (low bytes)
         .byte   $B5,$B5,$B5,$B5,$B5,$B5,$B5
 entity_special_ai_ptr_hi:  .byte   $EF,$EF,$ED,$ED,$EE,$EE,$EE,$EE ; special AI pointer (high bytes)
-        .byte   $EE,$EE,$E6,$EE,$EE,$EE,$BD,$E0
-        .byte   $04,$D0,$6F,$9D,$80
-        asl     $BD
-        bpl     met_init_shoot
-        .byte   $D0
+        .byte   $EE,$EE,$E6,$EE,$EE,$EE,$BD
+met_ai_preamble:
+        cpx     #$04
+        bne     met_update_timer
+        sta     $0680,x
+        lda     $0110,x
+        bne     met_reset_state
 
 ; =============================================================================
-; met_init_shoot -- Enemy AI: Met (Hard Hat) — hide/shoot pattern ($9499)
+; met_init_shoot -- Enemy AI: Met (Hard Hat) — hide/shoot pattern ($949A)
 ; =============================================================================
-met_init_shoot:  .byte   $42
+met_init_shoot:
         lda     #$01
         sta     $0110,x
         lda     #$14
@@ -2567,6 +2569,7 @@ met_calc_aim:  jsr     entity_face_player
         lda     $DA22
         sta     $0660,x
         bne     met_update_timer
+met_reset_state:
         lda     #$00
         sta     $06A0,x
         sta     $0110,x
@@ -2597,9 +2600,15 @@ met_check_state_4:  cmp     #$07
 met_apply_physics:  jsr     apply_entity_physics
         rts
 
-met_delay_table:  .byte   $19,$4A,$BD,$E0,$04,$D0,$26,$A0 ; Met hide/shoot delay timings
-        .byte   $0F,$A9,$02,$85,$01,$A9,$01,$85
-        .byte   $00
+met_delay_table:  .byte   $19,$4A                         ; Met hide/shoot delay timings
+anko_spawner_ai_entry:
+        lda     $04E0,x
+        bne     anko_spawner_dec_timer
+        ldy     #$0F
+        lda     #$02
+        sta     $01
+        lda     #$01
+        sta     $00
 
 ; =============================================================================
 ; anko_spawner_scan -- Enemy AI: Anko spawner (type $02) — creates Shrink-AI entities ($9532)
@@ -2618,6 +2627,7 @@ anko_spawner_create:  lda     #$01
         bne     anko_spawner_store_timer
 anko_spawner_set_timer:  lda     #$62
 anko_spawner_store_timer:  sta     $04E0,x
+anko_spawner_dec_timer:
         dec     $04E0,x
         jsr     apply_simple_physics
         rts
@@ -2626,8 +2636,14 @@ anko_spawner_store_timer:  sta     $04E0,x
 ; anko_seg_ai -- Enemy AI: Anko segment (type $03) — spawns M-445 jellyfish ($9555)
 ; Mislabeled by annotation scripts as "Pipi". Actually type $03 (Anko sub-part).
 ; =============================================================================
-        .byte   $BD,$20,$06,$D0,$08,$A9,$03,$20
-        .byte   $B5,$95,$90,$01,$60
+anko_seg_entry:
+        lda     $0620,x           ; check X velocity (sub)
+        bne     anko_seg_track_parent
+        lda     #$03
+        jsr     check_entity_collision_scan
+        bcc     anko_seg_track_parent
+        rts
+anko_seg_track_parent:
         lda     $0460
         sta     $0460,x
         lda     $0440
@@ -2686,10 +2702,19 @@ collision_scan_set_active:  lda     #$01
         clc
         rts
 
-        .byte   $BD,$20,$06,$D0,$12,$38,$AD,$A0
-        .byte   $04,$FD,$A0,$04,$C9,$03,$90,$04
-        .byte   $C9,$FE,$90,$4F
+friender_ai_entry:
+        lda     $0620,x
+        bne     friender_check_timer
+        sec
+        lda     $04A0
+        sbc     $04A0,x
+        cmp     #$03
+        bcc     friender_face_player
+        cmp     #$FE
+        bcc     friender_apply_physics
+friender_face_player:
         jsr     entity_face_player
+friender_check_timer:
         lda     $04E0,x
         bne     friender_dec_timer
         lda     #$0B
@@ -2724,6 +2749,7 @@ friender_update_direction:  pla
         and     #$0F
         sta     $0110,x
 friender_dec_timer:  dec     $04E0,x    ; decrement movement timer
+friender_apply_physics:
         jsr     apply_entity_physics
         rts
 
@@ -2756,9 +2782,17 @@ enemy_deactivate_self:  lda     #$00
 ; claw_spawner_ai -- Enemy AI: Claw spawner (type $07) — creates Claw variants ($9675)
 ; Mislabeled by annotation scripts as "Sniper". Actually type $07 (Claw).
 ; =============================================================================
-        .byte   $20,$B3,$EF,$60,$BD,$20,$06,$D0
-        .byte   $08,$A9,$07,$20,$B5,$95,$90,$01
-        .byte   $60
+claw_spawner_physics:
+        jsr     apply_entity_physics_alt
+        rts
+claw_spawner_ai_entry:
+        lda     $0620,x
+        bne     claw_spawner_copy_pos
+        lda     #$07
+        jsr     check_entity_collision_scan
+        bcc     claw_spawner_copy_pos
+        rts
+claw_spawner_copy_pos:
         lda     $0460
         sta     $0460,x
         lda     $0440
@@ -2962,19 +2996,28 @@ tanishi_flip_facing:  lda     $0420,x
 tanishi_apply_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $20,$BA,$EE,$60,$BD,$A0,$06,$C9
+kerog_physics_rts:
+        jsr     apply_entity_physics
+        rts
 ; =============================================================================
 ; kerog_ai -- Enemy AI: Kerog (type $0C) — frog, spawns Petit Kerogs ($982F)
 ; Mislabeled by annotation scripts as "Springer". Actually type $0C (Kerog).
 ; =============================================================================
-        .byte   $09,$B0,$18,$A9,$01,$85,$01,$A9
-        .byte   $0D,$20,$CF,$96
+kerog_ai_entry:
+        lda     $06A0,x
+        cmp     #$09
+        bcs     kerog_check_jump_state
+        lda     #$01
+        sta     $01
+        lda     #$0D
+        jsr     find_entity_count_check
         bcs     kerog_check_anim
         lda     #$09
         sta     $06A0,x
         lda     #$00
         sta     $0680,x
         jsr     kerog_apply_physics
+kerog_check_jump_state:
         cmp     #$0A
         bne     kerog_apply_physics
         lda     $0680,x
@@ -3036,10 +3079,18 @@ kerog_dec_timer:  dec     $04E0,x
 petit_kerog_apply_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$20,$06,$D0,$68,$BD,$E0,$04
-        .byte   $F0,$0C,$A0,$02,$DD,$C0,$06,$F0
-        .byte   $02,$A0,$05
+boss_ai_init_entry:
+        lda     $0620,x
+        bne     boss_countdown_dec
+        lda     $04E0,x
+        beq     boss_skip_palette
+        ldy     #$02
+        cmp     $06C0,x
+        beq     boss_apply_palette
+        ldy     #$05
+boss_apply_palette:
         jsr     boss_set_palette
+boss_skip_palette:
         lda     $06C0,x
         sta     $04E0,x
         lda     $0440,x
@@ -3076,6 +3127,7 @@ die_spawn_part_next:  ldx     $01
         sta     $0600,x
 die_expand_phase:  rts
 
+boss_countdown_dec:
         dec     $0600,x
         php
         lda     $0620,x
@@ -3344,8 +3396,12 @@ metalman_hitbox_rts:  sec
         sta     $0160,x
         rts
 
-        .byte   $38,$BD,$40,$04,$E9,$03,$A8,$B9
-        .byte   $DE,$9C
+metalman_blade_calc:
+        sec
+        lda     $0440,x
+        sbc     #$03
+        tay
+        lda     metalman_blade_count_table,y
         sta     $02
         lda     metalman_blade_src_table,y
         sta     $01
@@ -3375,6 +3431,7 @@ metalman_blade_set_x:  sta     $0470,y
         sta     a:$F0,x
         rts
 
+metalman_blade_count_table:
         .byte   $02,$03,$04,$00,$00,$00,$00,$00
         .byte   $00,$0C,$0A,$05,$05,$02,$05,$04
 metalman_blade_src_table:  .byte   $00,$02,$05,$09,$09,$09,$09,$09 ; Metalman blade source position table
@@ -3411,15 +3468,19 @@ metalman_blade_timer_table:              ; frame timing per throw pattern (52 en
         .byte   $01,$1F,$1F,$3E,$01,$1F,$3E,$5D
         .byte   $7C,$01,$1F,$01,$1F,$3E,$5D,$7C
         .byte   $01,$1F,$3E,$5D
-        ; code: LDA $04E0,X / BEQ +$13 / DEC $04E0,X / BEQ +$01 / RTS
-        ; (timer check preamble, branches forward into Woodman AI)
-        .byte   $BD,$E0,$04,$F0,$13,$DE,$E0,$04
-        .byte   $F0,$01,$60
+woodman_ai_timer_check:
+        lda     $04E0,x
+        beq     woodman_timer_expired
+        dec     $04E0,x
+        beq     woodman_timer_just_zero
+        rts
+woodman_timer_just_zero:
         lda     $0420,x
         and     #$DF
         sta     $0420,x
         lda     #$27
         jsr     bank_switch_enqueue
+woodman_timer_expired:
         lda     $0420,x
         and     #$20
         bne     woodman_check_contact
@@ -3492,10 +3553,20 @@ woodman_trigger_shield:  lda     #$00
 
 woodman_rts:  rts
 
-        .byte   $BD,$E0,$04,$D0,$16,$A5,$4A,$49
-        .byte   $01,$85,$4A,$29,$01,$A8,$B9,$20
-        .byte   $9F,$9D,$E0,$04,$A9,$8B,$9D,$20
-        .byte   $04,$D0,$13
+bubbleman_ai_init:
+        lda     $04E0,x
+        bne     bubbleman_check_state
+        lda     $4A
+        eor     #$01
+        sta     $4A
+        and     #$01
+        tay
+        lda     bubbleman_timer_table,y
+        sta     $04E0,x
+        lda     #$8B
+        sta     $0420,x
+        bne     bubbleman_apply_physics
+bubbleman_check_state:
         cmp     #$01
         beq     bubbleman_state_swim
         cmp     #$FF
@@ -3504,6 +3575,7 @@ woodman_rts:  rts
         lda     #$00
         sta     $06A0,x
         sta     $0680,x
+bubbleman_apply_physics:
         jsr     apply_entity_physics_alt
         rts
 
@@ -3558,13 +3630,30 @@ bubbleman_fall_setup:  lda     #$04
 bubbleman_fall_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $3E,$9C,$BD,$40,$06,$85,$04,$A9
-        .byte   $0C,$85,$01,$A9,$10,$85,$02,$20
-        .byte   $CF,$F0,$BD,$10,$01,$D0,$1F,$BD
-        .byte   $E0,$04,$D0,$79,$A9,$C0,$9D,$20
-        .byte   $06,$9D,$60,$06,$A9,$04,$9D,$40
-        .byte   $06,$85,$04,$20,$EE,$EF,$FE,$10
-        .byte   $01,$A9,$01,$9D,$A0,$06
+bubbleman_timer_table:  .byte   $3E,$9C         ; Bubbleman AI timer values (62/156 frames)
+quickman_ai_init:
+        lda     $0640,x
+        sta     $04
+        lda     #$0C
+        sta     $01
+        lda     #$10
+        sta     $02
+        jsr     check_horiz_tile_collision
+        lda     $0110,x
+        bne     quickman_check_pattern
+        lda     $04E0,x
+        bne     quickman_dec_timer
+        lda     #$C0
+        sta     $0620,x
+        sta     $0660,x
+        lda     #$04
+        sta     $0640,x
+        sta     $04
+        jsr     entity_face_player
+        inc     $0110,x
+        lda     #$01
+        sta     $06A0,x
+quickman_check_pattern:
         lda     $0110,x
         cmp     #$01
         bne     quickman_check_timer
@@ -3624,8 +3713,13 @@ quickman_dec_timer:  dec     $04E0,x
 quickman_state_table:  jsr     apply_entity_physics
         rts
 
-quickman_anim_threshold:  .byte   $00,$02,$00,$00,$00,$A0,$02,$BD ; Quickman animation speed thresholds
-        .byte   $C0,$06,$D0,$03,$4C,$6B,$A0
+quickman_anim_threshold:  .byte   $00,$02,$00,$00,$00             ; Quickman animation speed thresholds
+quickman_hp_check:
+        ldy     #$02
+        lda     $06C0,x
+        bne     quickman_palette_check
+        jmp     heatman_check_state_entry
+quickman_palette_check:
         cmp     $0660,x
         beq     quickman_palette_set
         ldy     #$05
@@ -3693,6 +3787,7 @@ heatman_apply_physics:  jsr     apply_entity_physics_alt
         sta     $0100,x
 heatman_rts:  rts
 
+heatman_check_state_entry:
         lda     #$00
         sta     $06A0,x
         sta     $0680,x
