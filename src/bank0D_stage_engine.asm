@@ -57,9 +57,16 @@ ending_player_anim           := $D627
 ending_scroll_update           := $D637
 ending_init_walk           := $D642
 ending_walk_step           := $D64D
-        .byte   $4C,$15,$80,$4C,$EC,$90,$4C,$78
-        .byte   $96,$4C,$E7,$9E,$4C,$01,$B1,$4C
-        .byte   $F1,$B6,$4C,$E0,$BA
+; --- Bank $0D dispatch table (7 JMP entries at $8000) ---
+        jmp     stage_select_init       ; $8000: entry 0 — stage select screen
+        jmp     main_stage_render       ; $8003: entry 1 — main stage OAM render
+        jmp     boss_get_screen_init    ; $8006: entry 2 — boss get screen
+        jmp     wily_intro_init         ; $8009: entry 3 — Wily intro sequence
+        jmp     ending_chr_load         ; $800C: entry 4 — ending CHR load
+        jmp     ending_scene_init       ; $800F: entry 5 — ending scene
+        jmp     ending_walk_init        ; $8012: entry 6 — ending walk
+; --- stage_select_init -- Stage Select Screen Init ($8015) ---
+stage_select_init:
         lda     #$10
         sta     $F7
         sta     $2000
@@ -1470,6 +1477,7 @@ sprite_def_data_9094:  cpy     #$01
         .byte   $FA,$F8,$CA,$03,$F0,$F8,$CB,$03
         .byte   $F8,$F8,$CC,$03,$00,$F8,$CD,$03
         .byte   $08
+main_stage_render:
         jsr     clear_oam_buffer_fixed
         lda     #$00
         jsr     fixed_D2EF
@@ -2141,6 +2149,7 @@ wselect_weapon_pal_idx:  tya
         tya
         .byte   $9B,$9B,$9B,$9B
 weapon_bitmask_table:  .byte   $00,$01,$02,$04,$08,$10,$20,$40
+boss_get_screen_init:
         lda     #$10
         sta     $F7
         sta     $2000
@@ -2185,7 +2194,7 @@ boss_get_load_palette:  lda     boss_get_palette_data,x
         lda     $2A
         cmp     #$09
         bcc     boss_get_normal_init
-        jsr     wily_intro_init
+        jsr     wily_intro_palette_clear
         jmp     boss_get_flash_palette
 
 ; =============================================================================
@@ -2736,9 +2745,9 @@ entity_oam_next_sprite:  iny
         rts
 
 ; =============================================================================
-; Wily Intro Init — fade in palette, play sound, wait
+; Wily Intro Palette Clear — fill palette RAM with $0F (black)
 ; =============================================================================
-wily_intro_init:  ldx     #$1F
+wily_intro_palette_clear:  ldx     #$1F
         lda     #$0F
 wily_intro_clear_pal:  sta     $0356,x
         dex
@@ -2966,6 +2975,7 @@ wily_fade_palette_data:  .byte   $0F,$00,$01,$0F,$0F,$00,$0F,$0F
         .byte   $0F,$17,$21,$07,$0F,$16,$29,$09
         .byte   $0F,$0F,$30,$38,$0F,$0F,$28,$30
         .byte   $0F,$0F,$12,$2C
+wily_intro_init:
         lda     #$10
         sta     $F7
         sta     $2000
@@ -3183,7 +3193,7 @@ ending_column_load:  jsr     ending_column_data_load
         lda     $27
         and     #$08
         beq     ending_column_second
-        .byte   $4C
+        .byte   $4C                     ; JMP credits_skip_init — overlap: $4C eats BCS bytes as target $A7B0
 ending_column_skip:  bcs     ending_fade_speed
 ending_column_second:  jsr     ending_column_data_load
         lda     #$23
@@ -3918,7 +3928,8 @@ ending_advance_anim:  dec     $0690
         sta     $0410
 ending_anim_rts:  rts
 
-        .byte   $A2,$14
+ending_star_oam_init:
+        ldx     #$14
 ending_load_star_oam:  lda     ending_star_oam_positions,x
         sta     $02EC,x
         dex
@@ -4946,8 +4957,10 @@ password_beaten_oam_data:  .byte   $60,$2F,$00,$60,$70,$1F,$00,$60
         bvs     data_B07A
         rol     $00
         .byte   $80,$80,$27,$00
-        bcc     data_B0AB
-        .byte   $03
+        .byte   $90                     ; data byte (was wrongly decoded as BCC)
+; --- ending_chr_load -- Ending: CHR bank load entry ($B101, dispatch entry 4) ---
+ending_chr_load:
+        lda     #$03
         jsr     chr_ram_bank_load
         lda     $2A
         pha
@@ -5312,6 +5325,7 @@ wily_castle_attr_data_2:  .byte   $FF,$FF,$55,$55,$55,$55,$55,$FF
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00
+ending_scene_init:
         jsr     reset_scroll_state
         inc     $20
         lda     #$04
@@ -5774,6 +5788,7 @@ ending_sprite_fade_table:  .byte   $1B,$1A,$19,$0F,$2C,$1F,$1E,$1D
 ending_walk_vel_sub:  .byte   $80,$80,$E5,$00
 ending_walk_vel_whole:  .byte   $00,$00,$00,$08
 ending_health_tile_data:  .byte   $13,$14,$01,$06,$06
+ending_walk_init:
         lda     #$03
         jsr     chr_ram_bank_load
         lda     #$06
