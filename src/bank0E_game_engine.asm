@@ -3044,10 +3044,13 @@ kerog_apply_physics:  jsr     entity_face_player
         rts
 
 kerog_child_vel_x_sub:  .byte   $15,$8D,$A2 ; Petit Kerog X velocity table
-kerog_child_vel_x_hi:  .byte   $04,$02,$01,$A9,$00,$9D,$80,$06
-        .byte   $A9,$03,$85
-        ora     ($A9,x)
-        .byte   $04
+kerog_child_vel_x_hi:  .byte   $04,$02,$01
+kerog_child_collision_check:
+        lda     #$00
+        sta     $0680,x
+        lda     #$03
+        sta     $01
+        lda     #$04
         sta     $02
         jsr     check_horiz_tile_collision
         lda     $0110,x
@@ -3243,11 +3246,26 @@ atomic_fire_update:  dec     $04E0,x
         jsr     apply_simple_physics
         rts
 
-        .byte   $A0,$02,$20,$8D,$99,$A9,$FF,$9D
-        .byte   $20,$01,$5E,$20,$04,$60,$A9,$14
-        .byte   $9D,$50,$01,$38,$BD,$40,$04,$E9
-        .byte   $04,$A4,$2A,$C0,$07,$F0,$06,$38
-        .byte   $BD,$40,$04,$E9,$1B
+crashman_deactivate:
+        ldy     #$02
+        jsr     boss_set_palette
+        lda     #$FF
+        sta     $0120,x
+        lsr     $0420,x
+        rts
+crashman_hitbox_setup:
+        lda     #$14
+        sta     $0150,x
+        sec
+        lda     $0440,x
+        sbc     #$04
+        ldy     $2A
+        cpy     #$07
+        beq     crashman_store_pos
+        sec
+        lda     $0440,x
+        sbc     #$1B
+crashman_store_pos:
         sta     $00
         tay
         lda     crashman_path_offset_table,y
@@ -5544,16 +5562,15 @@ drop_boss_dec_timer:  dec     $04E0,x
         jsr     apply_entity_physics
         rts
 
-        .byte   $BD
-        bpl     scworm_init
-        .byte   $F0
-
 ; =============================================================================
-; scworm_init -- Enemy AI: Scworm — pipe worm, tile-check movement ($B01F)
+; scworm_init -- Enemy AI: Scworm — pipe worm, tile-check movement ($B01B)
 ; =============================================================================
-scworm_init:  .byte   $03
+scworm_init:
+        lda     $0110,x
+        beq     scworm_tile_check
         jmp     scworm_anim
 
+scworm_tile_check:
         ldy     #$00
         sty     $0B
         lda     $0420,x
@@ -5773,17 +5790,37 @@ sniper_joe_physics:  jsr     apply_entity_physics
 
 sniper_joe_vel_fwd:  .byte   $41
 sniper_joe_vel_rev:  .byte   $E5
-sniper_joe_vel_hi_fwd:  brk
-sniper_joe_vel_hi_rev:  .byte   $00,$BF,$1B,$FF,$FF,$A9,$47,$85
-        .byte   $00,$4C,$52,$96,$BD,$10,$01,$F0
-        .byte   $2A,$BD,$A0,$06,$C9,$05,$D0,$20
-        .byte   $A9,$00,$9D,$80,$06,$BD,$E0,$04
-        .byte   $D0,$43,$A9,$00,$85,$01,$20,$72
-        .byte   $B2,$DE,$20,$06,$F0,$07,$A9,$1F
-        .byte   $9D,$E0,$04,$D0,$30
+sniper_joe_vel_hi_fwd:  .byte   $00
+sniper_joe_vel_hi_rev:  .byte   $00
+        .byte   $BF,$1B,$FF,$FF   ; unknown data bytes
+sniper_joe_destroy:
+        lda     #$47
+        sta     $00
+        jmp     enemy_destroy_scan
+sniper_joe_phase_check:
+        lda     $0110,x
+        beq     sniper_joe_boss_proj_init
+        lda     $06A0,x
+        cmp     #$05
+        bne     sniper_joe_boss_proj_jmp
+        lda     #$00
+        sta     $0680,x
+        lda     $04E0,x
+        bne     boss_proj_mgr_dec_timer
+        lda     #$00
+        sta     $01
+        jsr     boss_proj_mgr_fire
+        dec     $0620,x
+        beq     sniper_joe_boss_proj_dec
+        lda     #$1F
+        sta     $04E0,x
+        bne     boss_proj_mgr_dec_timer
+sniper_joe_boss_proj_dec:
         dec     $0110,x
+sniper_joe_boss_proj_jmp:
         jmp     boss_proj_mgr_physics
 
+sniper_joe_boss_proj_init:
         lda     $06A0,x
         bne     boss_proj_mgr_physics
         lda     #$00
@@ -5863,14 +5900,29 @@ boss_fire_vel_y_hi:  .byte   $04
 boss_fire_y_offset:  .byte   $0C
 boss_fire_x_offset:  .byte   $0C
 boss_fire_x_offset_hi:  .byte   $00,$F4,$FF,$1F,$60,$18,$D4,$02
-        .byte   $00,$08,$00,$F8,$FF,$BD,$10,$01
-        .byte   $D0,$44,$BD,$E0,$04,$D0,$28,$BD
-        .byte   $A0,$06,$C9,$02,$D0,$2C,$A9,$87
-        .byte   $9D,$20,$04,$20,$EE,$EF,$A9,$78
-        .byte   $9D,$60,$06,$A9,$04,$9D,$40,$06
-        .byte   $A9,$C9,$9D,$20,$06,$A9,$01,$9D
-        .byte   $00,$06,$FE,$10,$01
+        .byte   $00,$08,$00,$F8,$FF  ; unknown data padding
+boss_fire_phase_init:
+        lda     $0110,x
+        bne     multi_boss_state_check
+        lda     $04E0,x
+        bne     boss_fire_anim_check
+        lda     $06A0,x
+        cmp     #$02
         bne     multi_boss_physics
+        lda     #$87
+        sta     $0420,x
+        jsr     entity_face_player
+        lda     #$78
+        sta     $0660,x
+        lda     #$04
+        sta     $0640,x
+        lda     #$C9
+        sta     $0620,x
+        lda     #$01
+        sta     $0600,x
+        inc     $0110,x
+        bne     multi_boss_physics
+boss_fire_anim_check:
         lda     $06A0,x
         bne     multi_boss_dec_main_timer
         sta     $0680,x
@@ -5887,6 +5939,7 @@ multi_boss_rts:  rts
 
 multi_boss_fallthrough:  jmp     multi_boss_full_physics
 
+multi_boss_state_check:
         cmp     #$01
         bne     multi_boss_state_2
         lda     #$02
@@ -5975,22 +6028,33 @@ multi_boss_death_check:  lda     $06C0,x
         jsr     spawn_entity_from_parent
         bcs     multi_boss_rts_2
         lda     #$7E
-        .byte   $99
-        .byte   $F0
-multi_boss_shot_vel_y_sub:  .byte   $04 ; multi-boss shot Y velocity table
-        rts
-
-        .byte   $6A,$A0,$88
+        .byte   $99,$F0           ; STA $04F0,Y (hi byte overlaps table below)
+multi_boss_shot_vel_y_sub:  .byte   $04,$60,$6A,$A0,$88 ; vel Y sub table (also STA hi byte + RTS)
 multi_boss_shot_vel_y_hi:  .byte   $12,$58,$FB,$FC,$FD
 multi_boss_shot_vel_x_sub:  .byte   $FE,$FF,$8C,$4E,$9A ; multi-boss shot X velocity table
-multi_boss_shot_vel_x_hi:  .byte   $C2,$D2,$06,$07,$07,$07,$07,$20
-        .byte   $EE,$EF,$A9,$00,$9D,$80,$06,$A9
-        .byte   $0B,$85,$01,$A9,$0C,$85,$02,$20
-        .byte   $CF,$F0,$BD,$A0,$06,$D0,$1A,$A9
-        .byte   $00,$9D,$A0,$06,$BD,$E0,$04,$D0
-        .byte   $4C,$FE,$A0,$06,$A9,$1F,$9D,$E0
-        .byte   $04,$BD,$20,$04,$29,$F7,$9D,$20
-        .byte   $04
+multi_boss_shot_vel_x_hi:  .byte   $C2,$D2,$06,$07,$07,$07,$07
+turret_boss_collision_check:
+        jsr     entity_face_player
+        lda     #$00
+        sta     $0680,x
+        lda     #$0B
+        sta     $01
+        lda     #$0C
+        sta     $02
+        jsr     check_horiz_tile_collision
+        lda     $06A0,x
+        bne     turret_boss_ground_check
+        lda     #$00
+        sta     $06A0,x
+        lda     $04E0,x
+        bne     turret_boss_dec_timer
+        inc     $06A0,x
+        lda     #$1F
+        sta     $04E0,x
+        lda     $0420,x
+        and     #$F7
+        sta     $0420,x
+turret_boss_ground_check:
         lda     $04E0,x
         bne     turret_boss_dec_timer
         lda     #$25
@@ -6227,9 +6291,19 @@ stage_boss_jmp:  jmp     wily4_enemy_shared_ai
 stage_palette_entries:  .byte   $0F,$39,$18,$12,$0F,$39,$18,$01 ; stage palette entries for boss rooms
         .byte   $0F,$39,$18,$01,$0F,$39,$18,$01
         .byte   $0F,$39,$18,$01,$0F,$39,$18,$0F
-        .byte   $BD,$10,$01,$D0,$5B,$A9,$03,$85
-        .byte   $01,$A9,$04,$85,$02,$20,$CF,$F0
-        .byte   $A5,$03,$F0,$04,$5E,$20,$04,$60
+wily_boss_init:
+        lda     $0110,x
+        bne     wily_boss_check_phase
+        lda     #$03
+        sta     $01
+        lda     #$04
+        sta     $02
+        jsr     check_horiz_tile_collision
+        lda     $03
+        beq     wily_boss_first_phase
+        lsr     $0420,x
+        rts
+wily_boss_first_phase:
         lda     $00
         beq     wily_boss_physics
         lda     #$04
@@ -6259,6 +6333,7 @@ wily_boss_setup_vel:  lda     #$81
         lda     #$1F
         sta     $04E0,x
         inc     $0110,x
+wily_boss_check_phase:
         lda     $0110,x
         cmp     #$01
         bne     wily_boss_timer_check
@@ -6286,13 +6361,22 @@ wily_boss_physics:  jsr     apply_entity_physics
         rts
 
 wily_boss_vel_table:  .byte   $00,$41,$82,$C4,$06 ; Wily boss velocity table
-wily_boss_vel_hi_table:  .byte   $00,$00,$00,$00,$01,$BD,$10,$01
-        .byte   $D0
-        ora     $E0DE,x
-        .byte   $04,$D0,$2F,$FE,$10,$01,$A9,$1F
-        .byte   $9D,$E0,$04,$A9,$00,$9D,$00,$06
-        .byte   $9D,$20,$06,$9D,$40,$06,$9D,$60
-        .byte   $06,$F0,$17
+wily_boss_vel_hi_table:  .byte   $00,$00,$00,$00,$01
+falling_platform_phase_check:
+        lda     $0110,x
+        bne     falling_platform_phase_1
+        dec     $04E0,x
+        bne     falling_platform_physics
+        inc     $0110,x
+        lda     #$1F
+        sta     $04E0,x
+        lda     #$00
+        sta     $0600,x
+        sta     $0620,x
+        sta     $0640,x
+        sta     $0660,x
+        beq     falling_platform_physics
+falling_platform_phase_1:
         cmp     #$01
         bne     falling_platform_physics
         dec     $04E0,x
@@ -6306,26 +6390,58 @@ wily_boss_vel_hi_table:  .byte   $00,$00,$00,$00,$01,$BD,$10,$01
 falling_platform_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$40,$06,$08,$A9,$07,$85,$00
-        .byte   $A9,$08,$85,$02,$20,$CF,$F0,$28
-        .byte   $10,$0E,$A5,$00,$F0,$0A,$A9,$03
-        .byte   $9D,$40,$06,$A9,$76,$9D,$60,$06
+falling_platform_tile_check:
+        lda     $0640,x
+        php
+        lda     #$07
+        sta     $00
+        lda     #$08
+        sta     $02
+        jsr     check_horiz_tile_collision
+        plp
+        bpl     falling_platform_check_result
+        lda     $00
+        beq     falling_platform_check_result
+        lda     #$03
+        sta     $0640,x
+        lda     #$76
+        sta     $0660,x
+falling_platform_check_result:
         lda     $03
         beq     beam_boss_physics
         lsr     $0420,x
 beam_boss_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$E0,$04,$F0,$13,$DE,$E0,$04
-        .byte   $D0,$0E,$A9,$00,$9D,$00,$06,$9D
-        .byte   $20,$06,$9D,$60,$06,$9D,$40,$06
+beam_boss_timer_check:
+        lda     $04E0,x
+        beq     beam_boss_timer_physics
+        dec     $04E0,x
+        bne     beam_boss_timer_physics
+        lda     #$00
+        sta     $0600,x
+        sta     $0620,x
+        sta     $0660,x
+        sta     $0640,x
+beam_boss_timer_physics:
         jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$E0,$04,$D0,$3A,$A9,$00,$9D
-        .byte   $A0,$06,$9D,$80,$06,$A9,$07,$85
-        .byte   $01,$A9,$08,$85,$02,$20,$2C,$F0
-        .byte   $A5,$00,$D0,$03,$4C,$08,$B8
+beam_boss_vert_check:
+        lda     $04E0,x
+        bne     beam_boss_phase_check
+        lda     #$00
+        sta     $06A0,x
+        sta     $0680,x
+        lda     #$07
+        sta     $01
+        lda     #$08
+        sta     $02
+        jsr     check_vert_tile_collision
+        lda     $00
+        bne     beam_boss_clear_vel
+        jmp     beam_boss_check_anim
+beam_boss_clear_vel:
         lda     #$00
         sta     $0620,x
         sta     $0600,x
@@ -6338,6 +6454,7 @@ beam_boss_physics:  jsr     apply_entity_physics
         sta     $0110,x
         inc     $04E0,x
         bne     beam_boss_check_anim
+beam_boss_phase_check:
         cmp     #$01
         bne     beam_pattern_check
         dec     $0110,x
@@ -6417,10 +6534,20 @@ gravity_boss_accel:  clc
         jsr     apply_entity_physics
         rts
 
-        .byte   $A5,$2A,$C9,$08,$F0,$15,$A9,$58
-        .byte   $9D,$50,$01,$38,$BD,$A0,$04,$E9
-        .byte   $18,$9D,$60,$01,$A5,$AA,$D0,$20
-        .byte   $4C,$7A,$B9
+shield_boss_stage_check:
+        lda     $2A
+        cmp     #$08
+        beq     shield_boss_hitbox_small
+        lda     #$58
+        sta     $0150,x
+        sec
+        lda     $04A0,x
+        sbc     #$18
+        sta     $0160,x
+        lda     $AA
+        bne     shield_boss_physics
+        jmp     wily4_enemy_shared_ai
+shield_boss_hitbox_small:
         lda     #$10
         sta     $0150,x
         sec
@@ -6609,9 +6736,18 @@ wily4_pos_reset_anim:  lda     #$00
         sta     $0680,x
         rts
 
-        .byte   $BD,$E0,$04,$D0,$13,$A9,$80,$9D
-        .byte   $60,$06,$A9,$FF,$9D,$40,$06,$BD
-        .byte   $A0,$04,$C9,$7F,$90,$1B,$B0,$11
+wily_capsule_timer_check:
+        lda     $04E0,x
+        bne     wily_capsule_set_movement
+        lda     #$80
+        sta     $0660,x
+        lda     #$FF
+        sta     $0640,x
+        lda     $04A0,x
+        cmp     #$7F
+        bcc     wily_capsule_jmp_shared
+        bcs     wily_capsule_stop_vel
+wily_capsule_set_movement:
         lda     #$80
         sta     $0660,x
         lda     #$00
@@ -6619,6 +6755,7 @@ wily4_pos_reset_anim:  lda     #$00
         lda     $04A0,x
         cmp     #$68
         bcs     wily_capsule_jmp_shared
+wily_capsule_stop_vel:
         lda     #$00
         sta     $0640,x
         sta     $0660,x
@@ -6628,9 +6765,18 @@ wily4_pos_reset_anim:  lda     #$00
 ; =============================================================================
 wily_capsule_jmp_shared:  jmp     wily4_shared_velocity
 
-        .byte   $BD,$A0,$06,$D0,$2F,$9D,$80,$06
-        .byte   $DE,$10,$01,$D0,$23,$BD,$20,$04
-        .byte   $29,$40,$D0,$04,$5E,$20,$04,$60
+wily_teleport_phase_check:
+        lda     $06A0,x
+        bne     wily_teleport_ai
+        sta     $0680,x
+        dec     $0110,x
+        bne     wily_teleport_apply
+        lda     $0420,x
+        and     #$40
+        bne     wily_teleport_adjust
+        lsr     $0420,x
+        rts
+wily_teleport_adjust:
         clc
         lda     $0460,x
         adc     #$08
@@ -6641,6 +6787,7 @@ wily_capsule_jmp_shared:  jmp     wily4_shared_velocity
         lda     #$0F
         sta     $0110,x
         bne     wily_teleport_ai
+wily_teleport_apply:
         jsr     apply_entity_physics
         rts
 
