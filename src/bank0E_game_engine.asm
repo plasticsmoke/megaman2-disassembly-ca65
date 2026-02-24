@@ -18,7 +18,6 @@
 jump_ptr           := $0008
 zp_0F15           := $0F15
 zp_0F20           := $0F20
-addr_1D06           := $1D06
 addr_2020           := $2020
 addr_5060           := $5060
 bank_switch_enqueue           := $C051
@@ -5235,41 +5234,79 @@ boss_explode_vel_y_hi:  .byte   $FE,$00,$01,$01,$01,$02,$01,$00
 boss_explode_vel_x_sub:  .byte   $6A,$F0,$A8,$6A,$7B,$00,$9E,$E6 ; explosion X velocity (sub-pixel)
 boss_explode_vel_x_hi:  .byte   $01,$01,$01,$01,$00,$00,$00,$01
 boss_explode_timer_table:  .byte   $0B,$21,$1C,$0B,$21,$10,$19,$19
-        .byte   $BD,$10,$01,$D0,$13,$DE,$E0,$04
-        .byte   $D0,$0E,$A9,$47,$85,$08,$A9,$01
-        .byte   $85,$09,$20,$97,$F1,$FE,$10,$01
+
+boss_explode_phase_check:
+        lda     $0110,x
+        bne     boss_explode_apply_physics
+        dec     $04E0,x
+        bne     boss_explode_apply_physics
+        lda     #$47
+        sta     jump_ptr
+        lda     #$01
+        sta     $09
+        jsr     calc_entity_velocity
+        inc     $0110,x
+boss_explode_apply_physics:
         jsr     apply_entity_physics
         rts
 
-        .byte   $BC,$10,$01,$B9,$20,$04,$10,$4B
-        .byte   $B9,$00,$04,$C9,$3E,$D0,$44,$38
-        .byte   $B9,$A0,$04,$E9,$14,$9D,$A0,$04
-        .byte   $B9,$60,$04,$9D,$60,$04,$B9,$40
-        .byte   $04,$9D,$40,$04,$20,$EE,$EF,$FE
-        .byte   $E0,$04,$BD,$E0,$04,$C9,$9D,$D0
-        .byte   $12,$A9,$3F,$20,$59,$F1,$A9,$03
-        .byte   $9D,$A0,$06,$A9,$00,$9D,$80
-        asl     $9D
-        cpx     #$04
+multi_boss_child_track:
+        ldy     $0110,x
+        lda     $0420,y
+        bpl     multi_boss_deactivate
+        lda     $0400,y
+        cmp     #$3E
+        bne     multi_boss_deactivate
+        sec
+        lda     $04A0,y
+        sbc     #$14
+        sta     $04A0,x
+        lda     $0460,y
+        sta     $0460,x
+        lda     $0440,y
+        sta     $0440,x
+        jsr     entity_face_player
+        inc     $04E0,x
+        lda     $04E0,x
+        cmp     #$9D
+        bne     multi_boss_anim_check
+        lda     #$3F
+        jsr     spawn_entity_from_parent
+        lda     #$03
+        sta     $06A0,x
+        lda     #$00
+        sta     $0680,x
+        sta     $04E0,x
+multi_boss_anim_check:
         lda     $06A0,x
         cmp     #$02
-        bne     boss_proj_physics
+        bne     multi_boss_child_physics
         lda     #$00
         sta     $06A0,x
-boss_proj_physics:  jsr     apply_entity_physics
+multi_boss_child_physics:
+        jsr     apply_entity_physics
         rts
 
+multi_boss_deactivate:
         lsr     $0420,x
         rts
 
-        .byte   $A9,$18,$9D,$50,$01,$BD
-        jsr     addr_1D06
-        rts
-
-        asl     $D0
-        .byte   $14,$A9,$3D,$20,$59,$F1,$B0,$0D
-        .byte   $8A,$99,$20,$01,$38,$BD,$A0,$04
-        .byte   $E9,$14,$99,$B0,$04
+circular_shot_spawn_child:
+        lda     #$18
+        sta     $0150,x
+        lda     $0620,x
+        ora     $0660,x
+        bne     circular_shot_timer_check
+        lda     #$3D
+        jsr     spawn_entity_from_parent
+        bcs     circular_shot_timer_check
+        txa
+        sta     $0120,y
+        sec
+        lda     $04A0,x
+        sbc     #$14
+        sta     $04B0,y
+circular_shot_timer_check:
         lda     $04E0,x
         bne     circular_shot_dec_timer
         lda     $0110,x
@@ -5307,16 +5344,32 @@ circular_vel_x_sub_table:  .byte   $8B,$79,$5C,$32,$00,$32,$5C,$79 ; circular sh
         .byte   $8B,$79,$5C,$32,$00,$32,$5C,$79
 circular_flags_table:  .byte   $80,$80,$80,$80,$C0,$C0,$C0,$C0 ; circular shot direction flags
         .byte   $C0,$C0,$C0,$C0,$80,$80,$80,$80
-        .byte   $20,$EE,$EF,$38,$BD,$00,$04,$E9
-        .byte   $40,$A8,$B9,$79,$AF,$85,$01,$BD
-        .byte   $20,$04,$29,$20,$F0,$1B,$A4,$01
-        .byte   $A9,$15,$D9,$58,$03,$D0,$07,$A9
-        .byte   $04,$9D,$20,$06,$D0,$06
+alien_patrol_init:
+        jsr     entity_face_player
+        sec
+        lda     $0400,x
+        sbc     #$40
+        tay
+        lda     alien_palette_index_table,y
+        sta     $01
+        lda     $0420,x
+        and     #$20
+        beq     alien_check_phase
+        ldy     $01
+        lda     #$15
+        cmp     $0358,y
+        bne     alien_check_distance
+        lda     #$04
+        sta     $0620,x
+        bne     alien_set_active
+alien_check_distance:
         lda     $00
         cmp     #$60
         bcs     alien_jump_physics
+alien_set_active:
         lda     #$82
         sta     $0420,x
+alien_check_phase:
         lda     $0620,x
         cmp     #$04
         bcs     alien_check_fire
@@ -5428,7 +5481,7 @@ alien_palette_copy_loop:  lda     alien_palette_data,y
 
 alien_palette_data:  .byte   $0F,$21,$21,$21,$0F,$31,$35,$21 ; Alien Wily palette cycle data
         .byte   $0F,$30,$25,$10,$0F,$30,$15,$0F
-        .byte   $08,$0C
+alien_palette_index_table:  .byte   $08,$0C ; palette subgroup index per boss type
 alien_shot_flags_table:  .byte   $C3,$83 ; Alien Wily shot direction flags
 alien_shot_x_offset_lo:  .byte   $1D,$E3
 alien_shot_x_offset_hi:  .byte   $00,$FF,$5E,$20,$04,$A9,$FF,$9D
