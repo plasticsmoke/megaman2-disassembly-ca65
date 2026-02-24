@@ -441,7 +441,12 @@ item_collection_handler:  sec
         sta     $09
         jmp     (jump_ptr)
 
-        .byte   $A9,$0A,$D0,$02,$A9,$02
+health_refill_large:
+        lda     #$0A              ; large pickup: 10 ticks
+        bne     health_refill_set ; always branch
+health_refill_small:
+        lda     #$02              ; small pickup: 2 ticks
+health_refill_set:
         sta     $FD
         lda     $06C0
         cmp     #$1C
@@ -468,7 +473,12 @@ health_refill_done_jmp:  jmp     refill_complete
 
 health_refill_full_rts:  rts
 
-        .byte   $A9,$0A,$D0,$02,$A9,$02
+weapon_refill_large:
+        lda     #$0A              ; large pickup: 10 ticks
+        bne     weapon_refill_set ; always branch
+weapon_refill_small:
+        lda     #$02              ; small pickup: 2 ticks
+weapon_refill_set:
         sta     $FD
         lda     $A9
         beq     refill_exit
@@ -502,15 +512,24 @@ refill_complete:  lda     #$00
         jsr     weapon_set_base_type
 refill_exit:  rts
 
-        .byte   $A5,$A7,$C9,$04,$B0,$02,$E6,$A7
+etank_pickup:
+        lda     $A7               ; current E-tank count
+        cmp     #$04              ; max = 4
+        bcs     etank_pickup_done
+        inc     $A7               ; add E-tank
+etank_pickup_done:
         lda     #$42
         jsr     bank_switch_enqueue
         rts
 
-        .byte   $A5,$A8,$C9,$63,$B0,$07
+extra_life_pickup:
+        lda     $A8               ; current lives count
+        cmp     #$63              ; max = 99
+        bcs     extra_life_done
         inc     $A8
         lda     #$42
         jsr     bank_switch_enqueue
+extra_life_done:
         rts
 
         jsr     wily_teleport_sequence
@@ -989,8 +1008,13 @@ player_ladder_fire_weapon:  jsr     player_update_facing
 
 player_ladder_fire_done:  jmp     player_ladder_clear_vel
 
-        .byte   $AD,$A0,$06,$C9,$03,$D0,$05,$A9
-        .byte   $00,$8D,$80,$06
+player_ladder_clear_anim:
+        lda     $06A0             ; animation state
+        cmp     #$03
+        bne     player_ladder_clear_rts
+        lda     #$00
+        sta     $0680             ; clear Y velocity sub-pixel
+player_ladder_clear_rts:
         rts
 
 ; =============================================================================
@@ -2705,7 +2729,10 @@ friender_dec_timer:  dec     $04E0,x    ; decrement movement timer
 
 friender_x_speed_table:  .byte   $17,$5E,$AD,$E3,$E3,$AD,$5E,$17 ; Friender X speed per animation frame
 friender_y_speed_table:  .byte   $F5,$E3,$AD,$5E,$5E,$AD,$E3,$F5 ; Friender Y speed per animation frame
-        .byte   $A9,$03,$85,$00
+enemy_destroy_setup:
+        lda     #$03
+        sta     $00
+enemy_destroy_scan:
         ldy     #$0F
 
 ; =============================================================================
@@ -2783,12 +2810,27 @@ find_entity_count_ok:  clc
 find_entity_count_fail:  sec
         rts
 
-        .byte   $A9,$0B,$85,$01,$A9,$08,$85,$02
-        .byte   $20,$2C,$F0,$BD,$E0,$04,$D0,$1E
-        .byte   $A5,$00,$F0,$72,$FE,$E0,$04,$A9
-        .byte   $76,$9D,$60,$06,$A9,$03,$9D,$40
-        .byte   $06,$BD,$20,$04,$09,$04,$9D,$20
-        .byte   $04,$20,$EE,$EF,$D0,$58
+blocky_ai_entry:
+        lda     #$0B
+        sta     $01
+        lda     #$08
+        sta     $02
+        jsr     check_vert_tile_collision
+        lda     $04E0,x
+        bne     blocky_check_state
+        lda     $00
+        beq     blocky_apply_physics
+        inc     $04E0,x
+        lda     #$76
+        sta     $0660,x           ; set fall velocity sub
+        lda     #$03
+        sta     $0640,x           ; set fall velocity high
+        lda     $0420,x
+        ora     #$04
+        sta     $0420,x
+        jsr     entity_face_player
+        bne     blocky_apply_physics
+blocky_check_state:
         cmp     #$03
         beq     blocky_check_land
         lda     $00
@@ -2832,10 +2874,21 @@ blocky_apply_physics:  jsr     apply_entity_physics
 ; tanishi_ai -- Enemy AI: Tanishi (type $0A) — snail, spawns bare form on hit ($9776)
 ; Mislabeled by annotation scripts as "Shotman". Actually type $0A (Tanishi).
 ; =============================================================================
-        .byte   $A9,$07,$85,$00,$4C,$52,$96,$BD
-        .byte   $E0,$04,$D0,$48,$A9,$0C,$85,$02
-        .byte   $BD,$A0,$06,$C9,$02,$90,$05,$A9
-        .byte   $00,$9D,$A0,$06
+tanishi_ai_entry:
+        lda     #$07
+        sta     $00
+        jmp     enemy_destroy_scan
+tanishi_ai_main:
+        lda     $04E0,x
+        bne     tanishi_state_check
+        lda     #$0C
+        sta     $02
+        lda     $06A0,x
+        cmp     #$02
+        bcc     tanishi_hp_check
+        lda     #$00
+        sta     $06A0,x
+tanishi_hp_check:
         lda     $06C0,x
         cmp     #$14
         beq     tanishi_check_facing
@@ -2859,6 +2912,7 @@ blocky_apply_physics:  jsr     apply_entity_physics
         sta     $06A0,x
         inc     $04E0,x
         bne     tanishi_check_facing
+tanishi_state_check:
         lda     #$04
         sta     $02
         lda     $06A0,x
