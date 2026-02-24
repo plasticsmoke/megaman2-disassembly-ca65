@@ -50,7 +50,7 @@ Mapper 1 (MMC1), mode 3. 256 KB PRG (16 x 16 KB banks) + 8 KB CHR-RAM. Vertical 
 | $0E | `bank0E_game_engine.asm` | Main game engine, entity AI dispatch |
 | $0F | `bank0F_fixed.asm` | **Fixed bank** ($C000-$FFFF): bank switch, NMI, PPU, controllers |
 
-Banks $00-$0A are primarily data (tile maps, entity spawn tables, music). Banks $0B-$0F are the engine code banks.
+Banks $00-$0A are primarily data (tile maps, entity spawn tables, music). Each of banks $00-$07 contains tile data for one stage and entity spawn data for a different stage (see [Engine Notes](#engine-notes)). Banks $0B-$0F are the engine code banks.
 
 ## Project Structure
 
@@ -95,17 +95,18 @@ The raw da65 disassembly produced generic `L_XXXX` address labels and `code_XXXX
 
 ### Code/Data Verification
 
-The da65 disassembler frequently confuses code and data — bytes that happen to be valid 6502 opcodes get decoded as instructions when they are actually data table entries, and vice versa. All 5 engine banks have been verified and corrected:
+The da65 disassembler frequently confuses code and data — bytes that happen to be valid 6502 opcodes get decoded as instructions when they are actually data table entries, and vice versa. All 16 banks have been verified and corrected:
 
-| Bank | Description | Status |
-|------|-------------|--------|
+| Banks | Description | Status |
+|-------|-------------|--------|
+| $00-$0A | Stage data + sound (11 banks, 571 BRK artifacts) | Done |
 | $0B | Boss AI, enemy AI, collision | Done |
 | $0C | Weapon system, UI rendering | Done |
 | $0D | Stage engine, player control, OAM | Done |
 | $0E | Main game engine, entity AI dispatch | Done |
 | $0F | Fixed bank: NMI, PPU, bank switch | Done |
 
-Types of fixes applied: code-as-`.byte` (instruction sequences stored as raw data), data-as-instruction (table bytes decoded as opcodes), skip-byte tricks (intentional instruction overlaps), code/data overlaps (dual-purpose bytes), and instruction sync errors (da65 decoding at wrong byte boundary).
+Types of fixes applied: code-as-`.byte` (instruction sequences stored as raw data), data-as-instruction (table bytes decoded as opcodes), skip-byte tricks (intentional instruction overlaps), code/data overlaps (dual-purpose bytes), and instruction sync errors (da65 decoding at wrong byte boundary). Bank $09 contains the only executable code in the data banks (scroll update routines at $860C-$86FF).
 
 ### Entity Name Verification
 
@@ -116,13 +117,40 @@ Entity type IDs verified against canonical Japanese names using Mesen debugger b
 
 ## Engine Notes
 
-**MMC1 bank switching.** Mode 3 keeps bank $0F permanently at $C000-$FFFF. The switchable window at $8000-$BFFF maps one of banks $00-$0E. Stage data banks are selected by masking the stage ID (`$2A AND $07`), so the 8 Robot Master stages map directly to banks $00-$07.
+**MMC1 bank switching.** Mode 3 keeps bank $0F permanently at $C000-$FFFF. The switchable window at $8000-$BFFF maps one of banks $00-$0E.
+
+**Dual bank allocation.** Stage data banks $00-$07 each contain data for **two different stages**, accessed through different bank-selection methods:
+
+- **Tile/map data** (CHR patterns, metatiles, screen layouts, room config) — selected via a `stage_bank_table` lookup in bank $0E. Each stage index maps to a non-obvious bank number.
+- **Entity spawn tables and BG palettes** (at offsets $3600-$3A00 and $3E00 within each bank) — selected by masking the stage index directly (`current_stage AND #$07`). The spawn table has 4 sub-arrays at $B600/$B700/$B800/$B900: screen number, X position, Y position, and entity type ID.
+
+For example, bank $00 contains Flash Man's tile data but Heat Man's entity spawn tables. The full mapping:
+
+| Stage index | Stage | Tile bank | Entity bank |
+|-------------|-------|-----------|-------------|
+| $00 | Heat Man | $03 | $00 |
+| $01 | Air Man | $04 | $01 |
+| $02 | Wood Man | $01 | $02 |
+| $03 | Bubble Man | $07 | $03 |
+| $04 | Quick Man | $06 | $04 |
+| $05 | Flash Man | $00 | $05 |
+| $06 | Metal Man | $05 | $06 |
+| $07 | Crash Man | $02 | $07 |
+| $08 | Wily 1 | $08 | $00 (shared with Heat) |
+| $09 | Wily 2 | $08 | $01 (shared with Air) |
+| $0A | Wily 3 | $09 | $02 (shared with Wood) |
+| $0B | Wily 4 | $09 | $03 (shared with Bubble) |
+| $0C | Wily 5 | $09 | $04 (shared with Quick) |
+
+Wily stages share entity spawn banks with Robot Master stages — both stages' entities coexist in one table, sorted by screen number. Banks $08-$09 contain only tile/layout data. Bank filenames follow the tile data mapping (primary content by volume).
 
 **Entity system.** 32 entity slots using parallel arrays at $0400-$06C0 with $10 stride. Slots $00-$0F are player and weapons/projectiles; $10-$1F are enemies, items, and bosses. Key arrays: `$0400,x` = entity type, `$0410,x` = spawn type, `$0420,x` = flags, `$0430,x` = entity behavior flags. Entity AI is dispatched through a 128-entry pointer table at $92F0 in bank $0E, with each entry containing a low byte, high byte, and bank number.
 
 **Entity AI dispatch.** The `$AA` variable selects the dispatch mode: when zero, the entity's type indexes the main AI pointer table directly (bank field in the table is ignored — AI runs in the currently loaded bank). When non-zero, special dispatch logic applies for cross-bank entity routines.
 
 **Dynamic spawning.** Entities spawn through two paths: static spawns from per-stage entity tables (scanned by `entity_spawn_scan` at $C196), and dynamic child spawns via `spawn_entity_from_parent` ($D162 in the fixed bank). Some bosses self-convert by writing directly to the entity type array rather than spawning a new slot.
+
+**Skip-byte tricks.** The engine uses intentional instruction overlaps to save bytes. A `LDY #imm` ($A0) or `JMP abs` ($4C) opcode is placed so its operand bytes overlap the next instruction, creating two valid execution paths depending on the entry point. Example in bank $0C: `$A0` (LDY#) eats the next byte ($0A = ASL A opcode), so falling through executes `LDY #$0A` while jumping to the next label executes `ASL A`.
 
 **Difficulty system.** RAM address $CB holds the difficulty flag: 0 = Normal, non-zero = Difficult. Enemy spawn tables and behavior parameters vary based on this flag.
 

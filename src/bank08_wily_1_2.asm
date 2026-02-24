@@ -2,14 +2,10 @@
 
 ; =============================================================================
 ; Bank $08 — Wily Stages 1-2 (stage indices $08-$09)
-; CHR tile patterns and level layout data.
-; This bank contains no executable code — all bytes are data.
+; Tile patterns, metatile definitions, screen layouts, and room data.
+; Both Wily 1 and Wily 2 share this bank (stage_bank_table maps both to $08).
 ; =============================================================================
 
-; da65 V2.18 - Ubuntu 2.19-1
-; Created:    2026-02-23 18:17:35
-; Input file: build/bank08.bin
-; Page:       1
 
 
         .setcpu "6502"
@@ -22,7 +18,12 @@ L3830           := $3830
 L4020           := $4020
 L5E24           := $5E24
 LFDF3           := $FDF3
-        brk
+
+; =============================================================================
+; CHR Tile Pattern Data ($8000-$85F6)
+; =============================================================================
+; Wily Stages 1-2 graphics loaded into CHR-RAM via DMA.
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -36,10 +37,10 @@ LFDF3           := $FDF3
         .byte   $44,$0A,$16,$2E,$5E,$3E,$00,$FE
         .byte   $FE,$FE,$FE,$FE,$FE,$FE,$00,$00
         .byte   $44,$0A,$16,$2E
-        lsr     a:$3E,x
-        inc     $FEFE,x
-        inc     $FEFE,x
-        inc     a:$00,x
+        .byte   $5E,$3E,$00
+        .byte   $FE,$FE,$FE
+        .byte   $FE,$FE,$FE
+        .byte   $FE,$00,$00
         .byte   $44,$0A,$16,$2E,$5E,$3E,$00,$FE
         .byte   $FE,$FE,$FE,$FE,$FE,$FE,$00,$7F
         .byte   $FF,$FF,$F0,$E0,$E0,$E0,$E0,$00
@@ -85,10 +86,10 @@ LFDF3           := $FDF3
         .byte   $1C,$3C,$FC,$FC,$F8,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$FE
         .byte   $FE,$FE,$FE,$2E,$5E
-        rol     $FE00,x
-        inc     $FEFE,x
-        inc     $FEFE,x
-        brk
+        .byte   $3E,$00,$FE
+        .byte   $FE,$FE,$FE
+        .byte   $FE,$FE,$FE
+        .byte   $00
         .byte   $F0,$F4,$FA,$F6,$FE,$FE,$FE,$00
         .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$00
         .byte   $F0,$F4,$FA,$F6,$2E,$5E,$3E,$00
@@ -210,8 +211,8 @@ LFDF3           := $FDF3
         .byte   $00,$08,$08,$04,$24,$42,$42,$02
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$40,$7E,$40,$40,$40,$40
-        rol     a:$00,x
-        brk
+        .byte   $3E,$00,$00
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$7E,$02
         .byte   $02,$02,$02,$04,$38,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$10,$28
@@ -220,31 +221,36 @@ LFDF3           := $FDF3
         .byte   $10,$54,$54,$54,$10,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$FE,$02
         .byte   $04
-        pha
-        bmi     L85F7
-        php
-        brk
+        .byte   $48
+        .byte   $30,$10
+        .byte   $08
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $70,$0E,$70,$0E,$00,$70
-L85F7:  asl     a:$00
-        brk
+
+; =============================================================================
+; Metatile Definitions, Screen Layouts, and Room Data ($85F7+)
+; =============================================================================
+; Metatile combinations, per-screen grids, scroll config, and palette indices.
+L85F7:  .byte   $0E,$00,$00
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00
-        php
-        bpl     L8614
-        jsr     L5E24
+        .byte   $08
+        .byte   $10,$10
+        .byte   $20,$24,$5E
         .byte   $62
-        brk
-        brk
+        .byte   $00
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$04
         .byte   $04,$28
-L8614:  clc
-        clc
-        bit     $40
-        brk
+L8614:  .byte   $18
+        .byte   $18
+        .byte   $24,$40
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $7C,$20,$7E,$20
-        jsr     L1C20
-        brk
+        .byte   $20,$20,$1C
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$20
         .byte   $20,$FF,$22,$24,$20,$10,$10,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -263,9 +269,9 @@ L8614:  clc
         .byte   $7E,$42,$42,$42,$42,$42,$7E,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $FC,$04,$7C,$04,$04
-        php
-        beq     L86B9
-L86B9:  brk
+        .byte   $08
+        .byte   $F0,$00
+L86B9:  .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$7E
         .byte   $42,$42,$42,$02,$04,$38,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$02
@@ -324,15 +330,15 @@ L86B9:  brk
         .byte   $C6,$C0,$DE,$C6,$C6,$7C,$FF,$83
         .byte   $39,$3F,$21,$39,$39,$83,$00,$C6
         .byte   $C6
-        dec     $FE
-        dec     $C6
-        dec     $FF
-        and     $3939,y
-        ora     ($39,x)
-        and     $39,y
-        bmi     L88C3
-        bmi     L88C5
-        bmi     L88C7
+        .byte   $C6,$FE
+        .byte   $C6,$C6
+        .byte   $C6,$FF
+        .byte   $39,$39,$39
+        .byte   $01,$39
+        .byte   $39,$39,$00
+        .byte   $30,$30
+        .byte   $30,$30
+        .byte   $30,$30
         .byte   $30
 L8898:  .byte   $FF
         .byte   $CF,$CF,$CF,$CF,$CF,$CF,$CF,$00
@@ -343,7 +349,7 @@ L8898:  .byte   $FF
         .byte   $60,$60
 L88C3:  .byte   $60,$60
 L88C5:  .byte   $60,$60
-L88C7:  ror     L9FFF,x
+L88C7:  .byte   $7E,$FF,$9F
         .byte   $9F,$9F,$9F,$9F,$9F,$81,$00,$C6
         .byte   $EE,$FE,$D6,$C6,$C6,$C6,$FF,$39
         .byte   $11,$01,$29,$39,$39,$39,$00,$C6
@@ -366,12 +372,12 @@ L88C7:  ror     L9FFF,x
         .byte   $C6,$C6,$C6,$6C,$38,$10,$FF,$39
         .byte   $39,$39,$39,$93,$C7,$EF,$00,$C6
         .byte   $C6,$C6
-        dec     $FE,x
-        inc     $FFC6
-        and     $3939,y
-        and     #$01
-        ora     ($39),y
-        brk
+        .byte   $D6,$FE
+        .byte   $EE,$C6,$FF
+        .byte   $39,$39,$39
+        .byte   $29,$01
+        .byte   $11,$39
+        .byte   $00
         .byte   $CC,$CC,$78,$30,$78,$CC,$CC,$FF
         .byte   $33,$33,$87,$CF,$87,$33,$33,$00
         .byte   $CC,$CC,$CC,$78,$30,$30,$30,$FF
@@ -437,9 +443,9 @@ L89F8:  .byte   $FF
         .byte   $3C,$CE,$33,$0C,$03,$00,$00,$FF
         .byte   $3F,$0F,$03,$00,$00,$00,$00,$00
         .byte   $80,$80,$C0
-        cpy     #$00
-        cpy     #$20
-        brk
+        .byte   $C0,$00
+        .byte   $C0,$20
+        .byte   $00
         .byte   $80,$80,$C0,$C0,$00,$00,$00,$00
         .byte   $00,$02,$07,$4F,$6F,$37,$17,$00
         .byte   $00,$02,$07,$4F,$6F,$77,$77,$9F
@@ -448,13 +454,13 @@ L89F8:  .byte   $FF
         .byte   $C9,$89,$4F,$07,$03,$E0,$39,$00
         .byte   $00,$00,$78,$FC,$FE,$FE,$FF,$10
         .byte   $88,$CC,$C4,$C4
-        sty     $08
-        php
+        .byte   $84,$08
+        .byte   $08
         .byte   $80,$60,$30,$10,$10,$10,$20,$40
         .byte   $1B,$4B,$4D,$65,$72,$7B,$7F,$00
         .byte   $7B,$7B,$7D,$7D
-        ror     $7F7F,x
-        brk
+        .byte   $7E,$7F,$7F
+        .byte   $00
         .byte   $C0,$80,$CF,$F0,$E0,$30,$CC,$00
         .byte   $FF,$FF,$FF,$FF,$FF,$3F,$CF,$00
         .byte   $0C,$06,$C2,$73,$1A,$08,$08,$00
@@ -462,7 +468,7 @@ L89F8:  .byte   $FF
         .byte   $10,$60,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00
-        ora     ($03,x)
+        .byte   $01,$03
         .byte   $07,$00,$00,$00,$00,$00,$03,$03
         .byte   $1F,$00,$00,$00,$0F,$7F,$FF,$FF
         .byte   $F0,$00,$00,$00,$3F,$FF,$FF,$FF
@@ -473,8 +479,8 @@ L8C2E:  .byte   $FF,$FF,$00,$00,$00,$00,$00,$00
         .byte   $C0,$F0,$0F,$19,$76,$77,$6F,$6F
         .byte   $6F,$77,$7F,$79,$70,$70,$60,$60
         .byte   $60,$70,$E0,$E0
-        cpx     #$70
-        bcs     L8C2E
+        .byte   $E0,$70
+        .byte   $B0,$D8
         .byte   $8F,$90,$E0,$E0,$E0,$70,$38,$1F
         .byte   $0F,$06,$1E,$1C,$18,$10,$07,$1F
         .byte   $67,$E7,$7F,$3F,$3F,$38,$60,$80
@@ -497,26 +503,26 @@ L8C2E:  .byte   $FF,$FF,$00,$00,$00,$00,$00,$00
         .byte   $E0,$00,$04,$08,$00,$00,$00,$00
         .byte   $00,$00,$16,$1E,$0E,$0E,$06,$06
         .byte   $06,$00,$18,$18
-        clc
-        clc
-        clc
-        ora     $0D0D,x
-        brk
+        .byte   $18
+        .byte   $18
+        .byte   $18
+        .byte   $1D,$0D,$0D
+        .byte   $00
         .byte   $00,$00,$00,$00,$01,$01,$01,$00
         .byte   $04,$10,$40,$80,$01,$01,$03,$00
         .byte   $07,$1F,$7F,$FF,$FF,$FF,$FF,$00
         .byte   $78,$3E,$3E,$7E,$FD,$FB,$F7,$00
         .byte   $F8,$FE,$FE,$FE,$FC,$F8,$F0,$18
         .byte   $30,$70,$E0
-        cpy     #$C0
-        ldy     #$B0
-        brk
-        brk
+        .byte   $C0,$C0
+        .byte   $A0,$B0
+        .byte   $00
+        .byte   $00
         .byte   $00,$00,$00,$00,$20,$30,$0E,$0E
         .byte   $07,$07,$03,$0B,$09,$09,$00,$00
         .byte   $00,$00,$00,$08,$08,$08,$83,$87
         .byte   $47,$06
-        lda     ($C7,x)
+        .byte   $A1,$C7
         .byte   $FF,$FF,$FF,$FF,$7F,$3E,$38,$00
         .byte   $00,$00,$EF,$DE,$BC,$7C,$F9,$F0
         .byte   $E0,$C0,$E0,$C0,$80,$00,$01,$00
@@ -535,13 +541,13 @@ L8C2E:  .byte   $FF,$FF,$00,$00,$00,$00,$00,$00
         .byte   $7F,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$01,$01
-        asl     $04
-        php
-        brk
+        .byte   $06,$04
+        .byte   $08
+        .byte   $00
         .byte   $03,$00,$03,$03
-        asl     $04
-        php
-        brk
+        .byte   $06,$04
+        .byte   $08
+        .byte   $00
         .byte   $03,$00,$88,$08,$10,$32,$62,$CE
         .byte   $FE,$00,$8E,$0E,$1E,$3E,$7E,$FE
         .byte   $FE,$00,$00,$1F,$3F,$7F,$7F,$7F
@@ -579,25 +585,25 @@ L8C2E:  .byte   $FF,$FF,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$7C,$7D,$7D
         .byte   $7D,$7D,$FF,$FF,$FF,$83,$82,$80
         .byte   $80,$80,$00,$00,$1F,$7F,$FF,$F5
-        ldx     $B6,y
+        .byte   $B6,$B6
         .byte   $FF,$FF,$FF,$FF,$1F,$4A,$49,$49
         .byte   $00,$00,$F8,$FF,$FF,$87,$0F,$1F
         .byte   $FF,$FF,$FF,$FC,$F8,$78,$F0,$E0
         .byte   $00,$00,$00,$F8,$F0,$E0,$E0,$C0
         .byte   $FF,$FF,$FF,$07,$0F,$01,$03,$03
         .byte   $7D,$7C,$7C,$7C
-        adc     $7F7D,x
+        .byte   $7D,$7D,$7F
         .byte   $7F,$80,$80,$80,$80,$80,$80,$80
         .byte   $80,$E6,$00,$F0,$F0
-        sed
-        sbc     $FFFD,y
-        ora     $0FFF,y
+        .byte   $F8
+        .byte   $F9,$FD,$FF
+        .byte   $19,$FF,$0F
         .byte   $0F,$07,$06,$02,$00,$9F,$3F,$7F
         .byte   $7E,$FE,$FC,$F8,$F8,$60,$C0,$80
         .byte   $80,$00,$00,$00,$00,$80,$88,$08
         .byte   $1C,$1C,$1C,$1C,$1C,$07,$0F,$0F
         .byte   $1F,$3F,$3F,$7F,$FF,$7F,$7F
-        ror     $7C7E,x
+        .byte   $7E,$7E,$7C
         .byte   $7C,$00,$00,$80,$80,$80,$80,$80
         .byte   $80,$C1,$C1,$7F,$7F,$3F,$3F,$1F
         .byte   $1F,$0F,$0E,$00,$00,$40,$40,$E0
@@ -608,7 +614,7 @@ L8C2E:  .byte   $FF,$FF,$00,$00,$00,$00,$00,$00
         .byte   $FF,$FF,$FF,$0F,$07,$03,$01,$00
         .byte   $00,$00,$00,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$06,$84
-        cpx     #$FE
+        .byte   $E0,$FE
         .byte   $7F,$1F,$00,$00,$F8,$F8,$FE,$FE
         .byte   $FF,$FF,$FF,$FF,$00,$01,$07,$FF
         .byte   $FE,$F8,$00,$00,$3F,$3F,$7F,$FF
@@ -633,16 +639,16 @@ L8C2E:  .byte   $FF,$FF,$00,$00,$00,$00,$00,$00
         .byte   $F0,$F0,$F0,$F8,$08,$08,$08,$18
         .byte   $18,$18,$14,$14,$18,$18,$18,$18
         .byte   $18,$18,$1C,$1C
-        bpl     L9092
-L9092:  brk
+        .byte   $10,$00
+L9092:  .byte   $00
         .byte   $00,$00,$00,$00,$00,$30,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$01,$00,$00,$00
         .byte   $00,$00,$00,$00
-        ora     ($E8,x)
-        ldy     LB4A4
-        sty     $B4,x
-        ldy     $F8A8
+        .byte   $01,$E8
+        .byte   $AC,$A4,$B4
+        .byte   $94,$B4
+        .byte   $AC,$A8,$F8
         .byte   $FC,$FC,$FC,$FC,$FC,$FC,$F8,$14
         .byte   $02,$31,$70,$F8,$FC,$FE,$00,$1C
         .byte   $0E,$07,$03,$01,$00,$00,$00,$00
@@ -655,20 +661,20 @@ L9092:  brk
         .byte   $40,$60,$70,$71,$7B,$7A,$72,$00
         .byte   $00,$00,$00,$01,$03,$03,$03,$00
         .byte   $00,$23,$86,$0C,$1C
-        clc
-        sec
-        brk
+        .byte   $18
+        .byte   $38
+        .byte   $00
         .byte   $00,$3F,$FE,$FC,$FC,$F8,$F8,$00
         .byte   $14,$76,$FF,$7F,$FF,$FF
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$10,$1E,$3F,$21,$00,$00,$00
         .byte   $00,$80,$C0,$D0,$F0,$F0,$F4,$00
         .byte   $00,$00,$00,$00,$20,$40,$60,$32
         .byte   $1B,$11,$08,$1C,$26,$22,$22,$03
         .byte   $03
-        ora     ($00,x)
-        brk
+        .byte   $01,$00
+        .byte   $00
         .byte   $00,$00,$04,$78,$48,$C0,$80,$80
         .byte   $80,$80,$80,$F8,$C8,$C0,$80,$80
         .byte   $80,$80,$80,$F8,$F8,$FC,$FF,$FF
@@ -680,22 +686,22 @@ L9092:  brk
         .byte   $33,$73,$79,$80,$C1,$C3,$60,$10
         .byte   $08,$00,$80,$83,$C3,$C3,$E0,$F0
         .byte   $F8
-        sed
-        sed
-        brk
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$00,$00,$03,$1C,$70,$00
         .byte   $00,$00,$00,$00,$03,$1F,$7F,$00
         .byte   $00,$00,$00,$20,$10,$10,$10,$00
         .byte   $00,$00,$00,$20,$10,$90,$D0,$09
         .byte   $0C,$06,$03,$41,$60,$70,$00
-        adc     $7E7C,y
+        .byte   $79,$7C,$7E
         .byte   $7F
         .byte   $7F
         .byte   $7F,$7F,$00,$83,$C3,$63,$33,$87
         .byte   $C0,$38,$00,$FB,$FB,$7B,$3B,$87
         .byte   $C0,$F8,$00
-        sbc     ($C1,x)
-        cmp     ($C1,x)
+        .byte   $E1,$C1
+        .byte   $C1,$C1
         .byte   $E2,$FE,$3F,$00,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$3F,$00,$30,$30,$30,$24
         .byte   $0E,$96,$36,$00,$F0,$F0,$F0,$E4
@@ -705,8 +711,8 @@ L9092:  brk
         .byte   $FF,$3F,$CF,$F3,$00,$00,$03,$00
         .byte   $1C,$07,$C1,$F0
 L9220:  .byte   $00,$C0
-        beq     L9220
-        inc     $FCFC,x
+        .byte   $F0,$FC
+        .byte   $FE,$FC,$FC
         .byte   $89,$00,$00,$80,$C0,$70,$F9,$F9
         .byte   $8B,$00,$00,$00,$00,$00,$00,$80
         .byte   $80,$00,$00,$00,$00,$00,$00,$80
@@ -724,14 +730,14 @@ L9220:  .byte   $00,$C0
         .byte   $60,$00,$00,$80,$80,$C0,$C0,$E0
         .byte   $F0,$08,$00,$00,$00,$00,$00,$00
         .byte   $00,$18,$00,$00,$00,$00,$00,$00
-        brk
-        rol     $2E
-        rol     $2E2E
-        rol     $2226
-        rol     $2E,x
-        rol     $2E2E
-        rol     $2E2E
-        jsr     L3830
+        .byte   $00
+        .byte   $26,$2E
+        .byte   $2E,$2E,$2E
+        .byte   $2E,$26,$22
+        .byte   $36,$2E
+        .byte   $2E,$2E,$2E
+        .byte   $2E,$2E,$2E
+        .byte   $20,$30,$38
         .byte   $3C,$1E,$0F,$07,$00,$7C,$7E,$7E
         .byte   $7F,$7F,$7F,$7F,$00,$30,$38,$1C
         .byte   $1E,$07,$03,$80,$00,$F8,$7C,$3E
@@ -739,9 +745,9 @@ L9220:  .byte   $00,$C0
         .byte   $0F,$1F,$9F,$FF,$00,$00,$00,$1F
         .byte   $3F,$FF,$FF,$FF,$00,$20,$20,$20
         .byte   $A0,$E0,$E0,$C0,$00,$26,$36,$76
-        inc     $EE,x
-        inc     a:$DE
-        brk
+        .byte   $F6,$EE
+        .byte   $EE,$DE,$00
+        .byte   $00
         .byte   $00,$00,$00,$00,$01,$03,$07,$00
         .byte   $00,$00,$00,$00,$01,$00,$07,$00
         .byte   $07,$1F,$7F,$FF,$FF,$FF,$FF,$00
@@ -778,18 +784,18 @@ L9220:  .byte   $00,$C0
         .byte   $D9,$D8,$DB,$DB,$DA,$DB,$CB,$8A
         .byte   $AA,$AA,$AA,$AB,$A8,$A9,$A0,$CB
         .byte   $DB,$DB,$DA,$DB,$D8,$D9
-        cmp     ($0A),y
-        tax
-        rol     a
-        nop
-        rol     a
-        rol     a
-        rol     a
-        rol     a
-        stx     $B6
-        rol     $F6,x
-        ror     $76,x
-        inc     $F2,x
+        .byte   $D1,$0A
+        .byte   $AA
+        .byte   $2A
+        .byte   $EA
+        .byte   $2A
+        .byte   $2A
+        .byte   $2A
+        .byte   $2A
+        .byte   $86,$B6
+        .byte   $36,$F6
+        .byte   $76,$76
+        .byte   $F6,$F2
         .byte   $22,$2A,$2A,$2A,$EA,$2A,$AA,$0A
         .byte   $F2,$F6,$76,$76,$F6,$36,$B6,$86
         .byte   $06,$9C,$BE,$BF,$BF,$CE,$DE,$C6
@@ -824,7 +830,7 @@ L9220:  .byte   $00,$C0
         .byte   $00,$FF,$FF,$00,$00,$01,$0E,$1E
         .byte   $F9,$F9,$F9,$F9,$F3,$F3,$F3,$F3
         .byte   $3D
-        and     $7D3D,x
+        .byte   $3D,$3D,$7D
         .byte   $7B,$7B,$7B,$FB,$10,$CF,$9F,$FF
         .byte   $FF,$7F,$FF,$FF,$10,$EF,$DF,$03
         .byte   $0F,$7F,$FF,$FF,$FF,$FF,$FF,$FF
@@ -872,7 +878,7 @@ L9220:  .byte   $00,$C0
         .byte   $BF,$BF,$DF,$DF,$F0,$00,$00,$FF
         .byte   $FF,$FF,$EF,$F7,$00,$00,$00,$00
         .byte   $00,$C0
-        cpx     #$F0
+        .byte   $E0,$F0
         .byte   $F7,$F3,$F3,$F3,$F3,$F3,$F3,$F3
         .byte   $F0,$F0,$F0,$F0,$F0,$F0,$F0,$F0
         .byte   $3F,$00,$00,$FF,$FC,$FC,$FE,$FE
@@ -917,8 +923,8 @@ L9220:  .byte   $00,$C0
         .byte   $00,$80,$80,$C0,$C0,$C0,$E0,$E0
         .byte   $00,$7E,$7C,$78,$70,$60,$40,$00
         .byte   $00,$00,$02,$06
-        asl     $3E1E
-        brk
+        .byte   $0E,$1E,$3E
+        .byte   $00
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -1072,8 +1078,8 @@ L9220:  .byte   $00,$C0
         .byte   $7F,$FF,$FE,$FC,$FC,$F8,$F8,$F0
         .byte   $7F,$FF,$FE,$FC,$FC,$F8,$F8,$F0
         .byte   $E0,$E1,$C1,$C3,$87,$06,$0C,$1C
-        cpx     #$E0
-        cpy     #$C0
+        .byte   $E0,$E0
+        .byte   $C0,$C0
         .byte   $80,$00,$00,$00,$1F,$1E,$3C,$3C
         .byte   $38,$78,$70,$F0,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$E0,$C0,$C0,$80
@@ -1109,9 +1115,9 @@ L9220:  .byte   $00,$C0
         .byte   $EF,$EF,$EF,$EF,$01,$00,$00,$00
         .byte   $80,$60,$10,$0C,$01,$00,$00,$00
         .byte   $00,$00,$00,$00,$82,$61,$18,$C6
-        sbc     ($E0,x)
-        inc     $E7
-        brk
+        .byte   $E1,$E0
+        .byte   $E6,$E7
+        .byte   $00
         .byte   $00,$00,$C0,$E0,$F0,$F6,$F7,$FF
         .byte   $FF,$7F,$3F,$1F,$07,$03,$01,$FC
         .byte   $FE,$7F,$3F,$1F,$07,$03,$01,$00
@@ -1144,7 +1150,7 @@ L9220:  .byte   $00,$C0
         .byte   $FC,$F9,$F9,$F9,$F3,$F3,$E7,$FE
         .byte   $FE,$FD,$FD,$FD,$FB,$FB,$F7,$E7
         .byte   $CF,$9F,$3F,$7F,$FF,$FC
-        cpx     #$F7
+        .byte   $E0,$F7
         .byte   $EF,$DF,$BF,$7F,$FF,$FC,$E0,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FE,$FE,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FE,$FE,$FC
@@ -1155,26 +1161,26 @@ L9220:  .byte   $00,$C0
         .byte   $FF,$FC,$F0,$C2,$08,$00,$01,$FF
         .byte   $FF,$FF,$FC,$F2,$C8,$00,$00,$FF
         .byte   $FE,$FE,$FC
-        sbc     $E7F3,y
-        dec     $FFFF
+        .byte   $F9,$F3,$E7
+        .byte   $CE,$FF,$FF
         .byte   $FF,$FE
-        sbc     $F7FB,x
-        inc     $389C
-        adc     ($83,x)
-        asl     $1C
-        sei
+        .byte   $FD,$FB,$F7
+        .byte   $EE,$9C,$38
+        .byte   $61,$83
+        .byte   $06,$1C
+        .byte   $78
         .byte   $FF,$DC,$B8,$60,$80,$00,$00,$00
         .byte   $00,$3C,$78,$70,$E0,$C1,$83,$0E
         .byte   $18,$BC,$78,$70,$E0,$C0,$80,$00
         .byte   $00,$30,$60,$C1,$06,$0F,$3E,$F8
         .byte   $E0,$00,$00,$00,$00,$00,$00,$00
         .byte   $00
-        clc
-        bmi     L9FE3
-        cpy     #$80
-        ora     ($06,x)
-        php
-        brk
+        .byte   $18
+        .byte   $30,$60
+        .byte   $C0,$80
+        .byte   $01,$06
+        .byte   $08
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$31
         .byte   $46,$98,$63,$87,$07,$67,$E7,$00
         .byte   $00,$00,$03,$07,$0F,$6F,$EF,$04
@@ -1244,7 +1250,7 @@ L9FFF:  .byte   $F7,$E1,$E4,$E7,$E7,$E7,$E7,$E7
 LA18A:  .byte   $EF,$EF,$EF,$EF,$EF,$EF,$E7,$E7
         .byte   $E7,$E7,$E7,$E7,$E7,$E7,$EF,$EF
         .byte   $EF,$EF,$EF,$EF,$EF,$EF,$00
-        bpl     LA18A
+        .byte   $10,$E7
         .byte   $E7,$E7,$E7,$E7,$E7,$00,$10,$F7
         .byte   $F7,$F7,$F7,$F7,$F7,$E7,$E7,$E7
         .byte   $E7,$E7,$E7,$E7,$E7,$F7,$F7,$F7
@@ -1318,13 +1324,13 @@ LA18A:  .byte   $EF,$EF,$EF,$EF,$EF,$EF,$E7,$E7
         .byte   $1F,$00,$0A,$00,$00,$CF,$DF,$DF
         .byte   $DF,$FF,$FF,$FF,$00,$26,$26,$46
         .byte   $8C,$D0,$2C,$16
-        asl     $FE,x
+        .byte   $16,$FE
         .byte   $FE
-LA3EA:  inc     $D0FC,x
+LA3EA:  .byte   $FE,$FC,$D0
         .byte   $FC
-        inc     $16FE,x
-        asl     $06
-        asl     $16,x
+        .byte   $FE,$FE,$16
+        .byte   $06,$06
+        .byte   $16,$16
         .byte   $FC,$16,$00,$FE,$F6,$E6,$FE,$FE
         .byte   $FC,$FE,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -1349,14 +1355,14 @@ LA3EA:  inc     $D0FC,x
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
 LA4A5:  .byte   $00,$00,$00,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$00,$80,$E0
-        beq     LA4A5
-        sbc     $EFF0,x
+        .byte   $F0,$F0
+        .byte   $FD,$F0,$EF
         .byte   $FF,$7F,$1F,$0F,$0F,$02,$0F,$10
         .byte   $C0,$FD,$E0,$F3,$F7,$F7,$F7,$EF
         .byte   $3F,$02,$1F,$0C,$08,$08,$08,$10
         .byte   $FF,$DF,$FF,$FF,$FE,$FE,$FD
-        adc     $2000,x
-        brk
+        .byte   $7D,$00,$20
+        .byte   $00
         .byte   $00,$01,$01,$02,$82,$00,$40,$00
         .byte   $C0,$E0,$F0,$F0,$F0,$FF,$BF,$FF
         .byte   $3F,$1F,$0F,$0F,$0F,$FD,$E0,$80
@@ -1390,27 +1396,27 @@ LA4A5:  .byte   $00,$00,$00,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$F8,$F0,$E0,$1F,$1F,$1F
         .byte   $EF,$FF,$F8,$F7,$EF,$E0,$E0,$E0
         .byte   $10,$00,$07,$08,$10
-LA5E0:  brk
-        ora     ($03,x)
+LA5E0:  .byte   $00
+        .byte   $01,$03
         .byte   $03,$03,$83,$C0,$EF,$FF,$FE,$FC
         .byte   $FC,$FC,$7C,$3F
-        bpl     LA5E0
+        .byte   $10,$EF
         .byte   $DF,$FF,$FF,$FF,$7F,$DF,$FF,$10
         .byte   $20,$00,$00,$00,$80,$20,$00,$00
         .byte   $01,$01,$03,$03,$03,$01,$01,$FF
         .byte   $FE,$FE,$FC,$FC,$FC,$FE,$FE,$00
         .byte   $0F,$1F,$3F,$3F,$3F,$3F,$0F,$FF
         .byte   $F0
-        cpx     #$C0
-        cpy     #$C0
-        cpy     #$F0
-        ror     $FFFF,x
+        .byte   $E0,$C0
+        .byte   $C0,$C0
+        .byte   $C0,$F0
+        .byte   $7E,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$81,$00,$00
         .byte   $00,$00,$00,$00,$00,$EF,$1F,$FF
         .byte   $F8,$F7,$EF,$FF,$DF,$10,$E0,$00
         .byte   $07,$08,$10,$00
-        jsr     LFDF3
-        sbc     $FFFF,x
+        .byte   $20,$F3,$FD
+        .byte   $FD,$FF,$FF
         .byte   $FC,$FB,$77,$0C,$02,$02,$00,$00
         .byte   $03,$04,$88,$EF,$EF,$EF,$EF,$EF
         .byte   $87,$7B,$7F,$10,$10,$10,$10,$10
@@ -1446,16 +1452,16 @@ LA5E0:  brk
         .byte   $05,$50,$BB,$00,$00,$38,$54,$6C
         .byte   $FA,$AE,$44,$44,$9B,$55,$BF,$AA
         .byte   $5F,$BB,$EF
-        plp
-        bpl     LA76B
-        bpl     LA7B2
-        ldy     #$44
-        bpl     LA7D5
-        tsx
+        .byte   $28
+        .byte   $10,$10
+        .byte   $10,$55
+        .byte   $A0,$44
+        .byte   $10,$74
+        .byte   $BA
         .byte   $D7,$BA,$D7,$BE,$D7,$FF,$00,$00
         .byte   $00
 LA76B:  .byte   $00,$00,$00,$00,$00,$DD,$AB,$FF
-        ldx     $55F7
+        .byte   $AE,$F7,$55
         .byte   $FB,$B6,$00,$00,$00,$00,$00,$AA
         .byte   $04,$49,$62,$B9,$57,$AA,$FF,$BA
         .byte   $5D,$F7,$00,$00,$00,$00,$00,$00
@@ -1496,8 +1502,8 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $98,$8F,$C3,$A4,$F2,$D2,$69,$34
         .byte   $98,$8F,$C3,$00,$00,$00,$80,$61
         .byte   $B3,$45,$19,$FF,$7F,$1F,$87
-        adc     ($B3,x)
-        eor     $19
+        .byte   $61,$B3
+        .byte   $45,$19
         .byte   $03,$04,$23,$11,$8C,$62,$11,$CC
         .byte   $03,$04,$23,$11,$8C,$62,$11,$CC
         .byte   $00,$00,$00,$80,$C0,$A1,$53,$CF
@@ -1506,7 +1512,7 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $9C,$3B,$77,$CE,$BD,$3A,$85,$63
         .byte   $00,$02,$0E,$1F,$7F,$FF,$BF,$7F
         .byte   $FF
-        inc     $FFFE,x
+        .byte   $FE,$FE,$FF
         .byte   $FF,$FF,$BF,$7F,$FF,$FF,$77,$F7
         .byte   $6F,$EF,$DF,$BA,$FF,$FF,$77,$F7
         .byte   $6F,$EF,$DF,$BA,$1F,$3F,$3F,$1F
@@ -1530,8 +1536,8 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $1C,$E3,$1F,$FD,$EB,$58,$03,$47
         .byte   $2C,$00,$00,$82,$EB,$58,$03,$47
         .byte   $2C,$00,$00,$82
-        nop
-        cmp     $78A9,y
+        .byte   $EA
+        .byte   $D9,$A9,$78
         .byte   $DC,$B8,$A1,$47,$2A,$D9,$A9,$78
         .byte   $DC,$B8,$A1,$47,$1F,$7F,$FF,$9E
         .byte   $39,$47,$9E,$7F,$1F,$7F,$FF,$9E
@@ -1543,7 +1549,7 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $EB,$D7,$AF,$5B,$57,$AF,$DD,$7B
         .byte   $EB,$D7,$AF,$5B,$37,$EF,$DF,$BE
         .byte   $3D,$69,$D2,$4B,$37,$EF,$DF
-        ldx     $693D,y
+        .byte   $BE,$3D,$69
         .byte   $D2,$4B,$B6,$7D,$EF,$FE,$FF,$FF
         .byte   $DF,$8F,$00,$00,$00,$00,$00,$3E
         .byte   $5F,$AF,$00,$BE,$4F,$87,$80,$00
@@ -1551,8 +1557,8 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $00,$00,$ED,$BE,$DB,$B6,$FF,$FB
         .byte   $FF,$FE,$00,$00,$00,$00,$00,$00
         .byte   $00,$80,$7B,$3D,$1E,$81,$01
-        rol     $7F
-        ldx     $78,y
+        .byte   $26,$7F
+        .byte   $B6,$78
         .byte   $3C,$5E,$A0,$3C,$10,$00,$00,$B8
         .byte   $F4,$70,$C0,$84,$C1,$CA,$E5,$47
         .byte   $0B,$8F,$2F,$33,$1E,$33,$09,$C4
@@ -1561,7 +1567,7 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $03,$06,$41,$12,$68,$D1,$4B,$61
         .byte   $D0,$E9,$BC,$E8,$B6,$4C,$50,$95
         .byte   $83,$AF
-        sta     $6B,x
+        .byte   $95,$6B
         .byte   $9C,$A9,$DA,$A8,$90,$80,$80,$00
         .byte   $22,$54,$25,$FF,$FF,$FF,$FF,$ED
         .byte   $C5,$C6,$80,$00,$00,$00,$1F,$2D
@@ -1573,8 +1579,8 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $00,$00,$49,$DA,$ED,$F6,$7B,$BD
         .byte   $C0,$DB,$96,$FF,$FB,$FB,$FD,$F9
         .byte   $FE,$00,$80,$08,$08,$18,$1C
-        sec
-        ror     $3800,x
+        .byte   $38
+        .byte   $7E,$00,$38
         .byte   $80,$00,$8D,$46,$A3,$00,$00,$02
         .byte   $24,$3C,$BD,$66,$AB,$0C,$0F,$85
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$7F,$FF
@@ -1583,8 +1589,8 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $00,$00,$50,$A8,$54,$00,$F0,$98
         .byte   $AD,$E2,$7A,$ED,$FF,$FD,$EF,$FF
         .byte   $40,$18,$85,$12,$00,$02,$10,$00
-        inc     $FFFF,x
-        sbc     $FFFF,x
+        .byte   $FE,$FF,$FF
+        .byte   $FD,$FF,$FF
         .byte   $5B,$FE,$01,$00,$00,$02,$00,$00
         .byte   $00,$00,$EB,$AD,$E7,$5D,$DB,$B7
         .byte   $ED,$FB,$14,$00,$10,$A0,$24,$48
@@ -1620,7 +1626,7 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $F9,$F6,$15,$18,$23,$0C,$18,$06
         .byte   $00,$00,$42,$18,$02,$20,$0A,$A1
         .byte   $0C,$6A,$91,$E4,$FD,$DF
-        sbc     $5E,x
+        .byte   $F5,$5E
         .byte   $B3,$55,$DE,$D5,$65,$AA,$6C,$65
         .byte   $6D,$62,$4D,$52,$22,$A5,$63,$62
         .byte   $60,$60,$5B,$F5,$7F,$BA,$1F,$8A
@@ -1631,8 +1637,8 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $B7,$FF,$22,$B1,$84,$00,$11,$00
         .byte   $48,$00,$EF,$FF,$FD,$FF,$F5,$DD
         .byte   $4A,$B5,$10,$00,$02,$00,$08,$22
-        sta     ($00),y
-        sta     $5B06,y
+        .byte   $91,$00
+        .byte   $99,$06,$5B
         .byte   $B7,$6E,$FE,$B3,$5E,$62,$B1,$84
         .byte   $48,$91,$00,$48,$00,$EA,$BF,$E5
         .byte   $4F,$B2,$6F,$B3,$4F,$01,$00,$0A
@@ -1643,8 +1649,8 @@ LA7D5:  .byte   $FB,$DD,$FF,$14,$08,$08,$08,$80
         .byte   $A0,$08,$22,$91,$00,$B9,$C6,$7C
         .byte   $D7,$AC,$DB,$B2,$EF,$42,$10,$01
         .byte   $00
-        ora     ($24),y
-        eor     LAD10
+        .byte   $11,$24
+        .byte   $4D,$10,$AD
         .byte   $DF,$F5,$7F,$FF,$EF,$FF,$FF,$52
         .byte   $20,$0A,$80,$00,$10,$00,$00,$A4
         .byte   $DA,$AB,$6C,$97,$FD,$BF,$F7,$12
@@ -1699,16 +1705,16 @@ LAD10:  .byte   $FD,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $80,$2A,$04,$10,$00,$42,$00,$00
         .byte   $FF,$EE,$76,$A9,$8C,$45,$94,$6D
         .byte   $00
-        ora     ($08,x)
-        lsr     $73
-        tax
+        .byte   $01,$08
+        .byte   $46,$73
+        .byte   $AA
         .byte   $6B,$92,$7E,$DB,$76,$DF,$FF,$FF
         .byte   $EF,$F9,$81,$24,$89,$20,$00,$00
         .byte   $10,$06,$EB,$D0,$0E,$21,$D1,$76
-        tya
-        and     $04,x
+        .byte   $98
+        .byte   $35,$04
         .byte   $2F,$E1,$DE,$2E,$89,$67,$CA,$D7
-        lda     $FFED,y
+        .byte   $B9,$ED,$FF
         .byte   $FF,$D3,$B7,$40,$08,$42,$12,$00
         .byte   $00,$04,$48,$2D,$0B,$A4,$0D,$52
         .byte   $A9,$56,$C8,$31,$F4,$1B,$F2,$AD
@@ -1753,7 +1759,7 @@ LAF7D:  .byte   $0B,$24,$52,$FF,$FF,$FF,$FF,$FF
         .byte   $4A,$49,$94,$02,$19,$4C,$53,$AE
         .byte   $B5,$B6,$6B,$50,$04,$29,$09,$40
         .byte   $8A
-        bpl     LAF7D
+        .byte   $10,$85
         .byte   $AF,$FB,$D6,$F6,$BF,$75,$EF,$7A
         .byte   $00,$00,$00,$00,$00,$00,$00,$01
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -1771,10 +1777,10 @@ LAF7D:  .byte   $0B,$24,$52,$FF,$FF,$FF,$FF,$FF
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $FC,$FC,$F8,$F8,$F0,$F0,$E1,$E1
         .byte   $01
-LB079:  ora     ($03,x)
+LB079:  .byte   $01,$03
         .byte   $03,$07,$07,$0F,$0F
-        jsr     L4020
-        rti
+        .byte   $20,$20,$40
+        .byte   $40
 
         .byte   $80,$80,$00,$00,$E0,$E0,$C0,$C0
         .byte   $80,$80,$00,$00,$03,$07,$07,$0F
@@ -1787,7 +1793,7 @@ LB079:  ora     ($03,x)
         .byte   $0A,$0A,$13,$10,$1E,$1E,$3D,$3D
         .byte   $7B,$7B,$F3,$F0,$00,$00,$60,$7C
         .byte   $07,$01,$80,$10,$00
-        beq     LB079
+        .byte   $F0,$9E
         .byte   $83,$F8,$FE,$FF,$1F,$00,$00,$00
         .byte   $00,$00,$C0,$C0,$60,$00,$00,$00
         .byte   $80,$C0,$20,$30,$90,$00,$3F,$00
@@ -1799,14 +1805,14 @@ LB079:  ora     ($03,x)
         .byte   $09,$09,$09,$7B,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$FF,$00
         .byte   $DE,$DE
-        dec     a:$DE,x
-        brk
+        .byte   $DE,$DE,$00
+        .byte   $00
         .byte   $3E,$00,$19,$1B,$27,$4F,$3F,$00
         .byte   $FE,$00
-        sed
-        sed
-        cpx     #$C0
-        brk
+        .byte   $F8
+        .byte   $F8
+        .byte   $E0,$C0
+        .byte   $00
         .byte   $70,$71,$F1,$F0,$F0,$F0,$F0,$F3
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $08,$F1,$20,$04,$0C,$1C,$3C,$79
@@ -1838,7 +1844,7 @@ LB079:  ora     ($03,x)
         .byte   $82,$04,$09,$31,$00,$1F,$6A,$D5
         .byte   $9E,$7C,$79,$71,$00,$1F,$7F,$FF
         .byte   $08
-        ora     #$58
+        .byte   $09,$58
         .byte   $FA,$00,$FF,$AA,$55,$C8,$C9,$F8
         .byte   $FB,$00,$FF,$FF,$FF,$00,$C0,$03
         .byte   $EB,$00,$FF,$AA,$55,$00,$40,$03
@@ -1858,7 +1864,7 @@ LB079:  ora     ($03,x)
         .byte   $7E,$FE,$FE,$FE,$7E,$0E,$7E,$F0
         .byte   $80,$00,$00,$00,$00,$00,$00,$70
         .byte   $7E,$7F,$7F,$7F,$7E
-        bvs     LB348
+        .byte   $70,$7E
         .byte   $0F,$01,$00,$00,$00,$00,$FF,$3F
         .byte   $1F,$0F,$86,$80,$00,$30,$00,$00
         .byte   $80,$C0,$40,$00,$18,$0C,$C3,$87
@@ -1875,7 +1881,7 @@ LB079:  ora     ($03,x)
         .byte   $3E,$00,$00,$3E,$3E,$3C,$00,$40
         .byte   $40,$7E,$00,$40,$40,$42,$00,$00
         .byte   $00,$00,$00,$00,$00,$00
-LB348:  asl     $03
+LB348:  .byte   $06,$03
         .byte   $03,$03,$03,$03,$03,$03,$FF,$7F
         .byte   $7F,$7F,$7F,$79,$79,$7F,$00,$00
         .byte   $00,$00,$00,$04,$00,$00,$FF,$FF
@@ -1945,7 +1951,7 @@ LB4A4:  .byte   $07,$09,$C4,$04,$FF,$FF,$FF,$1F
         .byte   $7F,$7E,$70,$01,$00,$00,$00,$00
         .byte   $00,$01,$0E,$71,$31,$00,$85,$CD
         .byte   $98,$30,$00
-        sbc     $180D,x
+        .byte   $FD,$0D,$18
         .byte   $04,$0C,$5C,$BF,$00,$FD,$00,$00
         .byte   $50,$50,$00,$00,$00,$4E,$FE,$02
         .byte   $02,$02,$02,$FE,$00,$4E,$1B,$16
@@ -1966,8 +1972,8 @@ LB4A4:  .byte   $07,$09,$C4,$04,$FF,$FF,$FF,$1F
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$FF,$FF
         .byte   $FF,$FF,$FE,$F8
-        cpx     #$80
-        brk
+        .byte   $E0,$80
+        .byte   $00
         .byte   $00,$00,$00,$00,$01,$07,$1F,$FE
         .byte   $F8,$E0,$80,$00,$01,$06,$18,$00
         .byte   $01,$07,$1F,$7F,$FF,$FE,$F8,$07
@@ -2011,7 +2017,7 @@ LB4A4:  .byte   $07,$09,$C4,$04,$FF,$FF,$FF,$1F
         .byte   $67,$6F,$7F,$7F,$FF,$FF,$FF,$EF
         .byte   $EF,$6F,$6F,$E7,$E7,$C3,$83,$E0
         .byte   $E0,$E0,$E0,$E0
-        cpx     #$C0
+        .byte   $E0,$C0
         .byte   $80,$FF,$FF,$FE,$FC,$F8,$F4,$E6
         .byte   $C3,$00,$00,$00,$01,$03,$07,$0F
         .byte   $1F,$80,$00,$80,$40,$20,$00,$00
@@ -2031,12 +2037,12 @@ LB4A4:  .byte   $07,$09,$C4,$04,$FF,$FF,$FF,$1F
         .byte   $00,$4F,$40,$40,$40,$81,$02,$05
         .byte   $0A,$CF,$C0,$C0,$C0,$81,$03,$07
         .byte   $0F,$F9,$02,$06,$FD,$47,$8F
-        asl     $F93C,x
+        .byte   $1E,$3C,$F9
         .byte   $03,$07,$FE,$F8,$F0
-        sbc     ($C3,x)
-        cpy     #$30
-        sbc     ($C3,x)
-        stx     $0D
+        .byte   $E1,$C3
+        .byte   $C0,$30
+        .byte   $E1,$C3
+        .byte   $86,$0D
         .byte   $1B,$37,$FF,$CF,$1F,$3F,$7F,$FF
         .byte   $FF,$FF,$6F,$DE,$BC,$78,$F0,$E0
         .byte   $C0,$80,$FF,$FE,$FC,$F8,$F0,$E0
@@ -2048,18 +2054,18 @@ LB4A4:  .byte   $07,$09,$C4,$04,$FF,$FF,$FF,$1F
 LB844:  .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$14,$28,$51,$A3
         .byte   $C7,$0F
-        asl     $1F1C,x
+        .byte   $1E,$1C,$1F
         .byte   $3F,$7E,$FC,$F8
-        bvs     LB880
+        .byte   $70,$21
         .byte   $03
-        sei
-        beq     LB844
+        .byte   $78
+        .byte   $F0,$E1
         .byte   $C3,$86,$0D,$1B,$37,$87,$0F,$1F
         .byte   $3F,$7F,$FF,$FF,$FF,$6F,$DE,$BC
         .byte   $78,$F0,$E0,$C0,$80,$FF,$FE,$FC
         .byte   $F8,$F0,$E0,$C0,$80
-LB880:  php
-        brk
+LB880:  .byte   $08
+        .byte   $00
         .byte   $01,$01,$00,$00,$00,$00,$07,$07
         .byte   $03,$01,$00,$00,$00,$00,$6F,$DE
         .byte   $BC,$78,$F0,$60,$00,$00,$FF,$FE
@@ -2070,8 +2076,8 @@ LB880:  php
         .byte   $FF,$FF,$00,$2A,$00,$0F,$63,$31
         .byte   $E3,$F1,$07,$07,$03,$01,$E0,$F0
         .byte   $E0,$F0,$00
-        ldy     #$00
-        php
+        .byte   $A0,$00
+        .byte   $08
         .byte   $03,$01,$00,$00,$00,$00,$00,$00
         .byte   $03,$01,$00,$00,$00,$00,$00,$00
         .byte   $83,$88,$A0,$88,$81,$81,$00,$0C
@@ -2084,8 +2090,8 @@ LB880:  php
         .byte   $00,$00,$FF,$01,$01,$25,$01,$01
         .byte   $00,$F1,$F1,$70,$70,$77,$77,$70
         .byte   $00
-        plp
-        inx
+        .byte   $28
+        .byte   $E8
         .byte   $EF,$EF,$EF,$EF,$EF,$00,$00,$00
         .byte   $00,$00,$FF,$FF,$01,$00,$98,$98
         .byte   $FE,$FE,$FF,$FF,$FF,$00,$3F,$3F
@@ -2112,7 +2118,7 @@ LB880:  php
         .byte   $10,$07,$00,$62,$60,$F7,$D5,$D5
         .byte   $F7,$07,$00,$64,$64,$E0,$0F,$48
         .byte   $2B,$EA,$0A,$68,$68
-        cpx     #$4F
+        .byte   $E0,$4F
         .byte   $4F,$EF,$EF,$0F,$EC,$EF,$00,$15
         .byte   $00,$DB,$00,$00,$00,$00,$00,$1B
         .byte   $00,$E7,$00,$04,$04,$04,$09,$13
@@ -2129,8 +2135,8 @@ LB880:  php
         .byte   $E1,$82,$04,$0A,$0D,$01,$A3,$8C
         .byte   $1E,$7C,$F8,$F0,$F2,$FE,$D0,$30
         .byte   $18,$18
-        sta     $488E
-        bmi     LBA88
+        .byte   $8D,$8E,$48
+        .byte   $30,$0F
         .byte   $CF,$FF,$FF,$7E,$78,$30,$00,$C0
         .byte   $80,$80,$80,$40,$21,$1E,$00
 LBA88:  .byte   $3F,$7F,$7F,$7F,$3F,$1E,$00,$00
@@ -2201,59 +2207,59 @@ LBA88:  .byte   $3F,$7F,$7F,$7F,$3F,$1E,$00,$00
         .byte   $18,$18,$18,$10,$10,$10,$10,$10
         .byte   $38,$38,$18,$18,$10,$10,$10,$10
         .byte   $00,$00,$00,$10,$18
-        clc
-        clc
-        clc
-        brk
+        .byte   $18
+        .byte   $18
+        .byte   $18
+        .byte   $00
         .byte   $10,$38,$38,$38,$38
-        sec
-        sec
-LBCB0:  bvs     LBD22
-        ldy     #$A0
-        brk
+        .byte   $38
+        .byte   $38
+LBCB0:  .byte   $70,$70
+        .byte   $A0,$A0
+        .byte   $00
         .byte   $00
 LBCB6:  .byte   $00,$00,$F0,$70,$A0,$A0,$00
-        brk
-        brk
+        .byte   $00
+        .byte   $00
         .byte   $00,$0D,$0D,$0C,$0C,$0D,$0F,$0E
         .byte   $00,$0D,$0D,$0C,$0C,$0D,$0F,$0E
         .byte   $00,$83
-        ldx     $0C
-        tya
-        bcs     LBCB6
-        cpy     #$80
+        .byte   $A6,$0C
+        .byte   $98
+        .byte   $B0,$E0
+        .byte   $C0,$80
         .byte   $83,$A6,$0C,$98,$B0,$E0,$C0,$80
         .byte   $00,$00,$00,$00,$00,$01,$02,$04
         .byte   $00,$00,$00,$00,$00,$01,$02,$04
         .byte   $00,$03,$1C,$60,$80,$1E,$7E,$7C
         .byte   $00,$03,$1C,$60,$80,$1E,$7E,$7C
         .byte   $04,$09,$09
-LBD03:  ora     ($11),y
-        ora     ($10),y
-        jsr     L0904
-        ora     #$11
-        ora     ($11),y
-        bpl     LBD30
-        sed
-        beq     LBD03
-        cpx     #$C0
+LBD03:  .byte   $11,$11
+        .byte   $11,$10
+        .byte   $20,$04,$09
+        .byte   $09,$11
+        .byte   $11,$11
+        .byte   $10,$20
+        .byte   $F8
+        .byte   $F0,$F0
+        .byte   $E0,$C0
         .byte   $80
-        brk
+        .byte   $00
         .byte   $00,$F8,$F0,$F0,$E0,$C0,$80,$00
         .byte   $00,$20,$20
-LBD22:  jsr     L2020
-        jsr     L1020
-        jsr     L2020
-        jsr     L2020
+LBD22:  .byte   $20,$20,$20
+        .byte   $20,$20,$10
+        .byte   $20,$20,$20
+        .byte   $20,$20,$20
         .byte   $20
         .byte   $10
-LBD30:  bpl     LBD42
-        php
+LBD30:  .byte   $10,$10
+        .byte   $08
         .byte   $04,$04,$02,$00,$00,$10,$10,$08
         .byte   $04,$04,$02,$00,$00,$00,$03
-LBD42:  ora     ($00,x)
+LBD42:  .byte   $01,$00
         .byte   $02,$03,$01,$00,$03,$03
-        ora     $06
+        .byte   $05,$06
         .byte   $07,$03,$01,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$80,$C0,$E0
         .byte   $70,$B8,$DC,$EE,$00,$00,$00,$00
@@ -2270,12 +2276,12 @@ LBD42:  ora     ($00,x)
         .byte   $FD,$FD,$FF,$FF,$7D,$FF,$FF,$FF
         .byte   $C2,$8E,$C7,$7F,$00,$00,$00,$00
         .byte   $80,$C0,$C0
-LBDC7:  cpy     #$C0
-        beq     LBDC7
-        beq     LBE49
-        ldx     LBCB0,y
-        lsr     $46
-        rti
+LBDC7:  .byte   $C0,$C0
+        .byte   $F0,$FC
+        .byte   $F0,$7C
+        .byte   $BE,$B0,$BC
+        .byte   $46,$46
+        .byte   $40
 
         .byte   $40,$40,$40,$40,$20,$46,$46,$40
         .byte   $40,$40,$40,$40,$20,$03,$02,$01
@@ -2301,14 +2307,14 @@ LBE49:  .byte   $FF,$FF,$C7,$0C,$9D,$8F,$FF,$00
         .byte   $EC,$29,$D3,$87,$6F,$77,$77,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$30
         .byte   $00,$80,$C0,$E0,$E0,$F0,$F0,$00
-        asl     $3F1F
+        .byte   $0E,$1F,$3F
         .byte   $3F,$3F,$7F,$7F,$00,$06,$03,$00
         .byte   $00,$00,$00,$00,$0E,$3E,$FE,$FE
         .byte   $FE,$FF,$FF,$FE,$02,$02,$02,$02
         .byte   $02,$03,$03,$0E,$7F,$FF,$FD
-        sbc     $7EFE,x
-        asl     $00
-        brk
+        .byte   $FD,$FE,$7E
+        .byte   $06,$00
+        .byte   $00
         .byte   $00,$00,$00,$02,$06,$06,$00,$FC
         .byte   $F0,$F0,$F8,$F8,$F8,$F0,$60,$1C
         .byte   $10,$10,$18,$18,$18,$30,$60,$00
@@ -2342,8 +2348,8 @@ LBE49:  .byte   $FF,$FF,$C7,$0C,$9D,$8F,$FF,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00
-        brk
-        brk
+        .byte   $00
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00

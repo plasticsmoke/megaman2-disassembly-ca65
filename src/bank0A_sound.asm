@@ -6,15 +6,8 @@
 ; The sound driver code lives in the fixed bank ($0F) — this bank
 ; provides only data: note frequency tables, instrument envelopes,
 ; music sequence data for all stages, and sound effect definitions.
-; NOTE: All "instructions" in this file are data bytes that da65
-; interpreted as opcodes. No executable code exists in this bank.
+; No executable code exists in this bank.
 ; =============================================================================
-
-; da65 V2.18 - Ubuntu 2.19-1
-; Created:    2026-02-23 18:17:35
-; Input file: build/bank0A.bin
-; Page:       1
-
 
         .setcpu "6502"
 
@@ -22,12 +15,17 @@ L03B3           := $03B3
 L20E8           := $20E8
 L28D8           := $28D8
 LF0FE           := $F0FE
+
+; =============================================================================
+; Noise Channel / Duration Tables ($8000-$804F)
+; Timer values for the noise channel and note duration lookup.
+; =============================================================================
         .byte   $00,$00,$16,$2A,$3C,$52,$68,$7E
         .byte   $96,$AE,$C4,$DA,$EE,$02,$16,$28
         .byte   $3A,$50,$66,$7C,$92,$AA,$BA,$CA
         .byte   $D6
-        nop
-        inc     $1E14,x
+        .byte   $EA
+        .byte   $FE,$14,$1E
         .byte   $34,$3E,$56,$6A,$82,$8E,$92,$9A
         .byte   $A2,$AA,$B4,$BE,$C8,$CC,$D6,$E0
         .byte   $EA,$F4,$F4,$F8,$0C,$20,$34,$48
@@ -46,9 +44,9 @@ freq_table_base:  .byte   $68,$72,$86,$9A,$9E,$B0,$C2,$CC
         .byte   $12,$2C,$46,$60,$7A,$94,$AE,$C8
         .byte   $E2,$FC,$16,$32,$4E,$6C,$86,$A2
         .byte   $BC
-        dec     $F0,x
-        asl     a
-        plp
+        .byte   $D6,$F0
+        .byte   $0A
+        .byte   $28
         .byte   $42,$5E,$7C,$98,$B4,$D0,$EC,$08
         .byte   $2A,$46,$5C,$76,$8A,$9E,$B2,$C6
         .byte   $DA,$EE,$02,$16,$2A,$40,$5A,$74
@@ -72,37 +70,37 @@ freq_table_base:  .byte   $68,$72,$86,$9A,$9E,$B0,$C2,$CC
         .byte   $38,$62,$8C,$B6,$E0,$08,$32,$50
         .byte   $6E,$8C,$96,$AC,$C2,$F0,$1E,$4C
         .byte   $5A,$72,$8A
-L8130:  ldx     #$BA
+L8130:  .byte   $A2,$BA
         .byte   $D2,$EA,$F4,$0E,$28,$42,$56,$6C
         .byte   $88,$A4,$C8,$EC,$12,$32,$52,$72
         .byte   $92
 freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $42,$4A,$52,$5A,$62,$68
-        ror     sfx_sprite_frame_data
+        .byte   $6E,$74,$B4
         .byte   $F4,$3A,$4E,$62,$7E,$9A,$B6,$D2
         .byte   $F0,$0E,$1A,$26,$36,$46,$5A,$6E
         .byte   $7C,$8A,$B6,$C0,$C4,$CE,$DC,$F0
         .byte   $12,$34,$56,$78,$82,$8C,$B8,$E2
         .byte   $14,$3E,$48,$52,$A8,$04,$0E,$18
         .byte   $22,$26,$3A
-        rol     $5442,x
-        ror     $78
-        txa
-        sty     $9E,x
-        bcs     freq_table_extended
-        cpy     #$EE
-        jsr     freq_table_base
-        bcc     L8130
-        tax
-        ldy     $DE,x
-        brk
+        .byte   $3E,$42,$54
+        .byte   $66,$78
+        .byte   $8A
+        .byte   $94,$9E
+        .byte   $B0,$BA
+        .byte   $C0,$EE
+        .byte   $20,$50,$80
+        .byte   $90,$A0
+        .byte   $AA
+        .byte   $B4,$DE
+        .byte   $00
         .byte   $32,$44,$48,$4C,$50,$5A,$64,$72
         .byte   $86,$94
-        tay
-        ldx     LB6B2
-        ldx     $CAC2,y
-        cld
-        inc     $F4
+        .byte   $A8
+        .byte   $AE,$B2,$B6
+        .byte   $BE,$C2,$CA
+        .byte   $D8
+        .byte   $E6,$F4
         .byte   $02,$10,$1A,$24,$28,$2C,$36,$40
         .byte   $44,$48,$52,$5C,$66,$6A,$6E,$72
         .byte   $76,$7A,$7E,$82,$88,$8E,$94,$9E
@@ -117,11 +115,11 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $87,$87,$87,$87,$87,$87,$87,$87
         .byte   $87,$87,$87,$87,$87,$88,$88,$88
         .byte   $88,$88,$88,$88,$88,$88
-        dey
-        dey
-        dey
-        dey
-        dey
+        .byte   $88
+        .byte   $88
+        .byte   $88
+        .byte   $88
+        .byte   $88
         .byte   $89,$89,$89,$89,$89,$89,$89,$89
         .byte   $89,$89,$89,$89,$89,$89,$89,$89
         .byte   $89,$89,$89,$89,$89,$89,$8A,$8A
@@ -132,12 +130,12 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $8B,$8B,$8B,$8B,$8B,$8B,$8B,$8B
         .byte   $8B,$8B,$8C,$8C,$8C,$8C,$8C,$8C
         .byte   $8C,$8C,$8C,$8C,$8C,$8D,$8D
-        sta     L8D8D
-        sta     L8D8D
-        sta     L8E8D
-        stx     L8E8E
-        stx     L8E8E
-        stx     L8F8E
+        .byte   $8D,$8D,$8D
+        .byte   $8D,$8D,$8D
+        .byte   $8D,$8D,$8E
+        .byte   $8E,$8E,$8E
+        .byte   $8E,$8E,$8E
+        .byte   $8E,$8E,$8F
         .byte   $8F,$8F,$8F,$8F,$8F,$8F,$8F,$8F
         .byte   $90,$90,$90,$90,$90,$90,$90,$90
         .byte   $90,$90,$90,$91,$91,$91,$91,$91
@@ -171,14 +169,14 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $A3,$A3,$A3,$A3,$A3,$A3,$A3,$A3
         .byte   $A4,$A4,$A4,$A4,$A4,$A5,$A5,$A5
         .byte   $A5,$A5,$A5,$A5,$A5,$A5,$A5,$A5
-        lda     $A5
-        lda     $A5
-        lda     $A5
-        lda     $A6
-        ldx     $A6
-        ldx     $A6
-        ldx     $A6
-        ldx     $A7
+        .byte   $A5,$A5
+        .byte   $A5,$A5
+        .byte   $A5,$A5
+        .byte   $A5,$A6
+        .byte   $A6,$A6
+        .byte   $A6,$A6
+        .byte   $A6,$A6
+        .byte   $A6,$A7
         .byte   $A7,$A7,$A7,$A7,$A7,$A7,$A7,$A7
         .byte   $A7,$A7,$A7,$A7,$A7,$A7,$A7,$A7
         .byte   $A7,$A7,$A7,$A7,$A8,$A8,$A8,$A8
@@ -189,23 +187,23 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $A9,$A9,$A9,$A9,$A9,$A9,$A9,$A9
         .byte   $A9,$A9,$AA,$AA,$AA,$AA,$AA,$AA
         .byte   $AA,$AA,$AA
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
-        tax
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
+        .byte   $AA
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $B4,$D0,$E4,$F6,$0A,$20,$36,$4C
@@ -221,8 +219,8 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $02,$0E,$1A,$2C,$3E,$46,$48,$4A
         .byte   $4C,$52,$58,$70,$82,$94,$A6,$AE
         .byte   $BE,$C6,$CE,$DA,$E2
-        nop
-        asl     $3C26
+        .byte   $EA
+        .byte   $0E,$26,$3C
         .byte   $52,$6A,$82,$9A,$B2,$CE,$E6,$FE
         .byte   $16,$30,$4A,$64,$7E,$92,$B2,$C6
         .byte   $DE,$F6,$0E,$24,$3A,$54,$6C,$80
@@ -259,26 +257,26 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $B6,$B6,$B6,$B6,$B6,$B6,$B6,$B6
         .byte   $B6,$B6,$B7,$B7,$B7,$B7,$B7,$B7
         .byte   $B7,$B7,$B7,$B7,$B7
-        clv
-        clv
-        clv
-        clv
-        clv
-        clv
-        clv
-        clv
-        clv
-        lda     LB9B9,y
-        lda     LB9B9,y
-        lda     LBAB9,y
-        tsx
-        tsx
-        tsx
-        tsx
-        tsx
-        tsx
-        tsx
-        tsx
+        .byte   $B8
+        .byte   $B8
+        .byte   $B8
+        .byte   $B8
+        .byte   $B8
+        .byte   $B8
+        .byte   $B8
+        .byte   $B8
+        .byte   $B8
+        .byte   $B9,$B9,$B9
+        .byte   $B9,$B9,$B9
+        .byte   $B9,$B9,$BA
+        .byte   $BA
+        .byte   $BA
+        .byte   $BA
+        .byte   $BA
+        .byte   $BA
+        .byte   $BA
+        .byte   $BA
+        .byte   $BA
         .byte   $BB,$BB,$BB,$BB,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
@@ -326,9 +324,9 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $0A,$01,$01,$00,$02,$00,$11,$00
         .byte   $12,$00,$21,$00,$22,$00,$23,$00
         .byte   $00,$01,$13,$00,$10,$00
-        ora     #$01
-        ora     ($00,x)
-        ora     $00
+        .byte   $09,$01
+        .byte   $01,$00
+        .byte   $05,$00
         .byte   $14,$00,$15,$00,$24,$00,$25,$00
         .byte   $26,$00,$00,$01,$16,$00,$08,$02
         .byte   $07,$00,$08,$00,$17,$00,$18,$00
@@ -343,15 +341,15 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $0A,$00,$0B,$00,$19,$00,$1B,$00
         .byte   $00,$01,$0B,$05,$0C,$00,$0D,$00
         .byte   $1E,$40,$1C
-        brk
-        ora     $1E00,x
-        brk
+        .byte   $00
+        .byte   $1D,$00,$1E
+        .byte   $00
         .byte   $50,$00
-        bit     $2D00
-        brk
+        .byte   $2C,$00,$2D
+        .byte   $00
         .byte   $0E,$00,$2E,$01,$0B,$04,$31,$00
         .byte   $32,$00,$41,$00,$42,$00,$50,$00
-        eor     ($00),y
+        .byte   $51,$00
         .byte   $52,$00,$40,$00,$30,$40,$2F,$01
         .byte   $30,$00,$0A,$07,$07,$00,$0D,$00
         .byte   $43,$00,$44,$00,$53,$00,$54,$00
@@ -381,8 +379,8 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $0B,$00,$58,$00,$1B,$00,$00,$01
         .byte   $0A,$04,$3D,$00,$32,$00,$41,$00
         .byte   $42,$00,$50
-        brk
-        eor     ($00),y
+        .byte   $00
+        .byte   $51,$00
         .byte   $52,$00,$40,$00,$30,$00,$2F,$01
         .byte   $0B,$06,$07,$00,$32,$00,$6C,$00
         .byte   $42,$00,$51,$00,$52,$00,$40,$00
@@ -415,11 +413,11 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $70,$00,$44,$00,$73,$00,$71,$00
         .byte   $54,$00,$55,$00,$45,$00,$00,$01
         .byte   $05,$0A,$60,$00,$60,$40,$62
-        rti
+        .byte   $40
 
-        adc     ($40,x)
+        .byte   $61,$40
         .byte   $63,$40,$01,$00
-        adc     #$01
+        .byte   $69,$01
         .byte   $03,$0D,$74,$01,$74,$01,$74,$01
         .byte   $03,$0D,$75,$01,$75,$01,$75,$01
         .byte   $03,$0D,$76,$01,$76,$01,$76,$01
@@ -436,13 +434,13 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $9C,$01,$9C,$01,$9C,$01,$9C,$01
         .byte   $9C,$01,$9C,$01,$9C,$01,$9C,$01
         .byte   $9C,$01,$09,$5B,$9D,$01,$9D,$01
-        sta     L9D01,x
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($09,x)
+        .byte   $9D,$01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$09
         .byte   $5B,$9E,$01,$9E,$01,$9E,$01,$9E
         .byte   $01,$9E,$01,$9E,$01,$9E,$01,$9E
         .byte   $01,$9E,$01,$09,$5C,$9C,$01,$9C
@@ -456,17 +454,17 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $5D,$9C,$01,$9C,$01,$9C,$01,$9C
         .byte   $01,$9C,$01,$9C,$01,$9C,$01,$9C
         .byte   $01,$9C,$01
-        ora     #$5D
-        sta     L9D01,x
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($9D,x)
-        ora     ($09,x)
-        eor     $019E,x
+        .byte   $09,$5D
+        .byte   $9D,$01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$9D
+        .byte   $01,$09
+        .byte   $5D,$9E,$01
         .byte   $9E,$01,$9E,$01,$9E,$01,$9E,$01
         .byte   $9E,$01,$9E,$01,$9E,$01,$9E,$01
         .byte   $04,$17,$83,$01,$83,$41,$83,$81
@@ -479,21 +477,21 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $99,$40,$98,$40,$9B,$40,$9A,$40
         .byte   $04,$17,$9C,$00,$9C,$40,$9C,$80
         .byte   $9C,$C0,$04,$17
-        sta     music_data_mid,x
-        rti
+        .byte   $9D,$00,$9D
+        .byte   $40
 
         .byte   $9D,$80,$9D,$C0,$04,$17,$9E,$00
         .byte   $9E,$40,$9E,$80,$9E,$C0,$04,$17
         .byte   $9F,$00,$9F,$40,$9F,$80,$9F,$C0
-        ora     ($00,x)
-        txs
-        eor     ($01,x)
-        brk
+        .byte   $01,$00
+        .byte   $9A
+        .byte   $41,$01
+        .byte   $00
         .byte   $9B,$41,$01,$00,$9A,$C1,$01,$00
         .byte   $9B,$C1,$04,$17,$90,$00
-        sta     ($00),y
-        sta     ($C0),y
-        sta     ($80),y
+        .byte   $91,$00
+        .byte   $91,$C0
+        .byte   $91,$80
         .byte   $04,$17,$92,$00,$93,$00,$94,$00
         .byte   $95,$00,$04,$17,$96,$00,$97,$00
         .byte   $98,$00,$99,$00,$04,$17,$9C,$01
@@ -504,53 +502,53 @@ freq_table_extended:  .byte   $B2,$B6,$BC,$DA,$F8,$1A,$32,$3A
         .byte   $98,$C0,$04,$17,$99,$00,$99,$40
         .byte   $99,$80,$99,$C0,$09,$00,$93,$00
         .byte   $90,$80,$91,$80,$90,$C0,$90,$00
-        sta     ($00),y
-        bcc     drum_pattern_data
+        .byte   $91,$00
+        .byte   $90,$40
         .byte   $92,$00,$92,$40,$09,$00,$97,$00
         .byte   $94,$80
-        sta     $80,x
-        sty     $C0,x
-        sty     $00,x
-        sta     $00,x
-        sty     $40,x
-        stx     $00,y
-        stx     $40,y
-        ora     ($00,x)
-        bcc     envelope_data
+        .byte   $95,$80
+        .byte   $94,$C0
+        .byte   $94,$00
+        .byte   $95,$00
+        .byte   $94,$40
+        .byte   $96,$00
+        .byte   $96,$40
+        .byte   $01,$00
+        .byte   $90,$00
 
 ; =============================================================================
 ; Envelope / Instrument Data
 ; Duty cycle, volume, and timing data for each instrument voice.
 ; =============================================================================
-envelope_data:  php
+envelope_data:  .byte   $08
         .byte   $5F,$91,$00,$91,$00,$91,$00,$91
         .byte   $00,$92,$00,$92,$00,$92,$00,$92
         .byte   $00,$08,$5F,$93,$00,$93,$00,$93
         .byte   $00,$93,$00,$94,$00,$94,$00,$94
         .byte   $00,$94,$00
 drum_pattern_data:  .byte   $04,$5E,$90,$00,$90,$00
-        bcc     L8BCA
-L8BCA:  bcc     L8BCC
+        .byte   $90,$00
+L8BCA:  .byte   $90,$00
 L8BCC:  .byte   $04,$5F,$90,$00
-        bcc     L8BD2
-L8BD2:  bcc     L8BD4
-L8BD4:  bcc     L8BD6
+        .byte   $90,$00
+L8BD2:  .byte   $90,$00
+L8BD4:  .byte   $90,$00
 L8BD6:  .byte   $04,$61,$90,$00,$90,$00
-        bcc     L8BDE
-L8BDE:  bcc     L8BE0
+        .byte   $90,$00
+L8BDE:  .byte   $90,$00
 L8BE0:  .byte   $04,$60,$90,$00
-        bcc     L8BE6
-L8BE6:  bcc     L8BE8
-L8BE8:  bcc     music_sequence_headers
+        .byte   $90,$00
+L8BE6:  .byte   $90,$00
+L8BE8:  .byte   $90,$00
 music_sequence_headers:  .byte   $04,$63,$95,$00,$96,$00,$95,$40
         .byte   $97,$00,$04,$64,$95,$00,$96,$00
         .byte   $95,$40,$97,$40,$04,$54,$91,$00
         .byte   $92,$00,$90,$00,$93,$00,$04,$54
         .byte   $91,$00,$92,$00,$90,$00
-        sty     $00,x
-        asl     $62
-        tya
-        brk
+        .byte   $94,$00
+        .byte   $06,$62
+        .byte   $98
+        .byte   $00
         .byte   $99,$00,$98,$40,$9A,$00,$9B,$00
         .byte   $9A,$40,$06,$62,$9C,$00,$99,$00
         .byte   $9C,$40,$9D,$00,$9B,$00,$9D,$40
@@ -599,7 +597,7 @@ music_sequence_headers:  .byte   $04,$63,$95,$00,$96,$00,$95,$40
         .byte   $FE,$02,$FD,$02,$FE,$02,$FD,$02
         .byte   $FE,$02,$FD,$82,$FE,$82,$FD
 L8D8D:  .byte   $82
-        inc     $FD82,x
+        .byte   $FE,$82,$FD
         .byte   $82,$FE,$82,$0C,$4C,$FF,$02,$FF
         .byte   $42,$FF,$02,$FF,$42,$FF,$02,$FF
         .byte   $42,$FF,$82,$FF,$C2,$FF,$82,$FF
@@ -633,7 +631,7 @@ L8D8D:  .byte   $82
         .byte   $01,$C8,$02,$B2,$03,$0D,$6D,$D2
         .byte   $03,$D3,$03,$D4
 L8E8D:  .byte   $03
-L8E8E:  dec     $03,x
+L8E8E:  .byte   $D6,$03
         .byte   $D7,$03,$D8,$03,$D9,$03,$DA,$03
         .byte   $DB,$03,$BF,$01,$D0,$03,$D1,$03
         .byte   $D5,$03,$0C,$00,$CB,$03,$CC,$03
@@ -666,8 +664,8 @@ L8E8E:  dec     $03,x
         .byte   $B7,$03,$F4,$01,$0D,$72,$B8,$03
         .byte   $B9,$03,$BA,$03,$BB,$03,$BC,$03
         .byte   $BD,$03,$BE,$03,$BF,$03
-L8F8E:  cpy     #$03
-        cmp     ($03,x)
+L8F8E:  .byte   $C0,$03
+        .byte   $C1,$03
         .byte   $C2,$03,$C3,$03,$F4,$01,$0D,$72
         .byte   $B8,$03,$C4,$03,$C5,$03,$BB,$03
         .byte   $BC,$03,$BD,$03,$BE,$03,$BF,$03
@@ -698,12 +696,12 @@ L8F8E:  cpy     #$03
         .byte   $EB,$03,$EC,$03,$8F,$03,$ED,$03
         .byte   $EE,$03,$F4,$01,$09,$5B,$F6,$01
         .byte   $F6,$01,$F6,$01,$F6,$01
-        inc     $01,x
-        inc     $01,x
-        inc     $01,x
-        inc     $01,x
-        inc     $01,x
-        ora     #$5B
+        .byte   $F6,$01
+        .byte   $F6,$01
+        .byte   $F6,$01
+        .byte   $F6,$01
+        .byte   $F6,$01
+        .byte   $09,$5B
         .byte   $F7,$01,$F7,$01,$F7,$01,$F7,$01
         .byte   $F7,$01,$F7,$01,$F7,$01,$F7,$01
         .byte   $F7,$01,$09,$5B,$F8,$01,$F8,$01
@@ -737,7 +735,7 @@ L8F8E:  cpy     #$03
         .byte   $C5,$03,$C6,$03,$C7,$03,$C8,$03
         .byte   $C9,$03,$CA,$03,$CB,$03,$CC,$03
         .byte   $CD,$03,$0B,$7B,$C2,$03
-        dec     $C403
+        .byte   $CE,$03,$C4
         .byte   $03,$CF,$03,$D0,$03,$D1,$03,$D2
         .byte   $03,$D3,$03,$D4,$03,$D5,$03,$D6
         .byte   $03,$0B,$7C,$D7,$03,$D8,$03,$D9
@@ -770,8 +768,8 @@ L8F8E:  cpy     #$03
         .byte   $03,$0A,$83,$D5,$03,$D6,$03,$D8
         .byte   $03,$D9,$03,$DA,$03,$DB,$03,$DC
         .byte   $03
-        cmp     LA003,x
-        ora     ($D7,x)
+        .byte   $DD,$03,$A0
+        .byte   $01,$D7
         .byte   $03,$07,$84,$DE,$03,$DF,$03,$E0
         .byte   $03,$E1,$03,$E2,$03,$E3,$03,$A0
         .byte   $01,$09,$83,$D5,$03,$D6,$03,$E4
@@ -805,7 +803,7 @@ L8F8E:  cpy     #$03
         .byte   $03,$A7,$03,$A8,$03,$A9,$03,$F3
         .byte   $01,$0D,$8A,$AA,$03,$AB,$03,$AC
         .byte   $03
-        lda     LAE03
+        .byte   $AD,$03,$AE
         .byte   $03,$AF,$03,$B0,$03,$B1,$03,$B2
         .byte   $03,$B3,$03,$B4,$03,$B5,$03,$F3
         .byte   $01,$0D,$8B,$B6,$03,$B7,$03,$B8
@@ -819,8 +817,8 @@ L8F8E:  cpy     #$03
         .byte   $03,$C9,$03,$CA,$03,$CB,$03,$CC
         .byte   $03,$CD,$03,$CE,$03,$CF,$03,$D0
         .byte   $03,$D1,$03,$F3
-        ora     ($0D,x)
-        stx     $03D2
+        .byte   $01,$0D
+        .byte   $8E,$D2,$03
         .byte   $D3,$03,$D4,$03,$D5,$03,$D6,$03
         .byte   $D8,$03,$D9,$03,$DA,$03,$DB,$03
         .byte   $DC,$03,$DD,$03,$D7,$03,$F3,$01
@@ -831,8 +829,8 @@ L8F8E:  cpy     #$03
         .byte   $E8,$03,$E9,$03,$EA,$03,$EB,$03
         .byte   $EC,$03,$F3,$01,$09,$90,$A0,$03
         .byte   $A1,$03,$ED,$03,$EE,$03,$EF,$03
-        beq     music_data_start
-        sbc     ($03),y
+        .byte   $F0,$03
+        .byte   $F1,$03
         .byte   $F2
 
 ; =============================================================================
@@ -880,7 +878,7 @@ music_data_start:  .byte   $03,$F3,$01,$10,$91,$A0,$03,$A1
         .byte   $03,$A9,$03,$AA,$03,$AB,$03,$AC
         .byte   $03,$AD,$03,$AE,$03,$10,$9F,$A0
         .byte   $03,$A1,$03,$A2,$03,$AF,$03
-        bcs     L9599
+        .byte   $B0,$03
         .byte   $B3,$03,$B1
 L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $03,$B7,$03,$B8,$03,$B9,$03,$BA
@@ -946,7 +944,7 @@ L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $02,$DF,$42,$E9,$61,$E8,$61,$E5
         .byte   $21,$E5,$61,$DA,$02,$DB,$02,$DB
         .byte   $42,$DA,$42,$DD,$02,$DE,$02
-        dec     $DD42,x
+        .byte   $DE,$42,$DD
         .byte   $42,$EB,$61,$EA,$61,$E7,$61,$E6
         .byte   $61,$E3,$21,$E4,$21,$E4,$61,$E3
         .byte   $61,$D8,$02,$D9,$02,$D9,$42,$D8
@@ -979,22 +977,22 @@ L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $02,$CD,$02,$FA,$02,$FC,$02,$F1
         .byte   $02,$F3,$02,$F4,$02,$F5,$02,$F8
         .byte   $03,$F9,$03,$06,$62
-        dex
-        ora     ($CB,x)
-        ora     ($CC,x)
-        ora     ($CE,x)
-        ora     ($CF,x)
-        ora     ($D0,x)
-        ora     ($06,x)
+        .byte   $CA
+        .byte   $01,$CB
+        .byte   $01,$CC
+        .byte   $01,$CE
+        .byte   $01,$CF
+        .byte   $01,$D0
+        .byte   $01,$06
         .byte   $62,$D3,$01,$D4,$01,$D5,$01,$D6
         .byte   $01,$D7,$01,$D8,$01,$09,$00,$A5
         .byte   $01,$A7,$03,$A8,$01,$A9,$03,$A1
         .byte   $01,$A2,$01,$A3,$01,$A4,$01,$A6
         .byte   $01,$07,$A0,$AA,$01,$AB,$01,$AC
-        ora     ($AD,x)
-        ora     ($AE,x)
-        ora     ($AF,x)
-        ora     ($B0,x)
+        .byte   $01,$AD
+        .byte   $01,$AE
+        .byte   $01,$AF
+        .byte   $01,$B0
         .byte   $03,$07,$A0,$B1,$01,$B2,$01,$B3
         .byte   $01,$B4,$01,$B5,$01,$B6,$01,$B0
         .byte   $03,$10,$85,$E7,$03,$E8,$03,$E9
@@ -1011,8 +1009,8 @@ L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $03,$A9,$03,$AA,$03,$AB,$03,$AC
         .byte   $03,$AD,$03,$AE,$03,$AF,$03,$B0
         .byte   $03,$B1,$03,$D4
-        ora     ($12,x)
-        ora     ($B2),y
+        .byte   $01,$12
+        .byte   $11,$B2
         .byte   $03,$B3,$03,$B4,$03,$B5,$03,$B6
         .byte   $03,$B7,$03,$B8,$03,$B9,$03,$BA
         .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
@@ -1041,7 +1039,7 @@ L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $03,$A1,$03,$A0,$03,$A2,$03,$AE
         .byte   $03,$A8,$C3,$A5,$03,$AF,$03,$B0
         .byte   $03,$A8,$03,$A9
-        ora     ($AB,x)
+        .byte   $01,$AB
         .byte   $03,$AC,$03,$AD,$03,$BA,$01,$B1
         .byte   $01,$12,$14,$A0,$03,$B2,$03,$BD
         .byte   $03,$A2,$03,$B3,$03,$B4,$03,$B5
@@ -1101,7 +1099,7 @@ L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $02,$CD,$02,$C0,$02,$C1,$02,$C2
         .byte   $02,$CE,$02,$CF,$02,$D0,$02,$D1
         .byte   $02
-        cmp     $C501,y
+        .byte   $D9,$01,$C5
         .byte   $02,$14,$1C,$C3,$02,$C4,$02,$C6
         .byte   $02,$C7,$02,$C8,$02,$C9,$02,$CA
         .byte   $02,$D2,$02,$D3,$02,$D4,$02,$C0
@@ -1121,7 +1119,7 @@ L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $03,$CF,$03,$AF,$01,$04,$18,$8F
         .byte   $03,$AC,$03,$AD,$03,$AE,$03,$0A
         .byte   $43,$A0,$01,$A1,$01
-        ldx     #$01
+        .byte   $A2,$01
         .byte   $A3,$01,$A4,$01,$A5,$01,$A6,$01
         .byte   $A7,$01,$A8,$03,$A9,$03,$0A,$43
         .byte   $A0,$01,$A1,$01,$A2,$01,$A3,$01
@@ -1131,16 +1129,16 @@ L9599:  .byte   $03,$B2,$03,$B4,$03,$B5,$03,$B6
         .byte   $A2,$03,$A3,$03,$A6,$03,$A9,$03
         .byte   $AA,$03,$AD,$03,$AF,$03,$B0,$03
         .byte   $B1,$03,$B2,$03,$A4,$03
-        ldy     #$03
-        lda     $03
-        ldx     $C503
-        ora     ($C6,x)
-        ora     ($C4,x)
-        ora     ($16,x)
-        jsr     L03B3
-        ldy     $03,x
-        lda     $03,x
-        ldx     $03,y
+        .byte   $A0,$03
+        .byte   $A5,$03
+        .byte   $AE,$03,$C5
+        .byte   $01,$C6
+        .byte   $01,$C4
+        .byte   $01,$16
+        .byte   $20,$B3,$03
+        .byte   $B4,$03
+        .byte   $B5,$03
+        .byte   $B6,$03
         .byte   $B7,$03,$B8,$03,$B9,$03
 music_data_mid:  .byte   $BA
 L9D01:  .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
@@ -1148,7 +1146,7 @@ L9D01:  .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
         .byte   $03,$C2,$03,$B1,$03,$B2,$03,$C4
         .byte   $01,$C5,$01,$C6,$01,$16,$20,$B3
         .byte   $03,$B4,$03,$B5,$03
-        ldx     $03,y
+        .byte   $B6,$03
         .byte   $B7,$03,$B8,$03,$B9,$03,$BA,$03
         .byte   $BB,$03,$BC,$03,$C3,$03,$AB,$03
         .byte   $BF,$03,$C0,$03,$AE,$03,$AF,$03
@@ -1164,8 +1162,8 @@ L9D01:  .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
         .byte   $D6,$81,$0B,$21,$E5,$82,$E5,$C2
         .byte   $E4,$82,$E4,$C2,$E1,$82,$E2,$82
         .byte   $E3,$82,$E0,$82,$E3,$C2
-        cpx     #$C2
-        dec     $81,x
+        .byte   $E0,$C2
+        .byte   $D6,$81
         .byte   $0B,$22,$E1,$02,$E4,$02,$E4,$42
         .byte   $E2,$02,$E0,$02,$E0,$42,$E3,$02
         .byte   $E3,$42,$E5,$02,$E5,$42,$D6,$01
@@ -1182,7 +1180,7 @@ L9D01:  .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
         .byte   $AE,$02,$AF,$02,$0C,$33,$B0,$02
         .byte   $B1,$02,$B2,$02,$B3,$02,$B4,$02
         .byte   $B5,$02
-        ldx     $02,y
+        .byte   $B6,$02
         .byte   $B7,$02,$B8,$02,$B9,$02,$BA,$02
         .byte   $BB,$02,$0C,$33,$BC,$02,$BD,$02
         .byte   $BE,$02,$BF,$02,$C0,$02,$C1,$02
@@ -1198,14 +1196,14 @@ L9D01:  .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
         .byte   $C6,$41,$C8,$01,$CF,$01,$C8,$41
         .byte   $CD,$03,$0D,$42,$C0,$02,$C1,$02
         .byte   $C2,$02,$C3,$02,$C4,$02
-        cmp     $02
-        cmp     #$01
-        dex
-        ora     ($CB,x)
-        ora     ($CF,x)
-        ora     ($CC,x)
-        ora     ($CF,x)
-        ora     ($CE,x)
+        .byte   $C5,$02
+        .byte   $C9,$01
+        .byte   $CA
+        .byte   $01,$CB
+        .byte   $01,$CF
+        .byte   $01,$CC
+        .byte   $01,$CF
+        .byte   $01,$CE
         .byte   $03,$11,$26,$A0,$03,$A1,$03,$A2
         .byte   $03,$A3,$03,$A4,$03,$A5,$03,$A8
         .byte   $03,$A9,$03,$AC,$03,$AD,$03,$A6
@@ -1238,7 +1236,7 @@ L9D01:  .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
         .byte   $02,$BA,$02,$B1,$02,$B2,$02,$0F
         .byte   $17,$BC,$02,$BD,$02,$BF,$02,$C0
         .byte   $02,$A0,$02,$A1,$02
-        ldx     #$02
+        .byte   $A2,$02
         .byte   $BB,$02,$A6,$02,$BE,$02,$AA,$02
         .byte   $C1,$02,$C2,$02,$AD,$02,$AE,$02
         .byte   $01,$2A,$C5,$02,$02,$2A,$C6,$02
@@ -1270,7 +1268,7 @@ LA003:  .byte   $03,$B2,$03,$A6,$03,$A7,$03,$B3
         .byte   $02,$A6,$03,$A3,$02,$A4,$02,$A5
         .byte   $02,$A7,$03,$A8,$03,$A9,$03,$AA
         .byte   $03,$AB,$03,$AC,$03
-        lda     LAE03
+        .byte   $AD,$03,$AE
         .byte   $03,$AF,$03,$B0,$03,$B1,$03,$B2
         .byte   $03,$B1,$03,$B2,$03,$B3,$03,$B4
         .byte   $03,$B5,$03,$B4,$03,$B6,$03,$B7
@@ -1305,7 +1303,7 @@ LA003:  .byte   $03,$B2,$03,$A6,$03,$A7,$03,$B3
         .byte   $03,$A6,$03,$AC,$03,$A8,$03,$A9
         .byte   $03,$A9,$43,$A8,$43,$AD,$02,$0D
         .byte   $33,$AE,$03,$AF,$03
-        bcs     LA1A5
+        .byte   $B0,$03
         .byte   $A3,$03,$B1
 LA1A5:  .byte   $03,$B2,$03,$B3,$03,$A7,$03,$A8
         .byte   $03,$B4,$03,$B5,$03,$A8,$43,$B7
@@ -1336,22 +1334,22 @@ LA1A5:  .byte   $03,$B2,$03,$B3,$03,$A7,$03,$A8
         .byte   $03,$B3,$03,$A7,$03
 music_data_patterns:  .byte   $B7,$01,$06,$37,$B4,$03,$B5,$03
         .byte   $B6,$03,$AF,$03,$B2,$03,$B7,$01
-LA28A:  ora     $4F,x
+LA28A:  .byte   $15,$4F
         .byte   $D3,$23,$D4,$23,$D4,$63
 LA292:  .byte   $D3,$63,$D5,$23,$D6,$23,$D7,$23
         .byte   $D8,$23
-LA29C:  cmp     ($23),y
+LA29C:  .byte   $D1,$23
         .byte   $D2,$23,$D0,$23
-        bne     LA2C7
-        bne     LA2C9
-        bne     LA2CB
-        bne     LA2CD
-        bne     LA2CF
-LA2AC:  bne     LA2D1
-        bne     LA2D3
-        bne     LA2D5
-        bne     LA2D7
-LA2B4:  bne     LA2D9
+        .byte   $D0,$23
+        .byte   $D0,$23
+        .byte   $D0,$23
+        .byte   $D0,$23
+        .byte   $D0,$23
+LA2AC:  .byte   $D0,$23
+        .byte   $D0,$23
+        .byte   $D0,$23
+        .byte   $D0,$23
+LA2B4:  .byte   $D0,$23
         .byte   $04,$17,$D5,$02,$D6,$02
 LA2BC:  .byte   $D7,$02
 LA2BE:  .byte   $D8,$02,$01,$09,$3C,$02,$04,$17
@@ -1372,97 +1370,97 @@ LA2D5:  .byte   $03
 LA2D6:  .byte   $D3
 LA2D7:  .byte   $03,$D4
 LA2D9:  .byte   $03,$D5,$03,$09,$1C
-LA2DE:  dec     $03,x
+LA2DE:  .byte   $D6,$03
 LA2E0:  .byte   $D7,$03,$D8,$03
-        cmp     $DA03,y
+        .byte   $D9,$03,$DA
         .byte   $03,$DB,$03,$DC,$03,$DD,$03
 LA2EE:  .byte   $DE
         .byte   $03
 LA2F0:  .byte   $10,$3A
-        bne     LA2F6
-        bne     LA338
-LA2F6:  bne     music_data_patterns
-LA2F8:  bne     LA2BC
-        cmp     ($02),y
+        .byte   $D0,$02
+        .byte   $D0,$42
+LA2F6:  .byte   $D0,$82
+LA2F8:  .byte   $D0,$C2
+        .byte   $D1,$02
         .byte   $D2,$02,$D3,$02
 LA300:  .byte   $D4,$02,$D0,$02,$D0,$42
-        bne     LA28A
-        bne     LA2CC
-        bne     LA30E
-LA30C:  bne     LA350
-LA30E:  bne     LA292
-LA310:  bne     LA2D4
-        bpl     LA34F
-        bne     LA318
-        bne     LA35A
-LA318:  bne     LA29C
-        bne     LA2DE
-        cmp     ($02),y
+        .byte   $D0,$82
+        .byte   $D0,$C2
+        .byte   $D0,$02
+LA30C:  .byte   $D0,$42
+LA30E:  .byte   $D0,$82
+LA310:  .byte   $D0,$C2
+        .byte   $10,$3B
+        .byte   $D0,$02
+        .byte   $D0,$42
+LA318:  .byte   $D0,$82
+        .byte   $D0,$C2
+        .byte   $D1,$02
         .byte   $D2,$02,$D3,$02
 LA322:  .byte   $D4,$02,$D0,$02,$D0,$42
-        bne     LA2AC
-        bne     LA2EE
-        bne     LA330
-        bne     LA372
-LA330:  bne     LA2B4
-LA332:  bne     LA2F6
-        bpl     LA372
-        bne     LA33A
-LA338:  bne     LA37C
-LA33A:  bne     LA2BE
-        bne     LA300
-        cmp     ($02),y
+        .byte   $D0,$82
+        .byte   $D0,$C2
+        .byte   $D0,$02
+        .byte   $D0,$42
+LA330:  .byte   $D0,$82
+LA332:  .byte   $D0,$C2
+        .byte   $10,$3C
+        .byte   $D0,$02
+LA338:  .byte   $D0,$42
+LA33A:  .byte   $D0,$82
+        .byte   $D0,$C2
+        .byte   $D1,$02
         .byte   $D2,$02,$D3,$02,$D4,$02,$D0,$02
-        bne     LA38C
-        bne     LA2CE
-        bne     LA310
+        .byte   $D0,$42
+        .byte   $D0,$82
+        .byte   $D0,$C2
 LA34E:  .byte   $D0
 LA34F:  .byte   $02
-LA350:  bne     LA394
-        bne     LA2D6
-        bne     LA318
-        bpl     LA392
-        bne     LA35C
-LA35A:  bne     LA39E
-LA35C:  bne     LA2E0
-        bne     LA322
-        cmp     $02,x
-        dec     $02,x
+LA350:  .byte   $D0,$42
+        .byte   $D0,$82
+        .byte   $D0,$C2
+        .byte   $10,$3A
+        .byte   $D0,$02
+LA35A:  .byte   $D0,$42
+LA35C:  .byte   $D0,$82
+        .byte   $D0,$C2
+        .byte   $D5,$02
+        .byte   $D6,$02
         .byte   $D7,$02,$D8,$02,$D0,$02
-        bne     LA3AE
-        bne     LA2F0
-        bne     LA332
-        bne     LA374
-LA372:  bne     LA3B6
-LA374:  bne     LA2F8
-        bne     LA33A
+        .byte   $D0,$42
+        .byte   $D0,$82
+        .byte   $D0,$C2
+        .byte   $D0,$02
+LA372:  .byte   $D0,$42
+LA374:  .byte   $D0,$82
+        .byte   $D0,$C2
         .byte   $04,$17,$D9,$02
 LA37C:  .byte   $DA,$02,$DB,$02,$DC,$02,$04,$17
         .byte   $D0,$02,$D0,$42
-        bne     LA30C
-        bne     LA34E
-LA38C:  ora     $3D,x
-        ldx     #$03
+        .byte   $D0,$82
+        .byte   $D0,$C2
+LA38C:  .byte   $15,$3D
+        .byte   $A2,$03
         .byte   $A3,$03
-LA392:  ldy     $03
-LA394:  lda     $03
+LA392:  .byte   $A4,$03
+LA394:  .byte   $A5,$03
         .byte   $A7,$03,$A8,$03,$A9,$03,$AA,$03
 LA39E:  .byte   $AB,$03,$AC,$03,$AD,$03
-        ldx     LAF03
+        .byte   $AE,$03,$AF
         .byte   $03,$B0,$03,$B1,$03,$B2,$03
-LA3AE:  lda     ($03,x)
-        ldx     $03
+LA3AE:  .byte   $A1,$03
+        .byte   $A6,$03
         .byte   $B7,$01,$B8,$01
-LA3B6:  ldy     #$03
+LA3B6:  .byte   $A0,$03
         .byte   $14,$3D,$A2,$03,$B3,$03,$B4,$03
         .byte   $A5,$03,$A7,$03,$B5,$03,$B6,$03
         .byte   $AA,$03,$AB,$03,$AC,$03,$AD,$03
         .byte   $AE,$03,$AF,$03,$B0,$03,$B1,$03
         .byte   $B2,$03,$A1,$03,$A6,$03,$B7,$01
-        clv
-        ora     ($18,x)
-        rol     $038F,x
-        tsx
+        .byte   $B8
+        .byte   $01,$18
+        .byte   $3E,$8F,$03
+        .byte   $BA
         .byte   $03,$BB,$03,$BC,$03,$BD,$03,$BE
         .byte   $03,$BF,$03,$C0,$03,$C1,$03,$C3
         .byte   $03,$C4,$03,$C5,$03,$C6,$03,$C7
@@ -1487,7 +1485,7 @@ LA3B6:  ldy     #$03
         .byte   $43,$B6,$03,$B7,$03,$B8,$03,$B9
         .byte   $03,$BA,$03,$BB,$03,$BC,$03,$BD
         .byte   $03,$BE,$03,$BF,$03
-        cpy     #$03
+        .byte   $C0,$03
         .byte   $D2,$01,$2D,$40,$C1,$03,$C2,$03
         .byte   $C2,$43,$C1,$43,$C3,$03,$C4,$03
         .byte   $C5,$03,$C6,$03,$C7,$03,$C3,$43
@@ -1569,7 +1567,7 @@ LA3B6:  ldy     #$03
         .byte   $F9,$43,$F8,$43,$FA,$03,$FB,$03
         .byte   $FB,$43,$FA,$43,$FA,$83,$FB,$83
         .byte   $FB,$C3,$FA,$C3,$F8,$83
-        sbc     $F983,y
+        .byte   $F9,$83,$F9
         .byte   $C3,$F8,$C3,$08,$4D,$FF,$03,$FF
         .byte   $03,$FF,$03,$FF,$03,$FF,$03,$FF
         .byte   $03,$FF,$03,$FF,$03,$01,$00,$6A
@@ -1577,7 +1575,7 @@ LA3B6:  ldy     #$03
         .byte   $01,$04,$17,$D7,$02,$D7,$42,$D8
         .byte   $02,$D8,$42,$04,$17,$F0,$02,$F0
         .byte   $42
-        sbc     ($02),y
+        .byte   $F1,$02
         .byte   $F2,$02,$06,$50,$F0,$02,$F0,$42
         .byte   $F3,$02,$F4,$02,$F5,$02,$F5,$42
         .byte   $09,$52,$F6,$02,$F7,$02,$F8,$02
@@ -1587,14 +1585,14 @@ LA3B6:  ldy     #$03
         .byte   $F5,$42,$09,$53,$F7,$42,$F6,$42
         .byte   $FA,$42,$F9,$42,$F8,$42,$FC,$42
         .byte   $FB,$42,$FE,$42
-        sbc     $0242,x
+        .byte   $FD,$42,$02
         .byte   $54,$D9,$02
-        cmp     $0142,y
+        .byte   $D9,$42,$01
         .byte   $57,$DA,$03,$01,$55,$DB,$03,$03
         .byte   $58,$DC,$03,$DD,$03,$DE,$03,$01
         .byte   $56,$DB,$43,$03,$59,$DC,$43,$DE
         .byte   $43,$DD,$43,$06,$5A,$D0,$03
-        cmp     ($03),y
+        .byte   $D1,$03
         .byte   $D2,$03,$D3,$03,$DE,$03,$DE,$03
         .byte   $06,$5A,$D4,$03,$D5,$03,$D6,$03
         .byte   $D7,$03,$DF,$03,$DF,$03,$06,$5A
@@ -1654,7 +1652,7 @@ LA3B6:  ldy     #$03
         .byte   $F7,$02,$F8,$02,$04,$17,$F9,$02
         .byte   $FA,$02,$FB,$02,$FC,$02,$02,$54
         .byte   $FD,$02,$FD,$42,$04,$17,$FA,$42
-        sbc     $FC42,y
+        .byte   $F9,$42,$FC
         .byte   $42,$FB,$42,$04,$17,$F6,$42,$F5
         .byte   $42,$F8,$42,$F7,$42,$04,$17,$E5
         .byte   $01,$E6,$01,$E7,$01,$E8,$01,$0D
@@ -1705,7 +1703,7 @@ LA3B6:  ldy     #$03
         .byte   $F8,$F4,$00,$FB,$F0,$FC,$F8,$FC
         .byte   $00,$FB,$08,$04,$F0,$04,$F8,$04
         .byte   $00,$0C
-        inc     $FBFA,x
+        .byte   $FE,$FA,$FB
         .byte   $F4,$F8,$F4,$00,$FC,$F8,$FC,$00
         .byte   $04,$F8,$04,$00,$0C,$FF,$F5,$08
         .byte   $04,$F0,$FA,$FB,$FA,$F0,$F4,$F4
@@ -1749,43 +1747,43 @@ LA3B6:  ldy     #$03
         .byte   $F8,$F8,$F8,$00,$F8,$08,$00,$F8
         .byte   $00,$00,$00,$08,$07,$F0,$08,$F8
         .byte   $08,$00,$FD,$FC,$F0,$00,$F8
-        sed
-        sed
-        brk
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$08,$F8
-        php
+        .byte   $08
 
 ; =============================================================================
 ; Sound Effect Data
 ; Waveform, pitch, and timing data for gameplay sound effects.
 ; =============================================================================
-sfx_data_start:  brk
+sfx_data_start:  .byte   $00
         .byte   $06,$08,$FD,$FA,$F8,$F8,$F8,$00
         .byte   $00,$F8,$00,$00,$F0
-LACAB:  beq     sfx_data_start
-        sed
-        beq     LACB0
-LACB0:  sed
-        beq     LACAB
-        php
-        brk
+LACAB:  .byte   $F0,$F0
+        .byte   $F8
         .byte   $F0,$00
-        php
-        php
-        beq     LACC3
-        sed
-        php
-        brk
+LACB0:  .byte   $F8
+        .byte   $F0,$F8
+        .byte   $08
+        .byte   $00
+        .byte   $F0,$00
+        .byte   $08
+        .byte   $08
+        .byte   $F0,$08
+        .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $08,$08,$F0,$08
         .byte   $F0
-LACC3:  inx
-        sed
-        inx
-        php
-        inx
+LACC3:  .byte   $E8
+        .byte   $F8
+        .byte   $E8
+        .byte   $08
+        .byte   $E8
         .byte   $F7,$F0,$F7,$F8,$EF,$F6,$F8,$F8
         .byte   $00,$F8,$F8,$00,$00,$00,$FE,$F6
         .byte   $E5,$F8,$E5,$00,$ED,$F7,$ED,$FF
@@ -1793,51 +1791,51 @@ LACC3:  inx
         .byte   $FD,$F9,$FD,$01,$05,$E8,$05,$F0
         .byte   $05,$F8,$05,$00,$0D,$E8,$0D,$F0
         .byte   $0D
-LACF9:  sed
-        ora     $1500
-        beq     LACF9
+LACF9:  .byte   $F8
+        .byte   $0D,$00,$15
+        .byte   $F0,$FA
         .byte   $F7,$E8,$F8,$E8,$00,$F0,$F8
-        beq     LAD08
-LAD08:  sed
-        sed
-        sed
-        brk
+        .byte   $F0,$00
+LAD08:  .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$00,$F9,$00,$01,$00,$09
         .byte   $08,$F0,$08,$F8
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $08,$08,$10,$F0,$10
-        sed
-        bpl     LAD22
-LAD22:  bpl     LAD2C
-        clc
-        sed
-        sbc     $E5FF,x
-        sed
-        sbc     $00
-LAD2C:  sbc     $EDF8
-        brk
+        .byte   $F8
+        .byte   $10,$00
+LAD22:  .byte   $10,$08
+        .byte   $18
+        .byte   $F8
+        .byte   $FD,$FF,$E5
+        .byte   $F8
+        .byte   $E5,$00
+LAD2C:  .byte   $ED,$F8,$ED
+        .byte   $00
         .byte   $F5,$00,$F5,$08,$F5,$10,$FD,$01
         .byte   $FD,$09,$FD,$11,$05,$F8,$05,$00
         .byte   $05,$08,$05,$10,$0D,$F8,$0D,$00
         .byte   $0D,$08,$0D,$10,$15,$00,$FA
 LAD4F:  .byte   $07,$F0,$00
-        beq     LAD5C
-        sed
-        beq     LAD4F
-        sed
-        sed
-        brk
+        .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LAD5C:  .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$E8,$00,$E8,$08,$F0
         .byte   $F8,$08,$F1,$08,$F9,$08,$01,$08
-        ora     #$F7
-        sed
-        sbc     $10E8,y
-        sbc     $E8F4,x
+        .byte   $09,$F7
+        .byte   $F8
+        .byte   $F9,$E8,$10
+        .byte   $FD,$F4,$E8
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$FC,$E8
         .byte   $FC,$F0,$FC,$F8,$FC,$00,$FC,$08
         .byte   $04,$F0,$04,$F8,$04,$00,$04,$08
@@ -1845,74 +1843,74 @@ LAD5C:  .byte   $00,$F0,$00
         .byte   $F4,$00,$FC,$E8,$FC,$F0,$FC,$F8
         .byte   $FC,$00,$04,$F0,$04
 LADA7:  .byte   $F8,$04,$00,$FE
-        php
-        asl     $08
-        sbc     $F4F9,x
-        beq     LADA7
-        sed
+        .byte   $08
+        .byte   $06,$08
+        .byte   $FD,$F9,$F4
+        .byte   $F0,$F4
+        .byte   $F8
         .byte   $F4,$00,$FC,$F0,$FC,$F8,$FC,$00
         .byte   $04,$F0,$04,$F8,$04,$00,$FE
-        php
-        asl     $08
-        ora     #$E8
+        .byte   $08
+        .byte   $06,$08
+        .byte   $09,$E8
         .byte   $0C,$F0,$FD,$F9,$F0,$F0,$F0,$F8
         .byte   $F0
-LADD1:  brk
-        beq     LADDC
-        sed
-        inx
-        sed
-        beq     LADD1
-        sed
-        sed
-        brk
-LADDC:  sed
-        php
-        brk
-        .byte   $E8,$00,$F0,$00
-        sed
-        brk
-        .byte   $00,$00,$08,$08,$E8
-LADEA:  php
-        beq     LADF5
-        sed
-        php
-LADEF:  brk
-        .byte   $08,$08
-LADF2:  beq     LADEA
-        sed
-LADF5:  beq     LADEF
-        sed
-        beq     LADF2
-        beq     LADFC
-LADFC:  sed
-        sed
-        sed
-        brk
+LADD1:  .byte   $00
+        .byte   $F0,$08
+        .byte   $F8
+        .byte   $E8
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
         .byte   $00
-LAE01:  sed
-        brk
-LAE03:  .byte   $00,$F8,$F0,$00
-        beq     LAE01
-        php
-        brk
-        .byte   $08,$F8,$FC,$F8,$F8,$00
-LAE11:  sed
-        brk
-        .byte   $00,$F8,$00
-        sed
-        beq     LAE11
-        php
-        brk
+LADDC:  .byte   $F8
+        .byte   $08
+        .byte   $00
+        .byte   $E8,$00,$F0,$00
+        .byte   $F8
+        .byte   $00
+        .byte   $00,$00,$08,$08,$E8
+LADEA:  .byte   $08
+        .byte   $F0,$08
+        .byte   $F8
+        .byte   $08
+LADEF:  .byte   $00
+        .byte   $08,$08
+LADF2:  .byte   $F0,$F6
+        .byte   $F8
+LADF5:  .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F0,$F8
         .byte   $F0,$00
-        php
-        php
-        sed
-        php
-        brk
+LADFC:  .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
+        .byte   $00
+LAE01:  .byte   $F8
+        .byte   $00
+LAE03:  .byte   $00,$F8,$F0,$00
+        .byte   $F0,$F8
+        .byte   $08
+        .byte   $00
+        .byte   $08,$F8,$FC,$F8,$F8,$00
+LAE11:  .byte   $F8
+        .byte   $00
+        .byte   $00,$F8,$00
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $08
+        .byte   $00
+        .byte   $F0,$00
+        .byte   $08
+        .byte   $08
+        .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $00,$FC,$F0,$F0,$F0
-        sed
-        beq     LAE2A
+        .byte   $F8
+        .byte   $F0,$00
 LAE2A:  .byte   $F2,$08,$F8,$F0,$F8,$F8,$F8,$00
         .byte   $00,$F6,$00,$FE,$EC,$F4,$EC,$FC
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$FC,$F6
@@ -1921,199 +1919,199 @@ LAE49:  .byte   $FC,$F4,$F4,$F4,$FC,$F4,$04,$FC
         .byte   $F4,$FC,$FC
 LAE54:  .byte   $FC,$04,$04,$F6,$04,$FE,$0C,$F6
         .byte   $0C,$FE
-LAE5E:  inx
-        beq     LAE49
-LAE61:  sed
-        beq     LAE54
-        beq     LAE5E
-        sed
-        beq     LAE61
-        sed
-        brk
-LAE6B:  beq     LAE6D
-LAE6D:  sed
-        php
-        beq     LAE79
-        sed
-        sed
-        brk
-        .byte   $00,$00
-LAE76:  php
-        brk
+LAE5E:  .byte   $E8
+        .byte   $F0,$E8
+LAE61:  .byte   $F8
+        .byte   $F0,$F0
+        .byte   $F0,$F8
         .byte   $F8
-LAE79:  php
-        brk
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $00
+LAE6B:  .byte   $F0,$00
+LAE6D:  .byte   $F8
+        .byte   $08
+        .byte   $F0,$08
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
+        .byte   $00,$00
+LAE76:  .byte   $08
+        .byte   $00
+        .byte   $F8
+LAE79:  .byte   $08
+        .byte   $00
         .byte   $08,$08,$08,$F7,$F1
-LAE80:  inx
-        beq     LAE6B
-LAE83:  sed
-        beq     LAE76
-        beq     LAE80
-        sed
-        beq     LAE83
-        sed
-        sed
-        brk
+LAE80:  .byte   $E8
+        .byte   $F0,$E8
+LAE83:  .byte   $F8
+        .byte   $F0,$F0
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$00,$00,$F0,$00
-        sed
-        brk
-LAE95:  brk
+        .byte   $F8
+        .byte   $00
+LAE95:  .byte   $00
         .byte   $00,$08,$08,$F0,$08,$F8,$08,$00
-        php
-        php
-        sbc     $F0F1,y
-LAEA3:  beq     LAE95
-        sed
-        beq     LAEA8
-LAEA8:  sed
-        beq     LAEA3
-        sed
-        sed
-        brk
-        sed
-        php
-        brk
+        .byte   $08
+        .byte   $08
+        .byte   $F9,$F1,$F0
+LAEA3:  .byte   $F0,$F0
+        .byte   $F8
         .byte   $F0,$00
-        sed
-        brk
+LAEA8:  .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
+        .byte   $F8
+        .byte   $08
+        .byte   $00
+        .byte   $F0,$00
+        .byte   $F8
+        .byte   $00
         .byte   $00
 LAEB6:  .byte   $00,$08,$08,$F6
-        php
-        inc     $0608,x
-        bpl     LAEB6
-LAEC0:  bpl     LAEC0
-        bpl     LAECA
+        .byte   $08
+        .byte   $FE,$08,$06
+        .byte   $10,$F6
+LAEC0:  .byte   $10,$FE
+        .byte   $10,$06
         .byte   $F7,$F1,$F1,$F0,$F1,$F8
-LAECA:  sbc     ($00),y
-        sbc     $F9F0,y
-        sed
-        sbc     $F900,y
-        php
-        ora     ($F0,x)
-        ora     ($F8,x)
-        ora     ($00,x)
-        ora     ($08,x)
-        ora     #$F0
-        ora     #$F8
-        ora     #$00
-        ora     #$08
+LAECA:  .byte   $F1,$00
+        .byte   $F9,$F0,$F9
+        .byte   $F8
+        .byte   $F9,$00,$F9
+        .byte   $08
+        .byte   $01,$F0
+        .byte   $01,$F8
+        .byte   $01,$00
+        .byte   $01,$08
+        .byte   $09,$F0
+        .byte   $09,$F8
+        .byte   $09,$00
+        .byte   $09,$08
         .byte   $FC,$FC,$03,$00,$F0,$F0,$F0,$F8
         .byte   $F8,$F0,$F8,$F8,$F8,$00,$F8,$08
         .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$08,$F8,$08,$00,$08
         .byte   $08
 LAF02:  .byte   $F5
-LAF03:  sed
-        beq     LAF06
-LAF06:  beq     LAF10
-        beq     LAF02
-        beq     LAF0C
-LAF0C:  sed
-        sed
-        sed
-        brk
-LAF10:  brk
+LAF03:  .byte   $F8
+        .byte   $F0,$00
+LAF06:  .byte   $F0,$08
+        .byte   $F0,$F8
+        .byte   $F0,$00
+LAF0C:  .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
+LAF10:  .byte   $00
         .byte   $F8,$00,$00,$08
-        sed
-        php
-        brk
+        .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $00,$08,$00,$10,$F8,$FE,$F4,$FC
         .byte   $FC
 LAF21:  .byte   $FC,$04
 LAF23:  .byte   $FC,$EC,$F4,$EC,$FC,$F4,$F4,$F4
         .byte   $04,$FC,$F4,$FC,$04,$04,$F4,$04
         .byte   $04,$0C
-LAF35:  sbc     $0C,x
-        sbc     $F4F4,x
+LAF35:  .byte   $F5,$0C
+        .byte   $FD,$F4,$F4
         .byte   $F4,$FC,$F0,$F8,$F0,$00
-        sed
-        sed
-        sed
-        brk
+        .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $00,$F8,$08,$F8,$C8,$18,$C8,$20
-        iny
-        plp
-        iny
-        bmi     LAF21
-        bpl     LAF23
-        clc
-        bne     LAF76
-        bne     LAF80
-        bne     LAF8A
-        cld
-        bpl     LAF35
-LAF5D:  clc
-        cld
-        jsr     L28D8
-        cld
-        bmi     LAF5D
-        plp
-        sed
-        bmi     LAF69
-LAF69:  plp
-        brk
+        .byte   $C8
+        .byte   $28
+        .byte   $C8
+        .byte   $30,$D0
+        .byte   $10,$D0
+        .byte   $18
+        .byte   $D0,$20
+        .byte   $D0,$28
+        .byte   $D0,$30
+        .byte   $D8
+        .byte   $10,$D8
+LAF5D:  .byte   $18
+        .byte   $D8
+        .byte   $20,$D8,$28
+        .byte   $D8
+        .byte   $30,$F8
+        .byte   $28
+        .byte   $F8
+        .byte   $30,$00
+LAF69:  .byte   $28
+        .byte   $00
         .byte   $30,$DF,$38,$DF,$40,$E7,$70,$EF
         .byte   $70,$F7,$70
 LAF76:  .byte   $FF,$70,$07,$70,$2E,$20,$2E
-        plp
-        rol     $28,x
-LAF80:  bne     LAFBA
-        cld
-        sec
-        inx
-        brk
+        .byte   $28
+        .byte   $36,$28
+LAF80:  .byte   $D0,$38
+        .byte   $D8
+        .byte   $38
+        .byte   $E8
+        .byte   $00
         .byte   $E8,$08,$F0,$08
 LAF8A:  .byte   $F0
 LAF8B:  .byte   $10,$F0
-        clc
-        sed
-        php
-        sed
-        bpl     LAF8B
-        clc
-        brk
+        .byte   $18
+        .byte   $F8
+        .byte   $08
+        .byte   $F8
+        .byte   $10,$F8
+        .byte   $18
+        .byte   $00
         .byte   $00,$08,$00,$FC,$F4,$FC,$FC
 LAF9C:  .byte   $FC,$04,$04,$FC,$E4,$F0,$E4,$F8
         .byte   $E4,$00
-LAFA6:  cpx     $08
-        cpx     $ECF0
-        sed
-        cpx     $EC00
-        php
+LAFA6:  .byte   $E4,$08
+        .byte   $EC,$F0,$EC
+        .byte   $F8
+        .byte   $EC,$00,$EC
+        .byte   $08
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$F4,$08
         .byte   $FC,$F0
 LAFBA:  .byte   $FC,$F8,$FC,$00,$FC,$08,$FC,$10
         .byte   $04,$F8,$04,$00,$04,$08,$04,$10
         .byte   $0C,$F0,$0C,$F8,$0C,$00,$0C,$08
         .byte   $0C,$10,$14,$ED,$14
-        sbc     $14,x
-        sbc     $0514,x
+        .byte   $F5,$14
+        .byte   $FD,$14,$05
         .byte   $14,$0D,$E8,$F0
-        inx
-        sed
-        inx
-LAFE3:  brk
+        .byte   $E8
+        .byte   $F8
+        .byte   $E8
+LAFE3:  .byte   $00
         .byte   $F0,$F0,$F0,$F8,$F0
-        brk
-        cpx     $F408
-        beq     LAFE3
-        sed
+        .byte   $00
+        .byte   $EC,$08,$F4
+        .byte   $F0,$F4
+        .byte   $F8
         .byte   $F4,$00,$F4,$08,$FC,$F0,$FC,$F8
         .byte   $FC,$00,$FC,$08,$FC,$10,$04,$F8
         .byte   $04,$00,$04,$08,$04,$10,$0C,$F0
         .byte   $0C,$F8,$0C,$00,$0C,$08,$0C,$10
         .byte   $14,$ED,$14
-        sbc     $14,x
-        sbc     $0514,x
+        .byte   $F5,$14
+        .byte   $FD,$14,$05
         .byte   $14,$0D,$03,$18,$E4,$F0,$E4,$F8
         .byte   $E4,$00,$E4
-        php
-        cpx     $ECF0
-        sed
-        cpx     $EC00
-        php
+        .byte   $08
+        .byte   $EC,$F0,$EC
+        .byte   $F8
+        .byte   $EC,$00,$EC
+        .byte   $08
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$F4,$08
         .byte   $FC,$F0,$FC,$F8,$FC,$00,$FC,$08
         .byte   $04,$F6,$04,$FE,$04,$06,$04,$0E
@@ -2135,124 +2133,124 @@ LAFE3:  brk
         .byte   $0C,$00,$14,$F8,$14,$00,$0C,$08
         .byte   $14,$04,$F8,$F2,$F8,$FA,$F8,$02
         .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$E8,$F8,$E8,$00,$F0,$F8,$F0
         .byte   $00
-        sed
-        sed
-        sed
-        brk
+        .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $00,$F8,$00,$00,$08,$F8,$08,$00
         .byte   $10,$F8,$10,$00
-        clc
-        sed
-        clc
-        brk
+        .byte   $18
+        .byte   $F8
+        .byte   $18
+        .byte   $00
         .byte   $20,$F8,$20,$00,$D8,$F8,$D8,$00
         .byte   $E0,$F8,$E0,$00,$E8,$F6,$E8,$FE
         .byte   $F0,$F6
-sfx_data_section_2:  beq     sfx_data_section_2
-        sed
+sfx_data_section_2:  .byte   $F0,$FE
+        .byte   $F8
         .byte   $FA,$F8,$02,$00,$FA,$00,$02,$08
         .byte   $F6,$08,$FE,$10,$F6
-LB110:  bpl     LB110
-        clc
+LB110:  .byte   $10,$FE
+        .byte   $18
         .byte   $FA,$18,$02,$20,$FA,$20,$02,$E8
         .byte   $FA,$E8,$02,$F0,$FA,$F0,$02,$F8
         .byte   $F6
-        sed
-        inc     $F600,x
-        brk
+        .byte   $F8
+        .byte   $FE,$00,$F6
+        .byte   $00
         .byte   $FE,$08,$FA,$08
 LB12D:  .byte   $02,$10,$FA,$10,$02,$18,$F6
-        clc
-        inc     $F620,x
-        jsr     LF0FE
-        beq     LB12D
-LB13D:  sed
-        beq     LB140
-LB140:  beq     LB14A
-        sed
-        beq     LB13D
-        sed
-        sed
-        brk
+        .byte   $18
+        .byte   $FE,$20,$F6
+        .byte   $20,$FE,$F0
+        .byte   $F0,$F0
+LB13D:  .byte   $F8
+        .byte   $F0,$00
+LB140:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LB14A:  .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$08,$F0,$08,$F8,$08
         .byte   $00
-        php
-        php
-        sbc     ($E8),y
-        sbc     $F9E8,y
-        sed
-        sbc     $E800,y
+        .byte   $08
+        .byte   $08
+        .byte   $F1,$E8
+        .byte   $F9,$E8,$F9
+        .byte   $F8
+        .byte   $F9,$00,$E8
         .byte   $FF,$F0,$E8,$F0,$F0,$F0
-LB169:  sed
-        beq     LB16C
-LB16C:  sed
-        inx
-        sed
-        beq     LB169
-        sed
-        sed
-LB173:  brk
+LB169:  .byte   $F8
+        .byte   $F0,$00
+LB16C:  .byte   $F8
+        .byte   $E8
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+LB173:  .byte   $00
         .byte   $F8,$08,$00,$E8,$00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$08,$F0,$08,$F8,$08
         .byte   $00,$08,$08,$FB,$F9,$00
-        sbc     ($08),y
-        inx
-        brk
+        .byte   $F1,$08
+        .byte   $E8
+        .byte   $00
         .byte   $E0,$08,$E0,$E8,$F4,$DC
-        beq     LB173
-        sed
+        .byte   $F0,$DC
+        .byte   $F8
         .byte   $DC,$00,$DC,$08,$E4,$F0,$E4,$F8
         .byte   $E4,$00,$E4,$08,$EC,$E8,$EC,$F0
         .byte   $EC
-        sed
-        cpx     $EC00
-        php
-        cpx     $F410
-        inx
+        .byte   $F8
+        .byte   $EC,$00,$EC
+        .byte   $08
+        .byte   $EC,$10,$F4
+        .byte   $E8
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$F4,$08
         .byte   $F4,$10,$FC,$E8,$FC,$F0,$FC,$F8
         .byte   $FC,$00,$FC,$08,$FC
-        bpl     LB1CD
-        inx
+        .byte   $10,$04
+        .byte   $E8
         .byte   $04,$F0,$04
 LB1CD:  .byte   $F8,$04,$00,$04,$08,$04,$10,$0C
         .byte   $F0,$0C,$F8,$0C
 LB1D9:  .byte   $00,$14,$E8,$14,$F0,$14,$F8,$1C
         .byte   $E8,$1C
-        beq     LB201
-        sed
+        .byte   $F0,$1C
+        .byte   $F8
         .byte   $E7,$F5,$DC,$F0,$DC,$F8,$DC
 LB1ED:  .byte   $00,$DC,$08,$E4,$E8,$E4
-        beq     LB1D9
-        sed
-        cpx     $00
-        cpx     $08
-        cpx     $10
-        cpx     $ECE8
-        beq     LB1ED
-LB201:  sed
-        cpx     $EC00
-        php
-        cpx     $F410
-        inx
+        .byte   $F0,$E4
+        .byte   $F8
+        .byte   $E4,$00
+        .byte   $E4,$08
+        .byte   $E4,$10
+        .byte   $EC,$E8,$EC
+        .byte   $F0,$EC
+LB201:  .byte   $F8
+        .byte   $EC,$00,$EC
+        .byte   $08
+        .byte   $EC,$10,$F4
+        .byte   $E8
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$F4,$08
         .byte   $F4,$10,$FC,$E8,$FC,$F0,$FC,$F8
         .byte   $FC,$00,$FC,$08,$FC,$10,$04,$E8
         .byte   $04,$F0,$04,$F8,$04,$00,$04,$08
         .byte   $04,$10,$0C,$F0,$0C,$F8,$0C,$00
         .byte   $0C,$08,$14,$00,$14,$08,$14
-        bpl     LB257
-        brk
+        .byte   $10,$1C
+        .byte   $00
         .byte   $1C,$08,$1C,$10,$E9,$F2,$F8,$FC
         .byte   $00,$FC,$F4,$F4,$F4,$FC,$F4,$04
         .byte   $FC,$F4,$FC,$FC,$FC,$04,$04,$F4
@@ -2260,16 +2258,16 @@ LB201:  sed
 LB257:  .byte   $04,$0C,$F4,$0C,$FC,$0C,$04,$FC
         .byte   $FC,$F8,$F0,$F8,$F8,$F8,$00,$F8
         .byte   $08,$00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$08,$F7,$08,$FF,$FA
         .byte   $F8,$10,$07,$10,$0F,$10,$17,$18
         .byte   $07,$18,$0F,$18,$17,$08,$18,$FA
         .byte   $FA,$02,$00,$00,$12,$00,$1A,$08
         .byte   $12,$08,$1A,$10,$0A,$10,$12,$10
         .byte   $1A,$E4,$02,$E4,$0A,$EC,$FA
-        cpx     $EC02
-        asl     a
+        .byte   $EC,$02,$EC
+        .byte   $0A
         .byte   $F4,$FA,$F4,$02,$F4,$0A,$FC,$F2
         .byte   $FC,$FA,$FC,$02,$FC,$0A,$04,$FA
         .byte   $04,$02,$F4,$02,$00,$12,$00,$1A
@@ -2291,129 +2289,129 @@ LB257:  .byte   $04,$0C,$F4,$0C,$FC,$0C,$04,$FC
         .byte   $F4,$0A,$FC,$F2,$FC,$FA,$FC,$02
         .byte   $FC,$0A,$04,$FA,$04,$02,$F4,$02
         .byte   $EC,$ED,$EC,$F5,$EC
-        sbc     $EDF4,x
+        .byte   $FD,$F4,$ED
         .byte   $F4,$F5,$F4,$FD,$FC,$FC,$E4,$F5
         .byte   $E4,$FD,$EC,$F5,$EC,$FD,$F4,$F5
         .byte   $F4
-LB359:  sbc     $FCFC,x
-        sed
-        inx
-        sed
-        beq     LB359
-        sed
-        sed
-        brk
+LB359:  .byte   $FD,$FC,$FC
+        .byte   $F8
+        .byte   $E8
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$F8,$10,$00
-        inx
-        brk
+        .byte   $E8
+        .byte   $00
         .byte   $F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$00,$10,$F8,$E0
-        sed
-        clc
-        brk
+        .byte   $F8
+        .byte   $18
+        .byte   $00
         .byte   $E0,$00,$18,$F0,$F8,$F0,$00
-        sed
-        sed
-        sed
-        brk
+        .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $00,$F8,$00,$00,$08,$F8,$08,$00
         .byte   $F0,$E8,$F0,$F0,$F0
-LB391:  php
-        beq     LB3A4
-        sed
-LB395:  inx
-        sed
-LB397:  beq     LB391
-        php
-        sed
-        bpl     LB39D
-LB39D:  inx
-        brk
+LB391:  .byte   $08
+        .byte   $F0,$10
+        .byte   $F8
+LB395:  .byte   $E8
+        .byte   $F8
+LB397:  .byte   $F0,$F8
+        .byte   $08
+        .byte   $F8
+        .byte   $10,$00
+LB39D:  .byte   $E8
+        .byte   $00
         .byte   $F0,$00
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $10
-LB3A4:  php
-        inx
-        php
-        beq     LB3B1
-        php
-        php
-        bpl     LB395
-        beq     LB397
-        sed
-        inx
-LB3B1:  brk
-        inx
-LB3B3:  php
-        beq     LB3B6
-LB3B6:  beq     LB3C0
-        sed
-        beq     LB3B3
-        sed
-        sed
-        brk
+LB3A4:  .byte   $08
+        .byte   $E8
+        .byte   $08
+        .byte   $F0,$08
+        .byte   $08
+        .byte   $08
+        .byte   $10,$E8
+        .byte   $F0,$E8
+        .byte   $F8
+        .byte   $E8
+LB3B1:  .byte   $00
+        .byte   $E8
+LB3B3:  .byte   $08
+        .byte   $F0,$00
+LB3B6:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LB3C0:  .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$E8,$00,$E8,$08,$F0
         .byte   $F8,$08,$F7,$08,$FF,$08,$07,$08
         .byte   $0F,$F7,$F8,$F9,$E8,$F8,$F0,$F8
         .byte   $F8,$F8,$00,$F8,$08,$00,$F0
-        brk
-        sed
-        brk
+        .byte   $00
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$F0,$F8,$F0,$00,$E8
         .byte   $FC,$E0,$FC,$D8,$FC,$D0,$FC,$C8
         .byte   $FC,$C0,$FC,$B8,$FC,$B0,$FC,$A8
         .byte   $FC,$A0,$FC,$98,$FC,$F8,$F7,$F8
         .byte   $FF,$00,$F8,$00,$00,$08,$F8
-LB40E:  php
-        brk
-        .byte   $F8,$F9,$F8
-        ora     ($00,x)
-        sed
-        brk
+LB40E:  .byte   $08
         .byte   $00
-LB418:  php
-        sed
-        php
-LB41B:  brk
-        beq     LB40E
-        beq     LB418
-        sed
-        beq     LB41B
-        sed
-        sed
-        brk
+        .byte   $F8,$F9,$F8
+        .byte   $01,$00
+        .byte   $F8
+        .byte   $00
+        .byte   $00
+LB418:  .byte   $08
+        .byte   $F8
+        .byte   $08
+LB41B:  .byte   $00
+        .byte   $F0,$F0
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $00,$F8,$00,$00,$08,$F8,$08,$00
-        beq     LB430
-LB430:  beq     LB43A
-        sed
-        sed
-        sed
-        brk
+        .byte   $F0,$00
+LB430:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$00,$F8
 LB43A:  .byte   $00,$00,$08,$F8,$08,$00,$FC,$F8
         .byte   $FC,$00,$FC,$F0,$FC,$08,$00,$FE
         .byte   $00,$FA,$00,$FC,$F8,$FF,$00,$F7
         .byte   $00,$FF,$F8,$F9,$00
-        sbc     $0100,y
-        sed
-        sed
-        sed
-        brk
+        .byte   $F9,$00,$01
+        .byte   $F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $00,$F8,$00,$00,$08,$F8,$08,$00
         .byte   $F0,$F8,$F0,$00
-        sed
-        inx
-        sed
-        beq     LB46F
-LB46F:  inx
-        brk
+        .byte   $F8
+        .byte   $E8
+        .byte   $F8
+        .byte   $F0,$00
+LB46F:  .byte   $E8
+        .byte   $00
         .byte   $F0,$A0,$A0
 sfx_sprite_frame_data:  .byte   $C0,$B8,$A0,$08,$B0,$60,$F0,$40
         .byte   $10,$B0,$30,$20,$40,$68,$50,$98
@@ -2421,23 +2419,23 @@ sfx_sprite_frame_data:  .byte   $C0,$B8,$A0,$08,$B0,$60,$F0,$40
         .byte   $F0,$68,$18,$A8,$08,$30,$58,$E0
         .byte   $50,$40,$98,$48,$B0,$C0,$B8,$20
         .byte   $D8,$C0,$F8,$00
-        php
-        pla
-        sec
-        bcs     LB4E5
-        pha
-        cli
-        cli
-        cpx     $ECEC
+        .byte   $08
+        .byte   $68
+        .byte   $38
+        .byte   $B0,$40
+        .byte   $48
+        .byte   $58
+        .byte   $58
+        .byte   $EC,$EC,$EC
         .byte   $0C
         .byte   $0C
-        cpx     $0C0C
-        inx
+        .byte   $EC,$0C,$0C
+        .byte   $E8
         .byte   $FC
 LB4B2:  .byte   $FC,$10
-        bpl     LB4B2
+        .byte   $10,$FC
         .byte   $FC,$E8,$E8,$04,$FC,$18
-        bpl     LB4C2
+        .byte   $10,$04
         .byte   $FC,$F0,$EA,$F4
 LB4C2:  .byte   $F4,$0E,$0E,$04,$04,$EA,$EA,$04
         .byte   $04,$0E,$0E,$F4,$F4,$EA,$F8,$F4
@@ -2445,7 +2443,7 @@ LB4C2:  .byte   $F4,$0E,$0E,$04,$04,$EA,$EA,$04
         .byte   $00,$04,$FC,$F4,$FC,$FC,$FC,$04
         .byte   $04,$FA,$FC
 LB4E5:  .byte   $F4,$FC,$FC,$FC,$04,$04
-        inc     $F8F4,x
+        .byte   $FE,$F4,$F8
         .byte   $F4,$00,$FC,$F0,$FC,$F8,$FC,$00
         .byte   $FC,$08,$04,$F0,$04,$F8,$04,$00
         .byte   $04,$08,$F4,$F0,$F4,$08,$EC,$FA
@@ -2485,32 +2483,32 @@ LB4E5:  .byte   $F4,$FC,$FC,$FC,$04,$04
         .byte   $FC,$04,$04,$F4,$04,$FC,$0C,$FD
         .byte   $F8,$FB,$EC,$FC,$F4,$F6,$F4,$FE
         .byte   $F4
-LB61F:  inc     $FC,x
-        beq     LB61F
-        sed
+LB61F:  .byte   $F6,$FC
+        .byte   $F0,$FC
+        .byte   $F8
         .byte   $FC,$00,$FC,$08,$04
-        beq     LB62F
-        sed
+        .byte   $F0,$04
+        .byte   $F8
         .byte   $04,$00,$04
 LB62F:  .byte   $08,$F7,$FB,$F4,$F0,$F4,$F8,$F4
         .byte   $00,$F4,$08,$FC,$F0,$FC,$F8,$FC
         .byte   $00,$FC,$08,$04,$F0,$04,$F8,$04
 LB647:  .byte   $00,$04
-        php
-        sbc     $ECFD,y
-        sed
-        sbc     $F9E8,y
-        beq     LB647
-        sed
+        .byte   $08
+        .byte   $F9,$FD,$EC
+        .byte   $F8
+        .byte   $F9,$E8,$F9
+        .byte   $F0,$F4
+        .byte   $F8
         .byte   $F4,$00,$FC,$F8,$FC,$00,$FC,$08
         .byte   $04,$F0,$04,$F8,$04,$00,$04
-        php
-        sed
-        sbc     $F7EC,y
+        .byte   $08
+        .byte   $F8
+        .byte   $F9,$EC,$F7
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$FC,$E8
         .byte   $FC,$F0,$FC,$F8,$FC,$00,$04,$F0
         .byte   $04,$F8,$04,$00,$F6
-        inc     $0C,x
+        .byte   $F6,$0C
         .byte   $F3,$EC,$F7,$F5,$ED,$F4,$F5,$F4
         .byte   $FD,$F7,$F6,$FC,$F5,$FC,$FD,$04
         .byte   $F0,$04,$F8,$04,$00,$EC,$F1,$EC
@@ -2521,37 +2519,37 @@ LB647:  .byte   $00,$04
 LB6B2:  .byte   $0C,$00,$EC,$F8,$F4,$F7,$F4,$FF
         .byte   $FC,$F0,$FC,$F8,$FC,$00,$04,$F0
         .byte   $04,$F8,$04,$00,$04
-        php
-        cpx     $ECF2
+        .byte   $08
+        .byte   $EC,$F2,$EC
         .byte   $FA,$F4,$F0,$F4,$F8,$F4,$00,$FC
         .byte   $F0,$FC,$F8,$FC,$00,$04,$F0,$04
         .byte   $F8,$04,$00,$04
-        php
-        cpx     $F4F8
+        .byte   $08
+        .byte   $EC,$F8,$F4
         .byte   $F3,$F4,$FB,$F4,$03,$FC,$F0,$FC
         .byte   $F8,$FC,$00,$FC,$08,$04,$F0,$04
         .byte   $F8,$04,$00,$04
-        php
-        cpx     $F4F9
-        sbc     ($F4),y
+        .byte   $08
+        .byte   $EC,$F9,$F4
+        .byte   $F1,$F4
         .byte   $F9
         .byte   $F4
-LB6FF:  ora     ($FC,x)
-        beq     LB6FF
-        sed
+LB6FF:  .byte   $01,$FC
+        .byte   $F0,$FC
+        .byte   $F8
         .byte   $FC,$00,$FC,$08,$04,$F7,$04,$FF
         .byte   $0C,$F7,$0C,$FF,$F0,$F9,$F8,$F1
         .byte   $F8,$F9,$F8,$01,$F8,$09,$00,$F0
         .byte   $00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$08,$F2,$08,$FA,$08,$02,$EC
         .byte   $F1,$F4,$F1,$F4,$F9,$F4,$01,$FC
         .byte   $F1,$FC,$F9,$FC,$01,$04,$F0,$04
 LB737:  .byte   $F8,$04,$00,$04
-        php
-        beq     LB737
-        sed
+        .byte   $08
+        .byte   $F0,$F9
+        .byte   $F8
         .byte   $F4,$F8,$FC,$F8,$04,$FF,$EC,$00
         .byte   $F4,$00,$FC,$00,$04,$08,$F4,$08
         .byte   $FC,$08,$04,$10,$F4,$10,$06,$EC
@@ -2574,98 +2572,98 @@ LB737:  .byte   $F8,$04,$00,$04
         .byte   $EC,$F4,$F2,$F4,$FA,$FC,$F4,$FC
         .byte   $FC,$04,$F2,$04,$FA,$F6,$F5,$F0
         .byte   $F0,$F0
-LB7E9:  sed
-        beq     LB7EC
-LB7EC:  beq     LB7F6
-        sed
-        beq     LB7E9
-        sed
-        sed
-        brk
+LB7E9:  .byte   $F8
+        .byte   $F0,$00
+LB7EC:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LB7F6:  .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$08,$F0
-        php
-        sed
-        php
-        brk
+        .byte   $08
+        .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $08,$08,$F2,$FB,$F0
-        inc     $F0,x
-LB80B:  inc     $06F0,x
-        beq     LB81E
-        sed
-        beq     LB80B
-        sed
-        sed
-        brk
+        .byte   $F6,$F0
+LB80B:  .byte   $FE,$F0,$06
+        .byte   $F0,$0E
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$F8,$10,$00
-        beq     LB81D
-LB81D:  sed
-LB81E:  brk
+        .byte   $F0,$00
+LB81D:  .byte   $F8
+LB81E:  .byte   $00
         .byte   $00,$00,$08,$08,$F0
-        php
-        sed
-        php
-        brk
+        .byte   $08
+        .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $08,$08,$F4,$FB,$F0
-        inc     $F0,x
-LB82F:  inc     $06F0,x
-        beq     LB842
-        sed
-        beq     LB82F
-        sed
-        sed
-        brk
+        .byte   $F6,$F0
+LB82F:  .byte   $FE,$F0,$06
+        .byte   $F0,$0E
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$F8,$10,$00
-        beq     LB841
-LB841:  sed
-LB842:  brk
-LB843:  brk
+        .byte   $F0,$00
+LB841:  .byte   $F8
+LB842:  .byte   $00
+LB843:  .byte   $00
         .byte   $00,$08,$08,$F5
-LB848:  php
-        sbc     $0508,x
-        bpl     LB843
-        bpl     LB855
+LB848:  .byte   $08
+        .byte   $FD,$08,$05
+        .byte   $10,$F5
+        .byte   $10,$05
         .byte   $F4,$FB
         .byte   $F0
 LB853:  .byte   $F4
         .byte   $F0
 LB855:  .byte   $FC
-        beq     LB85C
-        sed
-        beq     LB853
-        sed
-LB85C:  sed
-        brk
+        .byte   $F0,$04
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+LB85C:  .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$FF,$E8,$00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$08,$F0,$08,$F8,$08
         .byte   $00,$08,$08,$F4,$F9,$F4,$F8,$F4
         .byte   $00,$FC,$F0,$FC,$F8,$FC,$00,$FC
         .byte   $08,$04,$F0,$04,$F8,$04,$00,$04
-        php
-        sbc     $F4FA,y
-        php
-        cpx     $ECF0
-        sed
+        .byte   $08
+        .byte   $F9,$FA,$F4
+        .byte   $08
+        .byte   $EC,$F0,$EC
+        .byte   $F8
         .byte   $F4,$F0,$F4,$F8,$F4,$00,$FC,$F0
         .byte   $FC,$F8,$FC,$00,$04
-LB89D:  beq     LB8A3
-        sed
+LB89D:  .byte   $F0,$04
+        .byte   $F8
         .byte   $04,$00,$04
-LB8A3:  php
-        sbc     $F4F9,y
-        beq     LB89D
-        sed
+LB8A3:  .byte   $08
+        .byte   $F9,$F9,$F4
+        .byte   $F0,$F4
+        .byte   $F8
         .byte   $F4,$00,$F4,$08,$FC,$F0,$FC,$F8
         .byte   $FC,$00,$FC,$08,$04,$F0,$04,$F8
         .byte   $04,$00,$04
-        php
-        sbc     $F4FC,y
-        inc     $F6F4
+        .byte   $08
+        .byte   $F9,$FC,$F4
+        .byte   $EE,$F4,$F6
         .byte   $F4,$FE,$F4,$06,$FC,$EE,$FC,$F6
         .byte   $FC,$FE,$FC,$06,$04,$F8,$04,$00
         .byte   $04,$08,$0C,$F8,$0C,$00,$F9,$FA
@@ -2679,166 +2677,166 @@ LB8A3:  php
 LB913:  .byte   $00,$FC
 LB915:  .byte   $FA,$FC,$02,$04,$FA,$04,$02,$F8
         .byte   $FA,$F4,$F8,$F4,$00,$FC,$F6,$FC
-LB925:  inc     $06FC,x
+LB925:  .byte   $FE,$FC,$06
         .byte   $04,$F6,$04,$FE,$04,$06,$F9,$FA
         .byte   $F0
-LB931:  sed
-        beq     LB934
-LB934:  beq     LB93E
-        sed
-        beq     LB931
-        sed
-        sed
-        brk
+LB931:  .byte   $F8
+        .byte   $F0,$00
+LB934:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LB93E:  .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00
-LB945:  php
-        php
-        beq     LB951
-        sed
-        php
-        brk
+LB945:  .byte   $08
+        .byte   $08
+        .byte   $F0,$08
+        .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $08,$08,$F7,$FA,$F0
-LB951:  beq     LB913
-        beq     LB915
-        sed
-        cpy     #$00
-        cpy     #$08
-        iny
-        beq     LB925
-        sed
-        iny
-        brk
+LB951:  .byte   $F0,$C0
+        .byte   $F0,$C0
+        .byte   $F8
+        .byte   $C0,$00
+        .byte   $C0,$08
+        .byte   $C8
+        .byte   $F0,$C8
+        .byte   $F8
+        .byte   $C8
+        .byte   $00
         .byte   $C8,$08,$D0,$F0,$D0
-LB965:  sed
-        bne     LB968
-LB968:  bne     LB972
-        cld
-        beq     LB945
-        sed
-        cld
-        brk
+LB965:  .byte   $F8
+        .byte   $D0,$00
+LB968:  .byte   $D0,$08
+        .byte   $D8
+        .byte   $F0,$D8
+        .byte   $F8
+        .byte   $D8
+        .byte   $00
         .byte   $D8,$08
-LB972:  cpx     #$F0
-        cpx     #$F8
-        cpx     #$00
-        cpx     #$08
-        inx
-        beq     LB965
-        sed
-        inx
-        brk
+LB972:  .byte   $E0,$F0
+        .byte   $E0,$F8
+        .byte   $E0,$00
+        .byte   $E0,$08
+        .byte   $E8
+        .byte   $F0,$E8
+        .byte   $F8
+        .byte   $E8
+        .byte   $00
         .byte   $E8,$08,$F0
-LB983:  sed
-        beq     LB986
-LB986:  beq     LB990
-        sed
-        beq     LB983
-        sed
-        sed
-        brk
+LB983:  .byte   $F8
+        .byte   $F0,$00
+LB986:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LB990:  .byte   $00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00,$00,$08,$08,$F0,$08,$F8
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $08,$08,$F8,$FA,$F0
-LB9A3:  sed
-        beq     LB9A6
-LB9A6:  beq     LB9B0
-        sed
-        beq     LB9A3
-        sed
-        sed
-        brk
+LB9A3:  .byte   $F8
+        .byte   $F0,$00
+LB9A6:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LB9B0:  .byte   $00,$F5,$00,$FD,$00,$05,$08,$F0
-        php
-LB9B9:  sed
-        php
-        brk
+        .byte   $08
+LB9B9:  .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $08,$08,$F8
 LB9BF:  .byte   $FA,$F0
-        sed
-        beq     LB9C4
-LB9C4:  sed
-        beq     LB9BF
-        sed
-        sed
-        brk
+        .byte   $F8
+        .byte   $F0,$00
+LB9C4:  .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08,$00,$F0,$00
-        sed
-        brk
+        .byte   $F8
+        .byte   $00
         .byte   $00
 LB9D2:  .byte   $00,$08,$08,$F0,$08,$F8,$08,$00
         .byte   $08,$08
 LB9DC:  .byte   $FB,$FB,$F0
-        inx
-        beq     LB9D2
+        .byte   $E8
+        .byte   $F0,$F0
         .byte   $F0
-LB9E3:  sed
-        beq     LB9E6
-LB9E6:  beq     LB9F0
-        sed
-        beq     LB9E3
-        sed
-        sed
-        brk
+LB9E3:  .byte   $F8
+        .byte   $F0,$00
+LB9E6:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $F0,$F8
+        .byte   $F8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$08
 LB9F0:  .byte   $00,$F1,$00,$F9,$00
-LB9F5:  ora     ($08,x)
+LB9F5:  .byte   $01,$08
         .byte   $F0
-LB9F8:  php
-        sed
-        php
-        brk
+LB9F8:  .byte   $08
+        .byte   $F8
         .byte   $08
-LB9FD:  php
-        sed
-        sed
-        inx
-LBA01:  inx
-        inx
-        beq     LB9F5
-        inx
-        beq     LB9F8
-LBA08:  inx
-        php
-        inx
-        bpl     LB9FD
-        php
-        beq     LBA20
-        php
-        inx
-        php
-        beq     LBA25
-        inx
-        bpl     LBA08
-        php
-        php
-        php
-LBA1B:  bpl     LBA2D
-        php
-        bpl     LBA30
-LBA20:  brk
+        .byte   $00
+        .byte   $08
+LB9FD:  .byte   $08
+        .byte   $F8
+        .byte   $F8
+        .byte   $E8
+LBA01:  .byte   $E8
+        .byte   $E8
+        .byte   $F0,$F0
+        .byte   $E8
+        .byte   $F0,$F0
+LBA08:  .byte   $E8
+        .byte   $08
+        .byte   $E8
+        .byte   $10,$F0
+        .byte   $08
+        .byte   $F0,$10
+        .byte   $08
+        .byte   $E8
+        .byte   $08
+        .byte   $F0,$10
+        .byte   $E8
+        .byte   $10,$F0
+        .byte   $08
+        .byte   $08
+        .byte   $08
+LBA1B:  .byte   $10,$10
+        .byte   $08
+        .byte   $10,$10
+LBA20:  .byte   $00
         .byte   $E4,$00,$EC,$08
-LBA25:  cpx     $08
-        cpx     $F0E4
-        cpx     $F8
+LBA25:  .byte   $E4,$08
+        .byte   $EC,$E4,$F0
+        .byte   $E4,$F8
         .byte   $EC
-LBA2D:  beq     LBA1B
-        sed
+LBA2D:  .byte   $F0,$EC
+        .byte   $F8
 LBA30:  .byte   $0C,$00,$0C,$08,$14,$00,$14,$08
         .byte   $F0,$0C,$F0,$14,$F8,$0C,$F8,$14
         .byte   $F8,$E2,$F8,$EA,$00,$E2,$00,$EA
         .byte   $E2,$F8,$E2,$00,$EA,$F8,$EA,$00
-        asl     $0EF8
-        brk
+        .byte   $0E,$F8,$0E
+        .byte   $00
         .byte   $16,$F8,$16,$00,$F8,$0E,$F8,$16
         .byte   $00,$0E,$00,$16,$F0,$E4,$F0,$EC
         .byte   $F8,$E4,$F8,$EC,$E4,$00,$E4,$08
@@ -2848,59 +2846,59 @@ LBA30:  .byte   $0C,$00,$0C,$08,$14,$00,$14,$08
         .byte   $D8,$DF,$D8,$E7,$D8,$EF,$D8,$F7
         .byte   $E0,$DF,$E0,$E7,$E0,$EF,$E0,$F7
         .byte   $E8,$DF,$E8,$E7
-        inx
-        sed
+        .byte   $E8
+        .byte   $F8
         .byte   $DF,$E3,$DF,$EB,$DF,$F3,$E7,$DB
 LBAA2:  .byte   $E7,$E3,$E7,$EB,$E7,$F3,$EF,$E3
         .byte   $EF,$EB
-        inx
-        sed
-        brk
+        .byte   $E8
+        .byte   $F8
+        .byte   $00
         .byte   $F8,$00,$00,$08,$D8,$08,$E0
-LBAB6:  php
-        inx
-        php
-LBAB9:  beq     LBAC3
-        sed
-        php
-        brk
+LBAB6:  .byte   $08
+        .byte   $E8
+        .byte   $08
+LBAB9:  .byte   $F0,$08
+        .byte   $F8
+        .byte   $08
+        .byte   $00
         .byte   $10,$D8
-LBAC0:  bpl     LBAA2
+LBAC0:  .byte   $10,$E0
         .byte   $10
-LBAC3:  inx
-        bpl     LBAB6
-        bpl     LBAC0
-        brk
+LBAC3:  .byte   $E8
+        .byte   $10,$F0
+        .byte   $10,$F8
+        .byte   $00
         .byte   $F8,$00,$00,$08,$F8,$08,$00,$10
         .byte   $F8,$10,$00
-        clc
-        inx
-        clc
-        beq     LBAF1
-        sed
+        .byte   $18
+        .byte   $E8
+        .byte   $18
+        .byte   $F0,$18
+        .byte   $F8
         .byte   $20
-LBADB:  inx
-        jsr     $28F0
-        inx
-        plp
-        beq     LBADB
+LBADB:  .byte   $E8
+        .byte   $20,$F0,$28
+        .byte   $E8
+        .byte   $28
+        .byte   $F0,$F8
         .byte   $FC,$F4,$18,$FC,$18,$04,$10,$0C
         .byte   $08,$0C,$10,$14,$F0,$14
 LBAF1:  .byte   $F8,$14,$00,$14,$08,$14
-        bpl     LBB15
-        beq     LBB17
-        sed
+        .byte   $10,$1C
+        .byte   $F0,$1C
+        .byte   $F8
         .byte   $1C,$00,$1C,$08,$F8,$FC,$F4,$18
         .byte   $FC,$18,$04
-LBB07:  bpl     LBB15
+LBB07:  .byte   $10,$0C
         .byte   $0F,$14,$F6,$14,$08,$14,$10,$1C
         .byte   $F0,$1C,$F8,$1C
 LBB15:  .byte   $00,$1C
-LBB17:  php
-        bit     $F0
-        bit     $F8
-        bit     $00
-        bit     $08
+LBB17:  .byte   $08
+        .byte   $24,$F0
+        .byte   $24,$F8
+        .byte   $24,$00
+        .byte   $24,$08
         .byte   $FC,$F3,$FC,$FB,$FC,$03,$04,$F0
         .byte   $04,$F8,$04,$00,$04,$08,$FC,$F8
         .byte   $FC,$00,$04,$F8,$04,$00,$FF,$FF
