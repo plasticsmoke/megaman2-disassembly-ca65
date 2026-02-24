@@ -1,7 +1,7 @@
 .segment "BANK05"
 
 ; =============================================================================
-; Bank $05 — Stage Data 6
+; Bank $05 — Metal Man Stage (stage index $06)
 ; CHR tile patterns and level layout data.
 ; This bank contains no executable code — all bytes are data.
 ; =============================================================================

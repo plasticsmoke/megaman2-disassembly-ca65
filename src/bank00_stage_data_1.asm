@@ -1,7 +1,7 @@
 .segment "BANK00"
 
 ; =============================================================================
-; Bank $00 — Stage Data 1
+; Bank $00 — Flash Man Stage (stage index $05)
 ; CHR tile patterns and level layout data.
 ; This bank contains no executable code — all bytes are data.
 ; =============================================================================

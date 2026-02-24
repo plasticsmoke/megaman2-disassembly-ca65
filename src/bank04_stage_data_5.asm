@@ -1,7 +1,7 @@
 .segment "BANK04"
 
 ; =============================================================================
-; Bank $04 — Stage Data 5
+; Bank $04 — Air Man Stage (stage index $01)
 ; CHR tile patterns and level layout data.
 ; This bank contains no executable code — all bytes are data.
 ; =============================================================================

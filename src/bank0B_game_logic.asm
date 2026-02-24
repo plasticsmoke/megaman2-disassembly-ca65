@@ -159,10 +159,10 @@ enemy_spawn_sound_ids:  .byte   $51,$67,$6D
         .byte   $B0,$0A,$AD,$A1,$06,$D0,$69,$8D
         .byte   $81,$06,$F0,$64
         lda     $0681
-        bne     bubbleman_frame_update
+        bne     heatman_frame_update
         lda     $06A1
         cmp     #$02
-        bne     bubbleman_frame_update
+        bne     heatman_frame_update
         jsr     calc_player_boss_distance
         lda     zp_temp_00
         sta     $03
@@ -171,32 +171,32 @@ enemy_spawn_sound_ids:  .byte   $51,$67,$6D
         sta     $02
         sec
         sbc     #$40
-        bcs     bubbleman_store_aim_low
+        bcs     heatman_store_aim_low
         lda     #$00
-bubbleman_store_aim_low:  sta     $04
+heatman_store_aim_low:  sta     $04
         lda     #$02
         sta     $01
 
 
 ; =============================================================================
-; Boss AI: Bubbleman — projectile spawning and movement patterns ($8194)
+; Boss AI: Heat Man — projectile spawning and movement patterns ($8194)
 ; =============================================================================
-bubbleman_spawn_projectile_loop:  ldx     $01
+heatman_spawn_projectile_loop:  ldx     $01
         lda     #$00
         sta     $0A
         sta     $0C
         lda     $02,x
         sta     $0B
-        lda     bubbleman_proj_speed_table,x
+        lda     heatman_proj_speed_table,x
         sta     $0D
         jsr     divide_16bit            ; divide for velocity ratio
         ldx     #$01
         lda     #$58
         jsr     spawn_entity_from_boss
         ldx     $01
-        lda     bubbleman_proj_hitbox_y,x
+        lda     heatman_proj_hitbox_y,x
         sta     $0670,y
-        lda     bubbleman_proj_hitbox_mask,x
+        lda     heatman_proj_hitbox_mask,x
         sta     $0650,y
         lda     $0E
         sta     $0630,y
@@ -206,31 +206,31 @@ bubbleman_spawn_projectile_loop:  ldx     $01
         ora     #$04
         sta     $0430,y
         dec     $01
-        bpl     bubbleman_spawn_projectile_loop
-bubbleman_frame_update:  ldx     #$01
+        bpl     heatman_spawn_projectile_loop
+heatman_frame_update:  ldx     #$01
         jsr     boss_check_weapon_hit
         lda     $02
         cmp     #$01
-        bne     bubbleman_attack_rts
-        bne     bubbleman_attack_rts
+        bne     heatman_attack_rts
+        bne     heatman_attack_rts
         lda     #$04
         sta     $B1
         lda     #$12
         sta     $05A8
         lda     #$53
         jsr     play_sound_and_reset_anim
-bubbleman_attack_rts:  rts
+heatman_attack_rts:  rts
 
         .byte   $0F,$15,$0F,$0F,$0F
-bubbleman_proj_hitbox_y:  rol     $A8,x
+heatman_proj_hitbox_y:  rol     $A8,x
         .byte   $76
-bubbleman_proj_hitbox_mask:  .byte   $07
+heatman_proj_hitbox_mask:  .byte   $07
         ora     $03
-bubbleman_proj_speed_table:  .byte   $3A,$2E,$1C,$AD,$E1,$04,$D0,$35
+heatman_proj_speed_table:  .byte   $3A,$2E,$1C,$AD,$E1,$04,$D0,$35
         .byte   $AD,$A1,$06,$C9,$02,$D0,$05,$A9
         .byte   $00,$8D,$A1,$06
         dec     $B2
-        bne     bubbleman_frame_update
+        bne     heatman_frame_update
         lda     #$03
         sta     $06A1
         lda     #$00
@@ -247,23 +247,23 @@ bubbleman_proj_speed_table:  .byte   $3A,$2E,$1C,$AD,$E1,$04,$D0,$35
         lda     #$38
         jsr     bank_switch_enqueue
         inc     $04E1
-        bne     bubbleman_frame_update
+        bne     heatman_frame_update
         cmp     #$01
-        bne     bubbleman_check_death_anim
+        bne     heatman_check_death_anim
         lda     $06A1
         cmp     #$06
-        bcc     bubbleman_check_anim_state
+        bcc     heatman_check_anim_state
         ldy     #$04
         sty     $0601
-bubbleman_check_anim_state:  cmp     #$09
-        bne     bubbleman_dec_timer
+heatman_check_anim_state:  cmp     #$09
+        bne     heatman_dec_timer
         lda     #$06
         sta     $06A1
-bubbleman_dec_timer:  lda     $B2
-        beq     bubbleman_phase3_reset
+heatman_dec_timer:  lda     $B2
+        beq     heatman_phase3_reset
         dec     $B2
-        bne     bubbleman_jmp_frame_update
-bubbleman_phase3_reset:  lda     #$00
+        bne     heatman_jmp_frame_update
+heatman_phase3_reset:  lda     #$00
         sta     $0601
         sta     $0681
         lda     #$01
@@ -271,10 +271,10 @@ bubbleman_phase3_reset:  lda     #$00
         lda     #$0A
         sta     $06A1
         inc     $04E1
-        bne     bubbleman_jmp_frame_update
-bubbleman_check_death_anim:  lda     $06A1
+        bne     heatman_jmp_frame_update
+heatman_check_death_anim:  lda     $06A1
         cmp     #$0D
-        bne     bubbleman_jmp_frame_update
+        bne     heatman_jmp_frame_update
         lda     #$50
         jsr     play_sound_and_reset_anim
         lda     #$83
@@ -283,9 +283,9 @@ bubbleman_check_death_anim:  lda     $06A1
         inc     $06A0,x
         lda     #$05
         sta     $B1
-bubbleman_jmp_frame_update:  jmp     bubbleman_frame_update
+heatman_jmp_frame_update:  jmp     heatman_frame_update
 
-bubbleman_random_delay_table:  .byte   $1F,$3E,$5D,$AD,$A1,$06,$F0,$33
+heatman_random_delay_table:  .byte   $1F,$3E,$5D,$AD,$A1,$06,$F0,$33
         .byte   $C6,$B1,$A9,$8B,$AE,$61,$04,$E0
         .byte   $80,$B0,$02,$A9,$CB
         sta     $0421
@@ -298,7 +298,7 @@ bubbleman_random_delay_table:  .byte   $1F,$3E,$5D,$AD,$A1,$06,$F0,$33
         sta     $02
         jsr     divide_8bit
         ldx     $04
-        lda     bubbleman_random_delay_table,x
+        lda     heatman_random_delay_table,x
         sta     $B2
         lda     #$52
         jsr     play_sound_and_reset_anim
@@ -326,7 +326,7 @@ bubbleman_random_delay_table:  .byte   $1F,$3E,$5D,$AD,$A1,$06,$F0,$33
         sta     $02
         jsr     divide_8bit
         ldx     $04
-        lda     woodman_leaf_count_table,x
+        lda     airman_leaf_count_table,x
         sta     $04E1
         lda     $04
         asl     a
@@ -339,9 +339,9 @@ bubbleman_random_delay_table:  .byte   $1F,$3E,$5D,$AD,$A1,$06,$F0,$33
 
 
 ; =============================================================================
-; Boss AI: Woodman — Leaf Shield creation and leaf projectile spawning ($833C)
+; Boss AI: Air Man — Leaf Shield creation and leaf projectile spawning ($833C)
 ; =============================================================================
-woodman_spawn_leaf_loop:  lda     #$5D
+airman_spawn_leaf_loop:  lda     #$5D
         ldx     #$01
         jsr     spawn_entity_from_boss
         ldx     $01
@@ -357,7 +357,7 @@ woodman_spawn_leaf_loop:  lda     #$5D
         sta     $04F0,y
         inc     $01
         dec     $02
-        bne     woodman_spawn_leaf_loop
+        bne     airman_spawn_leaf_loop
         lda     #$3F
         jsr     bank_switch_enqueue
         inc     $B2
@@ -368,7 +368,7 @@ woodman_spawn_leaf_loop:  lda     #$5D
         jsr     boss_update_with_sound
         rts
 
-woodman_leaf_count_table:  .byte   $44,$4A,$42,$43,$43
+airman_leaf_count_table:  .byte   $44,$4A,$42,$43,$43
 enemy_sprite_ids:  .byte   $00,$F0,$50,$3C,$00,$00,$D3,$CD
         .byte   $68,$0F,$1A,$00,$A7,$68,$00,$7F
         .byte   $B1,$A7,$88,$50,$D4,$D0,$D0,$B9
@@ -376,16 +376,16 @@ enemy_sprite_ids:  .byte   $00,$F0,$50,$3C,$00,$00,$D3,$CD
 enemy_palette_data:  .byte   $04,$03,$03,$02,$02,$00,$03,$03
         .byte   $02,$02,$01,$00,$03,$02,$02,$01
         .byte   $00,$FF,$03,$03,$02
-woodman_leaf_data_overflow:  ora     ($01,x)
+airman_leaf_data_overflow:  ora     ($01,x)
         .byte   $FF,$03,$03,$02,$01,$00,$00
 enemy_x_offsets:  .byte   $00,$B1,$3C,$50,$76,$00,$2B,$3C
         .byte   $31,$6B,$DB,$00,$A0,$31
-woodman_leaf_data_mid:  ror     $B5,x
-        beq     woodman_leaf_data_mid
+airman_leaf_data_mid:  ror     $B5,x
+        beq     airman_leaf_data_mid
         cpx     #$3C
         .byte   $D4,$90,$90
         sbc     $3CC0,x
-        bvc     woodman_leaf_data_overflow
+        bvc     airman_leaf_data_overflow
         sed
         .byte   $FE
 enemy_collision_data:  brk
@@ -399,7 +399,7 @@ enemy_damage_values:  .byte   $0C,$16,$24,$0E,$24,$18,$1B,$0E
         .byte   $22,$18,$21,$15,$05,$0D,$23,$1C
         .byte   $1A,$0E,$1C,$1D,$10,$24,$AD,$E1
         .byte   $04,$F0,$0C
-woodman_dec_leaf_count:  lda     #$00
+airman_dec_leaf_count:  lda     #$00
         sta     $0681
         dec     $04E1
         jsr     boss_update_with_sound
@@ -407,11 +407,11 @@ woodman_dec_leaf_count:  lda     #$00
 
         lda     #$5D
         jsr     find_entity_by_type
-        bcc     woodman_shield_active
+        bcc     airman_shield_active
         dec     $B1
-        jmp     woodman_dec_leaf_count
+        jmp     airman_dec_leaf_count
 
-woodman_shield_active:  lda     #$01
+airman_shield_active:  lda     #$01
         sta     $40
         lda     $0421
         and     #$40
@@ -424,26 +424,26 @@ woodman_shield_active:  lda     #$01
         adc     #$00
         sta     $50
         cmp     #$04
-        bne     woodman_update_scroll_lock
+        bne     airman_update_scroll_lock
         lda     #$00
         sta     $4F
-woodman_update_scroll_lock:  ldy     #$0F
+airman_update_scroll_lock:  ldy     #$0F
         lda     #$5D
         sta     zp_temp_00
-woodman_sprite_scan_loop:  jsr     collision_check_sprite
-        bcs     woodman_check_anim_state
+airman_sprite_scan_loop:  jsr     collision_check_sprite
+        bcs     airman_check_anim_state
         lda     $4F
         sta     $0630,y
         lda     $50
         sta     $0610,y
         dey
-        bpl     woodman_sprite_scan_loop
-woodman_check_anim_state:  lda     $06A1
+        bpl     airman_sprite_scan_loop
+airman_check_anim_state:  lda     $06A1
         cmp     #$03
-        bne     woodman_frame_update
+        bne     airman_frame_update
         lda     #$01
         sta     $06A1
-woodman_frame_update:  ldx     #$01
+airman_frame_update:  ldx     #$01
         jsr     boss_update_with_sound
         rts
 
@@ -476,46 +476,46 @@ boss_update_rts:  rts
         .byte   $D3,$F1,$19,$80,$80,$82,$84,$84
         .byte   $CA,$BD,$4E,$86,$85
         php
-        lda     crashman_ai_table_hi,x
+        lda     bubbleman_ai_table_hi,x
         sta     $09
         jmp     (jump_ptr)
 
         jsr     calc_player_boss_distance
         lda     $04E1
-        bne     airman_check_phase
+        bne     woodman_check_phase
         lda     #$61
         ldx     #$01
         jsr     spawn_entity_from_boss
         inc     $04E1
-        jmp     airman_frame_update
+        jmp     woodman_frame_update
 
 
 ; =============================================================================
-; Boss AI: Airman — tornado spawning and wind patterns ($851E)
+; Boss AI: Wood Man — tornado spawning and wind patterns ($851E)
 ; =============================================================================
-airman_check_phase:  cmp     #$04
-        bcs     airman_spawn_multi_tornado
-airman_inc_timer:  inc     $B2
+woodman_check_phase:  cmp     #$04
+        bcs     woodman_spawn_multi_tornado
+woodman_inc_timer:  inc     $B2
         lda     $B2
         cmp     #$12
-        bne     airman_jmp_frame_update
+        bne     woodman_jmp_frame_update
         lda     #$00
         sta     $B2
         inc     $04E1
-airman_spawn_tornado:  lda     #$62
+woodman_spawn_tornado:  lda     #$62
         ldx     #$01
         jsr     spawn_entity_from_boss
-airman_jmp_frame_update:  jmp     airman_frame_update
+woodman_jmp_frame_update:  jmp     woodman_frame_update
 
-airman_spawn_multi_tornado:  lda     #$62
+woodman_spawn_multi_tornado:  lda     #$62
         jsr     find_entity_by_type
-        bcc     airman_frame_update
+        bcc     woodman_frame_update
         lda     #$03
         sta     $02
-airman_tornado_loop:  lda     #$62
+woodman_tornado_loop:  lda     #$62
         ldx     #$01
         jsr     spawn_entity_from_boss
-        bcs     airman_advance_phase
+        bcs     woodman_advance_phase
         ldx     $02
         lda     #$C1
         sta     $0430,y
@@ -527,49 +527,49 @@ airman_tornado_loop:  lda     #$62
         sta     $0650,y
         lda     #$02
         sta     $0610,y
-        lda     airman_tornado_x_offset,x
+        lda     woodman_tornado_x_offset,x
         sta     $0470,y
         dec     $02
-        bpl     airman_tornado_loop
-airman_advance_phase:  inc     $B1
+        bpl     woodman_tornado_loop
+woodman_advance_phase:  inc     $B1
         lda     #$6F
         jsr     play_sound_and_reset_anim
-airman_frame_update:  jsr     airman_update_with_sound
+woodman_frame_update:  jsr     woodman_update_with_sound
         rts
 
-airman_tornado_x_offset:  .byte   $40
-        bvs     airman_inc_timer
-        bne     airman_spawn_tornado
+woodman_tornado_x_offset:  .byte   $40
+        bvs     woodman_inc_timer
+        bne     woodman_spawn_tornado
         lda     ($06,x)
         cmp     #$02
-        bcc     airman_jmp_frame_update_2
-        bne     airman_phase3_sound
+        bcc     woodman_jmp_frame_update_2
+        bne     woodman_phase3_sound
         lda     $0681
-        bne     airman_jmp_frame_update_2
+        bne     woodman_jmp_frame_update_2
         lda     #$61
         jsr     find_entity_by_type
-airman_bcc_frame_update:  bcs     airman_jmp_frame_update_2
+woodman_bcc_frame_update:  bcs     woodman_jmp_frame_update_2
         lda     #$04
         sta     $0610,y
         .byte   $B9
         .byte   $30
-airman_data_byte:  .byte   $04
+woodman_data_byte:  .byte   $04
         and     #$BF
         sta     zp_temp_00
         lda     $0421
         and     #$40
         ora     zp_temp_00
         sta     $0430,y
-        bne     airman_jmp_frame_update_2
-airman_phase3_sound:  lda     #$6E
+        bne     woodman_jmp_frame_update_2
+woodman_phase3_sound:  lda     #$6E
         jsr     play_sound_and_reset_anim
         inc     $B1
-airman_jmp_frame_update_2:  jsr     airman_update_with_sound
+woodman_jmp_frame_update_2:  jsr     woodman_update_with_sound
         rts
 
         .byte   $20,$36,$86,$AD,$A1,$06,$C9,$02
         .byte   $90
-        bvs     airman_bcc_frame_update
+        bvs     woodman_bcc_frame_update
         .byte   $52,$AD,$81,$06,$D0,$12,$A9,$04
         .byte   $8D,$41,$06,$A9,$01,$8D,$01,$06
         .byte   $AD,$21,$04,$09,$04,$8D,$21,$04
@@ -583,9 +583,9 @@ airman_jmp_frame_update_2:  jsr     airman_update_with_sound
         sta     $02
         jsr     boss_wall_collision_check
         plp
-        bpl     airman_collision_rts
+        bpl     woodman_collision_rts
         lda     zp_temp_00
-        beq     airman_collision_rts
+        beq     woodman_collision_rts
         lda     #$03
         sta     $06A1
         lda     #$00
@@ -600,52 +600,52 @@ airman_jmp_frame_update_2:  jsr     airman_update_with_sound
         sta     $0421
         lda     $06A1
         cmp     #$04
-        bne     airman_collision_rts
+        bne     woodman_collision_rts
         lda     #$00
         sta     $0681
         lda     #$62
         jsr     find_entity_by_type
-        bcc     airman_collision_rts
+        bcc     woodman_collision_rts
         lda     #$02
         sta     $B1
         lda     #$6D
         jsr     play_sound_and_reset_anim
-airman_collision_rts:  rts
+woodman_collision_rts:  rts
 
-airman_update_with_sound:  lda     $05A8
-        beq     airman_collision_check
+woodman_update_with_sound:  lda     $05A8
+        beq     woodman_collision_check
         jsr     boss_apply_movement_physics
         rts
 
-airman_collision_check:  jsr     boss_check_weapon_hit
+woodman_collision_check:  jsr     boss_check_weapon_hit
         lda     $02
         cmp     #$01
-        bne     airman_update_rts
+        bne     woodman_update_rts
         lda     #$12
         sta     $05A8
-airman_update_rts:  rts
+woodman_update_rts:  rts
 
         .byte   $D3,$09,$83,$BB
-crashman_ai_table_hi:  .byte   $80,$85,$85,$85,$CA,$BD,$96,$87
+bubbleman_ai_table_hi:  .byte   $80,$85,$85,$85,$CA,$BD,$96,$87
         .byte   $85,$08,$BD,$9A,$87,$85,$09,$6C
         .byte   $08,$00,$A9,$83,$8D,$21,$04,$20
         .byte   $09,$A2,$BD,$A0,$06,$D0,$03,$8D
         .byte   $81,$06
         lda     $04E1
-        bne     crashman_dec_aim_timer
+        bne     bubbleman_dec_aim_timer
         sec
         lda     $04A1
         sbc     $04A0
-        bcs     crashman_aim_check_dist
+        bcs     bubbleman_aim_check_dist
         eor     #$FF
         adc     #$01
 
 
 ; =============================================================================
-; Boss AI: Crashman — Crash Bomber aiming and movement ($8686)
+; Boss AI: Bubble Man — Crash Bomber aiming and movement ($8686)
 ; =============================================================================
-crashman_aim_check_dist:  cmp     #$03
-        bcs     crashman_frame_update
+bubbleman_aim_check_dist:  cmp     #$03
+        bcs     bubbleman_frame_update
         lda     $4A
         sta     $01
         lda     #$03
@@ -656,8 +656,8 @@ crashman_aim_check_dist:  cmp     #$03
         sta     $04E1
         lda     #$01
         sta     $B2
-crashman_dec_aim_timer:  dec     $B2
-        bne     crashman_frame_update
+bubbleman_dec_aim_timer:  dec     $B2
+        bne     bubbleman_frame_update
         lda     #$1F
         sta     $B2
         lda     #$5B
@@ -666,7 +666,7 @@ crashman_dec_aim_timer:  dec     $B2
         lda     #$01
         sta     $06A1
         dec     $04E1
-        bne     crashman_frame_update
+        bne     bubbleman_frame_update
         lda     $04A0
         pha
         lda     #$50
@@ -687,7 +687,7 @@ crashman_dec_aim_timer:  dec     $B2
         inc     $B1
         lda     #$62
         jsr     play_sound_and_reset_anim
-crashman_frame_update:  jsr     crashman_update_with_sound
+bubbleman_frame_update:  jsr     bubbleman_update_with_sound
         rts
 
         .byte   $AD,$E1,$04,$8D,$21,$04,$20,$71
@@ -697,21 +697,21 @@ crashman_frame_update:  jsr     crashman_update_with_sound
         .byte   $A9,$04,$85,$B1
         jsr     calc_player_boss_distance
         lda     $B2
-        bne     crashman_dec_shot_timer
+        bne     bubbleman_dec_shot_timer
         sec
         lda     $04A1
         sbc     $04A0
-        bcs     crashman_check_dist_2
+        bcs     bubbleman_check_dist_2
         eor     #$FF
         adc     #$01
-crashman_check_dist_2:  cmp     #$03
-        bcs     crashman_check_anim_reset
+bubbleman_check_dist_2:  cmp     #$03
+        bcs     bubbleman_check_anim_reset
         lda     #$01
         sta     $05A7
         lda     #$04
         sta     $B2
-crashman_dec_shot_timer:  dec     $05A7
-        bne     crashman_check_anim_reset
+bubbleman_dec_shot_timer:  dec     $05A7
+        bne     bubbleman_check_anim_reset
         lda     #$12
         sta     $05A7
         lda     #$03
@@ -720,29 +720,29 @@ crashman_dec_shot_timer:  dec     $05A7
         ldx     #$01
         jsr     spawn_entity_from_boss
         dec     $B2
-crashman_check_anim_reset:  lda     $06A1
+bubbleman_check_anim_reset:  lda     $06A1
         cmp     #$02
-        bne     crashman_anim_rts
+        bne     bubbleman_anim_rts
         lda     #$00
         sta     $06A1
-crashman_anim_rts:  rts
+bubbleman_anim_rts:  rts
 
         .byte   $20,$71,$87,$A5,$00,$F0,$B3,$A9
         .byte   $02,$85,$B1,$A9,$00,$8D,$41,$06
         .byte   $8D,$E1,$04,$85,$B2,$A9,$61,$20
         .byte   $0C,$A1,$4C,$47,$87
-crashman_update_with_sound:  lda     $05A8
-        beq     crashman_collision_check
+bubbleman_update_with_sound:  lda     $05A8
+        beq     bubbleman_collision_check
         jsr     boss_apply_movement_physics
-        jmp     crashman_collision_params
+        jmp     bubbleman_collision_params
 
-crashman_collision_check:  jsr     boss_check_weapon_hit
+bubbleman_collision_check:  jsr     boss_check_weapon_hit
         lda     $02
         cmp     #$01
-        bne     crashman_collision_params
+        bne     bubbleman_collision_params
         lda     #$12
         sta     $05A8
-crashman_collision_params:  lda     #$09
+bubbleman_collision_params:  lda     #$09
         sta     $01
         lda     #$0C
         sta     $02
@@ -939,24 +939,24 @@ quickman_update_rts:  rts
         jsr     play_sound_and_reset_anim
         lda     #$03
         sta     $06A1
-        jsr     heatman_update_with_sound
+        jsr     flashman_update_with_sound
         lda     #$21
         jsr     bank_switch_enqueue
         rts
 
-        jsr     heatman_update_with_sound
+        jsr     flashman_update_with_sound
         lda     $03
-        beq     heatman_rts
+        beq     flashman_rts
         lda     $B1
         cmp     #$06
-        beq     heatman_rts
+        beq     flashman_rts
         lda     #$00
         sta     $04E1
         lda     #$05
         sta     $B1
         lda     #$5D
         jsr     play_sound_and_reset_anim
-heatman_rts:  rts
+flashman_rts:  rts
 
         .byte   $A9,$00,$8D,$21,$06,$8D,$01,$06
         .byte   $AD,$A1,$06,$C9,$07,$D0,$43,$A9
@@ -972,14 +972,14 @@ heatman_rts:  rts
 
 
 ; =============================================================================
-; Boss AI: Heatman — flame charge and projectile patterns ($8A08)
+; Boss AI: Flash Man — flame charge and projectile patterns ($8A08)
 ; =============================================================================
-heatman_frame_update:  jsr     heatman_update_with_sound
+flashman_frame_update:  jsr     flashman_update_with_sound
         rts
 
         .byte   $A9,$0F,$8D,$66,$03,$AD,$A1,$06
         .byte   $F0,$F2
-heatman_data_overlap:  .byte   $C9,$02,$D0,$1B,$A9,$02,$85,$B1
+flashman_data_overlap:  .byte   $C9,$02,$D0,$1B,$A9,$02,$85,$B1
         .byte   $A9,$00,$85,$AA,$85,$B2,$8D,$E1
         .byte   $04,$4E,$2F,$04,$A9,$5C,$20,$0C
         .byte   $A1,$20,$09,$A2,$4C,$08,$8A
@@ -987,7 +987,7 @@ heatman_data_overlap:  .byte   $C9,$02,$D0,$1B,$A9,$02,$85,$B1
         lda     #$00
         sta     $0681
         dec     $B2
-        bne     heatman_frame_update
+        bne     flashman_frame_update
         lda     #$06
         sta     $B2
         lda     $04A0
@@ -1006,7 +1006,7 @@ heatman_data_overlap:  .byte   $C9,$02,$D0,$1B,$A9,$02,$85,$B1
         lda     #$35
         ldx     #$01
         jsr     spawn_entity_from_boss
-        bcs     heatman_restore_y_pos
+        bcs     flashman_restore_y_pos
         clc
         tya
         adc     #$10
@@ -1020,11 +1020,11 @@ heatman_data_overlap:  .byte   $C9,$02,$D0,$1B,$A9,$02,$85,$B1
         lda     $0421
         and     #$40
         pha
-        bne     heatman_aim_adjust_x
+        bne     flashman_aim_adjust_x
         iny
-heatman_aim_adjust_x:  clc
+flashman_aim_adjust_x:  clc
         lda     $0460,x
-        adc     heatman_aim_offset_table,y
+        adc     flashman_aim_offset_table,y
         sta     $0460,x
         pla
         tay
@@ -1033,45 +1033,45 @@ heatman_aim_adjust_x:  clc
         jsr     calc_velocity_set_facing
         lda     #$01
         sta     $2B
-heatman_restore_y_pos:  pla
+flashman_restore_y_pos:  pla
         sta     $04A0
         ldx     #$01
         dec     $04E1
-        bne     heatman_jmp_frame_update
+        bne     flashman_jmp_frame_update
         inc     $06A1
-heatman_jmp_frame_update:  jmp     heatman_frame_update
+flashman_jmp_frame_update:  jmp     flashman_frame_update
 
-heatman_aim_offset_table:  .byte   $08,$F8,$AD,$E1,$04,$D0,$18,$20
+flashman_aim_offset_table:  .byte   $08,$F8,$AD,$E1,$04,$D0,$18,$20
         .byte   $09,$A2,$A9,$00,$8D,$61,$06,$8D
         .byte   $01,$06,$A9,$04,$8D,$41,$06,$A9
         .byte   $80,$8D,$21,$06,$EE,$E1,$04
-        jsr     heatman_update_with_sound
-        bne     heatman_hit_response
-heatman_collision_rts:  rts
+        jsr     flashman_update_with_sound
+        bne     flashman_hit_response
+flashman_collision_rts:  rts
 
-heatman_hit_response:  lda     $B1
+flashman_hit_response:  lda     $B1
         cmp     #$06
-        beq     heatman_collision_rts
+        beq     flashman_collision_rts
         lda     #$00
         sta     $04E1
         lda     #$02
         sta     $B1
         lda     #$5C
         jsr     play_sound_and_reset_anim
-heatman_update_with_sound:  lda     $05A8
-        beq     heatman_collision_check
+flashman_update_with_sound:  lda     $05A8
+        beq     flashman_collision_check
         jsr     boss_apply_movement_physics
-        jmp     heatman_hitbox_params
+        jmp     flashman_hitbox_params
 
-heatman_collision_check:  jsr     boss_check_weapon_hit
+flashman_collision_check:  jsr     boss_check_weapon_hit
         lda     $02
         cmp     #$01
-        bne     heatman_hitbox_params
+        bne     flashman_hitbox_params
         lda     #$12
         sta     $05A8
         rts
 
-heatman_hitbox_params:  lda     #$08
+flashman_hitbox_params:  lda     #$08
         sta     $01
         lda     #$0C
         sta     $02
@@ -1079,11 +1079,11 @@ heatman_hitbox_params:  lda     #$08
         php
         jsr     boss_wall_collision_check
         plp
-        bpl     heatman_no_hit
+        bpl     flashman_no_hit
         lda     zp_temp_00
         rts
 
-heatman_no_hit:  lda     #$00
+flashman_no_hit:  lda     #$00
         rts
 
         .byte   $D3,$64,$B6,$0C,$AD,$80,$89,$89
@@ -1258,7 +1258,7 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         .byte   $B5,$B5,$80,$8B,$8B,$8B,$CA,$BD
         .byte   $08,$8E
         sta     jump_ptr
-        lda     flashman_ai_table_hi,x
+        lda     crashman_ai_table_hi,x
         sta     $09
         jmp     (jump_ptr)
 
@@ -1286,19 +1286,19 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         sta     $0B
         lda     $4A
         and     #$01
-        beq     flashman_setup_velocity
+        beq     crashman_setup_velocity
         sec
         lda     $0B
         sbc     #$40
-        bcs     flashman_aim_y_offset
+        bcs     crashman_aim_y_offset
         lda     #$00
-flashman_aim_y_offset:  sta     $0B
+crashman_aim_y_offset:  sta     $0B
 
 
 ; =============================================================================
-; Boss AI: Flashman — Time Stopper freeze and movement ($8D36)
+; Boss AI: Crash Man — Time Stopper freeze and movement ($8D36)
 ; =============================================================================
-flashman_setup_velocity:  lda     #$37
+crashman_setup_velocity:  lda     #$37
         sta     $0D
         lda     #$00
         sta     $0A
@@ -1312,61 +1312,61 @@ flashman_setup_velocity:  lda     #$37
         jsr     play_sound_and_reset_anim
         lda     #$04
         sta     $B1
-        bne     flashman_frame_update
+        bne     crashman_frame_update
         ldx     $0461
         lda     $0421
         and     #$40
-        bne     flashman_check_x_right
+        bne     crashman_check_x_right
         cpx     #$38
-        bcs     flashman_frame_update
-        bcc     flashman_check_facing_flip
-flashman_check_x_right:  cpx     #$C8
-        bcc     flashman_frame_update
-flashman_check_facing_flip:  lda     $04E1
+        bcs     crashman_frame_update
+        bcc     crashman_check_facing_flip
+crashman_check_x_right:  cpx     #$C8
+        bcc     crashman_frame_update
+crashman_check_facing_flip:  lda     $04E1
         eor     #$40
         sta     $04E1
         lda     $0421
         eor     #$40
         sta     $0421
-flashman_frame_update:  jsr     flashman_update_with_sound
+crashman_frame_update:  jsr     crashman_update_with_sound
         rts
 
         lda     $05A9
         sta     $0421
         lda     $0641
         php
-        jsr     flashman_update_with_sound
+        jsr     crashman_update_with_sound
         lda     #$0B
         sta     $01
         lda     #$0C
         sta     $02
         jsr     boss_wall_collision_check
         plp
-        bmi     flashman_hit_response
+        bmi     crashman_hit_response
         lda     $0641
-        bpl     flashman_check_anim_state
+        bpl     crashman_check_anim_state
         lda     #$01
         sta     $06A1
-        bne     flashman_check_anim_state
-flashman_hit_response:  lda     zp_temp_00
-        beq     flashman_check_anim_fire
+        bne     crashman_check_anim_state
+crashman_hit_response:  lda     zp_temp_00
+        beq     crashman_check_anim_fire
         lda     #$02
         sta     $B1
         lda     #$9C
         sta     $05A7
-        bne     flashman_check_anim_state
-flashman_check_anim_fire:  lda     $06A1
+        bne     crashman_check_anim_state
+crashman_check_anim_fire:  lda     $06A1
         cmp     #$02
-        bne     flashman_check_anim_state
+        bne     crashman_check_anim_state
         lda     $0681
-        bne     flashman_check_anim_state
+        bne     crashman_check_anim_state
         lda     #$5E
         jsr     find_entity_by_type
-        bcc     flashman_check_anim_state
+        bcc     crashman_check_anim_state
         lda     #$5E
         ldx     #$01
         jsr     spawn_entity_from_boss
-        bcs     flashman_check_anim_state
+        bcs     crashman_check_anim_state
         clc
         tya
         adc     #$10
@@ -1377,27 +1377,27 @@ flashman_check_anim_fire:  lda     $06A1
         lda     #$06
         sta     $09
         jsr     calc_velocity_toward_player
-flashman_check_anim_state:  lda     $06A1
-        bne     flashman_jmp_aim
+crashman_check_anim_state:  lda     $06A1
+        bne     crashman_jmp_aim
         sta     $0681
-flashman_jmp_aim:  jsr     calc_player_boss_distance
+crashman_jmp_aim:  jsr     calc_player_boss_distance
         rts
 
-flashman_update_with_sound:  lda     $05A8
-        beq     flashman_collision_check
+crashman_update_with_sound:  lda     $05A8
+        beq     crashman_collision_check
         jsr     boss_apply_movement_physics
         rts
 
-flashman_collision_check:  jsr     boss_check_weapon_hit
+crashman_collision_check:  jsr     boss_check_weapon_hit
         lda     $02
         cmp     #$01
-        bne     flashman_update_rts
+        bne     crashman_update_rts
         lda     #$12
         sta     $05A8
-flashman_update_rts:  rts
+crashman_update_rts:  rts
 
         .byte   $D3,$D1,$F6,$80
-flashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D,$CA,$BD,$05,$92
+crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D,$CA,$BD,$05,$92
         .byte   $85,$08,$BD,$0C,$92,$85,$09,$6C
         .byte   $08,$00,$AD,$E1,$04,$D0,$1B,$A9
         .byte   $09,$20,$F1,$C5,$E6,$B2,$A5,$B2
@@ -1729,7 +1729,7 @@ dragon_no_fire:  clc
 
         .byte   $A5,$B2,$D0,$08,$A9,$0F,$8D,$66
         .byte   $03,$4C,$8B,$A0
-        jsr     guts_tank_palette_flash
+        jsr     picopico_palette_flash
         lda     $1C
         and     #$0F
         bne     dragon_fade_rts
@@ -1837,7 +1837,7 @@ dragon_move_facing_left:  sec
         sta     $B9
         rts
 
-        asl     heatman_data_overlap,x
+        asl     flashman_data_overlap,x
         .byte   $FC,$64,$E5,$22,$8E,$8F,$8F,$8F
         .byte   $90,$90,$91,$CA,$BD,$95,$93,$85
         .byte   $08,$BD,$98,$93,$85,$09,$6C,$08
@@ -1846,15 +1846,15 @@ dragon_move_facing_left:  sec
         jsr     boss_health_bar_tick
         lda     $06C1
         cmp     #$1C
-        bne     guts_tank_phase_rts
+        bne     picopico_phase_rts
         lda     #$6F
         sta     $04E1
         inc     $B1
         lda     #$00
         sta     $B2
-guts_tank_phase_rts:  rts
+picopico_phase_rts:  rts
 
-        jmp     guts_tank_rts
+        jmp     picopico_rts
 
         .byte   $CE,$E1,$04,$D0,$F8,$A9,$1F,$8D
         .byte   $E1,$04,$A9,$6A,$20,$2D,$A2,$90
@@ -1862,28 +1862,28 @@ guts_tank_phase_rts:  rts
 
 
 ; =============================================================================
-; Boss AI: Wily 2 — Guts Tank entity spawning and setup ($925D)
+; Boss AI: Wily 2 — Picopico-kun entity spawning and setup ($925D)
 ; =============================================================================
-guts_tank_copy_data_loop:  lda     guts_tank_spawn_data,y
+picopico_copy_data_loop:  lda     picopico_spawn_data,y
         sta     jump_ptr,x
         iny
         inx
         cpx     #$08
-        bne     guts_tank_copy_data_loop
+        bne     picopico_copy_data_loop
         lda     $B2
         asl     a
         sta     $01
         ldx     #$00
-guts_tank_spawn_entity_loop:  stx     $02
+picopico_spawn_entity_loop:  stx     $02
         lda     #$6A
         ldx     #$01
         jsr     spawn_entity_from_boss
         ldx     $01
-        lda     guts_tank_y_pos_table,x
+        lda     picopico_y_pos_table,x
         sta     $04B0,y
-        lda     guts_tank_x_pos_table,x
+        lda     picopico_x_pos_table,x
         sta     $0470,y
-        lda     guts_tank_phase_id_table,x
+        lda     picopico_phase_id_table,x
         sta     $04F0,y
         ldx     $02
         lda     jump_ptr,x
@@ -1897,40 +1897,40 @@ guts_tank_spawn_entity_loop:  stx     $02
         inc     $01
         inx
         cpx     #$02
-        bne     guts_tank_spawn_entity_loop
+        bne     picopico_spawn_entity_loop
         lda     $B2
         asl     a
         sta     $0C
-guts_tank_attr_update_loop:  ldx     $0C
+picopico_attr_update_loop:  ldx     $0C
         lda     $0440
         sta     $09
-        lda     guts_tank_x_pos_table,x
+        lda     picopico_x_pos_table,x
         and     #$F0
         sta     jump_ptr
-        lda     guts_tank_y_pos_table,x
+        lda     picopico_y_pos_table,x
         sta     $0A
         jsr     metatile_render
         lda     $51
-        bne     guts_tank_advance_phase
+        bne     picopico_advance_phase
         inc     $51
         inc     $0C
-        bne     guts_tank_attr_update_loop
-guts_tank_advance_phase:  lda     #$82
+        bne     picopico_attr_update_loop
+picopico_advance_phase:  lda     #$82
         sta     $51
         inc     $B2
         lda     $B2
         cmp     #$0E
-        bne     guts_tank_rts
+        bne     picopico_rts
         inc     $B1
-guts_tank_rts:  rts
+picopico_rts:  rts
 
         .byte   $00,$00,$00,$08,$10,$00,$00,$10
         .byte   $08,$00,$10,$10,$00,$10
-guts_tank_y_pos_table:  .byte   $57,$57,$87,$87,$B7,$B7,$27,$C7
+picopico_y_pos_table:  .byte   $57,$57,$87,$87,$B7,$B7,$27,$C7
         .byte   $27,$C7,$77,$77,$37,$37,$27,$C7
         .byte   $27,$C7,$A7,$A7,$27,$C7,$27,$C7
         .byte   $97,$97,$27,$C7
-guts_tank_x_pos_table:  plp
+picopico_x_pos_table:  plp
         cld
         plp
         cld
@@ -1958,12 +1958,12 @@ guts_tank_x_pos_table:  plp
         cld
         pha
         sec
-guts_tank_phase_id_table:  brk
+picopico_phase_id_table:  brk
         .byte   $00,$00,$00,$00,$00,$00,$00,$01
         .byte   $01,$01,$01,$01,$01,$01,$01,$02
         .byte   $02,$02,$02,$02,$02,$02,$02,$03
         .byte   $03,$03,$03
-guts_tank_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
+picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
         .byte   $FF,$01,$00,$00,$CB,$8B,$50,$50
         .byte   $FF,$01,$00,$00,$8B,$CB,$50,$50
         .byte   $AD,$C1,$06,$D0,$0C,$A9,$BB,$85
@@ -1978,16 +1978,16 @@ guts_tank_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
 
 
 ; =============================================================================
-; Guts Tank Palette — flash effect on hit ($9382)
+; Picopico-kun Palette — flash effect on hit ($9382)
 ; =============================================================================
-guts_tank_palette_flash:  ldx     #$0F
+picopico_palette_flash:  ldx     #$0F
         lda     $1C
         and     #$07
-        bne     guts_tank_palette_store
+        bne     picopico_palette_store
         lda     #$2B
         jsr     bank_switch_enqueue
         ldx     #$30
-guts_tank_palette_store:  stx     $0366
+picopico_palette_store:  stx     $0366
         rts
 
         .byte   $21
@@ -2006,54 +2006,54 @@ guts_tank_palette_store:  stx     $0366
         .byte   $85,$B2,$EE,$E1,$04
         lda     $04E1
         cmp     #$01
-        bne     buebeam_phase2_check
+        bne     gutsdozer_phase2_check
         lda     #$0B
         jsr     sound_column_copy
         dec     $B2
-        beq     buebeam_advance_phase
+        beq     gutsdozer_advance_phase
         rts
 
 
 ; =============================================================================
-; Boss AI: Wily 3 — Buebeam Trap nametable and column setup ($93E7)
+; Boss AI: Wily 3 — Guts-Dozer nametable and column setup ($93E7)
 ; =============================================================================
-buebeam_advance_phase:  inc     $04E1
+gutsdozer_advance_phase:  inc     $04E1
         lda     #$10
         sta     $05A7
         rts
 
-buebeam_phase2_check:  cmp     #$02
-        bne     buebeam_phase3_check
+gutsdozer_phase2_check:  cmp     #$02
+        bne     gutsdozer_phase3_check
         ldx     $B2
         cpx     #$0B
-        beq     buebeam_column_done
-        lda     buebeam_nt_addr_hi_table,x
+        beq     gutsdozer_column_done
+        lda     gutsdozer_nt_addr_hi_table,x
         sta     $03B6
-        lda     buebeam_nt_addr_lo_table,x
+        lda     gutsdozer_nt_addr_lo_table,x
         sta     $03B7
-        lda     buebeam_nt_length_table,x
+        lda     gutsdozer_nt_length_table,x
         sta     $47
         ldy     #$00
-buebeam_fill_column_loop:  lda     $05A7
+gutsdozer_fill_column_loop:  lda     $05A7
         sta     $03B8,y
         inc     $05A7
         iny
         cpy     $47
-        bne     buebeam_fill_column_loop
+        bne     gutsdozer_fill_column_loop
         inx
         stx     $B2
         rts
 
-buebeam_column_done:  lda     #$21
+gutsdozer_column_done:  lda     #$21
         sta     $03B6
         lda     #$E0
         sta     $03B7
         lda     #$00
         sta     $B2
         inc     $04E1
-buebeam_phase3_check:  lda     $04E1
+gutsdozer_phase3_check:  lda     $04E1
         cmp     #$03
-        bne     buebeam_attr_update
+        bne     gutsdozer_attr_update
         clc
         lda     #$20
         sta     $47
@@ -2064,25 +2064,25 @@ buebeam_phase3_check:  lda     $04E1
         sta     $03B6
         ldx     $B2
         cpx     #$B0
-        beq     buebeam_tile_done
+        beq     gutsdozer_tile_done
         ldy     #$00
-buebeam_tile_copy_loop:  lda     buebeam_nt_tile_data,x
+gutsdozer_tile_copy_loop:  lda     gutsdozer_nt_tile_data,x
         sta     $03B8,y
         inx
         iny
         cpy     #$16
-        bne     buebeam_tile_copy_loop
+        bne     gutsdozer_tile_copy_loop
         stx     $B2
         rts
 
-buebeam_tile_done:  lda     #$23
+gutsdozer_tile_done:  lda     #$23
         sta     $03B6
         lda     #$C0
         sta     $03B7
         lda     #$00
         sta     $B2
         inc     $04E1
-buebeam_attr_update:  clc
+gutsdozer_attr_update:  clc
         lda     $03B7
         adc     #$08
         sta     $03B7
@@ -2093,18 +2093,18 @@ buebeam_attr_update:  clc
         sta     $47
         ldx     $B2
         cpx     #$1E
-        beq     buebeam_setup_complete
+        beq     gutsdozer_setup_complete
         ldy     #$00
-buebeam_attr_copy_loop:  lda     buebeam_attr_data,x
+gutsdozer_attr_copy_loop:  lda     gutsdozer_attr_data,x
         sta     $03B8,y
         inx
         iny
         cpy     #$06
-        bne     buebeam_attr_copy_loop
+        bne     gutsdozer_attr_copy_loop
         stx     $B2
         rts
 
-buebeam_setup_complete:  lda     #$00
+gutsdozer_setup_complete:  lda     #$00
         sta     $47
         sta     $04E1
         lda     #$8B
@@ -2116,25 +2116,25 @@ buebeam_setup_complete:  lda     #$00
         .byte   $61,$04
         ldx     $04E1
         lda     $B8
-        cmp     buebeam_spawn_screen_table,x
-        bne     buebeam_jmp_movement
+        cmp     gutsdozer_spawn_screen_table,x
+        bne     gutsdozer_jmp_movement
         cpx     #$01
-        bne     buebeam_spawn_turret
+        bne     gutsdozer_spawn_turret
         lda     #$8B
         sta     $0421
         lda     $B7
         sta     $0481
-        jmp     buebeam_advance_turret
+        jmp     gutsdozer_advance_turret
 
 
 ; =============================================================================
-; Buebeam Battle — turret spawning and phase management ($94D2)
+; Guts-Dozer Battle — turret spawning and phase management ($94D2)
 ; =============================================================================
-buebeam_spawn_turret:  lda     buebeam_turret_y_table,x
+gutsdozer_spawn_turret:  lda     gutsdozer_turret_y_table,x
         sta     $01
-        lda     buebeam_turret_ai_table,x
+        lda     gutsdozer_turret_ai_table,x
         sta     $02
-        lda     buebeam_turret_type_table,x
+        lda     gutsdozer_turret_type_table,x
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     $01
@@ -2145,61 +2145,61 @@ buebeam_spawn_turret:  lda     buebeam_turret_y_table,x
         sta     $0490,y
         lda     $02
         sta     $06F0,y
-buebeam_advance_turret:  inc     $04E1
+gutsdozer_advance_turret:  inc     $04E1
         lda     $04E1
         cmp     #$04
-        bne     buebeam_jmp_movement
+        bne     gutsdozer_jmp_movement
         lda     #$3F
         sta     $04E1
         inc     $B1
-buebeam_jmp_movement:  jsr     dragon_apply_movement
+gutsdozer_jmp_movement:  jsr     dragon_apply_movement
         rts
 
-buebeam_spawn_screen_table:  .byte   $D7,$C7,$A7,$8C
-buebeam_turret_type_table:  .byte   $69,$00,$63,$67
-buebeam_turret_y_table:  .byte   $7F,$00,$A8,$68
-buebeam_turret_ai_table:  ora     #$00
+gutsdozer_spawn_screen_table:  .byte   $D7,$C7,$A7,$8C
+gutsdozer_turret_type_table:  .byte   $69,$00,$63,$67
+gutsdozer_turret_y_table:  .byte   $7F,$00,$A8,$68
+gutsdozer_turret_ai_table:  ora     #$00
         .byte   $14,$06,$A5,$B8,$C9,$30,$D0,$06
         .byte   $A9,$7D,$85,$B2,$E6,$B1
         lda     #$8B
-buebeam_set_facing:  sta     $05A7
+gutsdozer_set_facing:  sta     $05A7
         lda     #$60
         sta     $0621
-        jsr     buebeam_spawn_tick
+        jsr     gutsdozer_spawn_tick
         rts
 
         .byte   $A5,$B8,$C9,$80,$D0,$06,$A9,$7D
         .byte   $85,$B2,$E6,$B1
         lda     #$CB
-        bne     buebeam_set_facing
+        bne     gutsdozer_set_facing
         lda     #$05
-        bne     buebeam_dec_phase_timer
+        bne     gutsdozer_dec_phase_timer
         lda     #$03
-buebeam_dec_phase_timer:  sta     zp_temp_00
+gutsdozer_dec_phase_timer:  sta     zp_temp_00
         dec     $B2
-        bne     buebeam_clear_velocity
+        bne     gutsdozer_clear_velocity
         lda     zp_temp_00
         sta     $B1
-buebeam_clear_velocity:  lda     #$00
+gutsdozer_clear_velocity:  lda     #$00
         sta     $0601
         sta     $0621
-        jsr     buebeam_spawn_tick
+        jsr     gutsdozer_spawn_tick
         rts
 
 
 ; =============================================================================
-; Buebeam Projectile — spawn timing and aim calculation ($9563)
+; Guts-Dozer Projectile — spawn timing and aim calculation ($9563)
 ; =============================================================================
-buebeam_spawn_tick:  dec     $04E1
-        beq     buebeam_spawn_setup
-        jmp     buebeam_check_anim_state
+gutsdozer_spawn_tick:  dec     $04E1
+        beq     gutsdozer_spawn_setup
+        jmp     gutsdozer_check_anim_state
 
-buebeam_spawn_setup:  lda     #$3F
+gutsdozer_spawn_setup:  lda     #$3F
         sta     $04E1
         jsr     calc_player_boss_distance
         lda     zp_temp_00
         cmp     #$38
-        bcc     buebeam_calc_aim_angle
+        bcc     gutsdozer_calc_aim_angle
         lda     #$69
         jsr     find_entity_by_type
         lda     #$01
@@ -2209,16 +2209,16 @@ buebeam_spawn_setup:  lda     #$3F
         lda     #$34
         sta     zp_temp_00
         ldy     #$0F
-buebeam_sprite_scan_loop:  jsr     collision_check_sprite
-        bcs     buebeam_spawn_shot
+gutsdozer_sprite_scan_loop:  jsr     collision_check_sprite
+        bcs     gutsdozer_spawn_shot
         dec     $02
-        beq     buebeam_check_anim_state
+        beq     gutsdozer_check_anim_state
         dey
-        bpl     buebeam_sprite_scan_loop
-buebeam_spawn_shot:  lda     #$34
+        bpl     gutsdozer_sprite_scan_loop
+gutsdozer_spawn_shot:  lda     #$34
         ldx     #$01
         jsr     spawn_entity_from_boss
-        bcs     buebeam_check_anim_state
+        bcs     gutsdozer_check_anim_state
         lda     #$87
         sta     $0430,y
         clc
@@ -2233,13 +2233,13 @@ buebeam_spawn_shot:  lda     #$34
         sta     $0650,y
         lda     #$D4
         sta     $0670,y
-        bne     buebeam_check_anim_state
-buebeam_calc_aim_angle:  sec
+        bne     gutsdozer_check_anim_state
+gutsdozer_calc_aim_angle:  sec
         lda     zp_temp_00
         sbc     #$10
-        bcs     buebeam_aim_shift
+        bcs     gutsdozer_aim_shift
         lda     #$00
-buebeam_aim_shift:  sta     jump_ptr
+gutsdozer_aim_shift:  sta     jump_ptr
         lda     #$00
         asl     jump_ptr
         rol     a
@@ -2255,7 +2255,7 @@ buebeam_aim_shift:  sta     jump_ptr
         lda     #$35
         ldx     #$01
         jsr     spawn_entity_from_boss
-        bcs     buebeam_check_anim_state
+        bcs     gutsdozer_check_anim_state
         lda     #$85
         sta     $0430,y
         clc
@@ -2270,14 +2270,14 @@ buebeam_aim_shift:  sta     jump_ptr
         sta     $0630,y
         lda     #$01
         sta     $06A1
-buebeam_check_anim_state:  lda     $06A1
-        bne     buebeam_palette_and_hit
+gutsdozer_check_anim_state:  lda     $06A1
+        bne     gutsdozer_palette_and_hit
         sta     $0681
-buebeam_palette_and_hit:  lda     #$0F
+gutsdozer_palette_and_hit:  lda     #$0F
         sta     $0366
         jsr     weapon_boss_collision_check
-        bcc     buebeam_check_hit_flash
-buebeam_death_fade:  lda     #$00
+        bcc     gutsdozer_check_hit_flash
+gutsdozer_death_fade:  lda     #$00
         sta     $0354
         sta     $0355
         lda     #$0D
@@ -2290,13 +2290,13 @@ buebeam_death_fade:  lda     #$00
         inc     $05AA
         lda     #$07
         sta     $B1
-        bne     buebeam_apply_facing
-buebeam_check_hit_flash:  lda     $02
+        bne     gutsdozer_apply_facing
+gutsdozer_check_hit_flash:  lda     $02
         cmp     #$01
-        bne     buebeam_apply_facing
+        bne     gutsdozer_apply_facing
         lda     #$30
         sta     $0366
-buebeam_apply_facing:  lda     $05A7
+gutsdozer_apply_facing:  lda     $05A7
         sta     $0421
         jsr     dragon_apply_movement
         lda     #$83
@@ -2641,7 +2641,7 @@ wily_machine_clear_flags:  lda     #$00
         sta     $B1
 wily_machine_scroll_rts:  rts
 
-        jsr     guts_tank_palette_flash
+        jsr     picopico_palette_flash
         lda     $04A1
         beq     wily_machine_rng_spawn
         sec
@@ -2750,7 +2750,7 @@ wily_machine_death_explosion:  lda     #$74
         .byte   $99
         .byte   $30
 wily_machine_data_byte:  .byte   $04
-wily_machine_death_jmp:  jmp     buebeam_death_fade
+wily_machine_death_jmp:  jmp     gutsdozer_death_fade
 
 wily_machine_check_flash:  lda     $02
         cmp     #$01
@@ -2803,7 +2803,7 @@ projectile_tile_ids:  .byte   $00,$E6,$E7,$E8,$00,$00,$E9,$EA
         tya
         tya
         sta     chr_data_BDCA,y
-        lda     airman_data_byte,x
+        lda     woodman_data_byte,x
         php
         lda     alien_phase_ptr_hi_table,x
         sta     $09
@@ -4492,18 +4492,18 @@ boss_contact_damage_table:  php
 
 
 ; =============================================================================
-; Buebeam Nametable Data — PPU addresses and tile data for trap room ($A9C0)
+; Guts-Dozer Nametable Data — PPU addresses and tile data for arena ($A9C0)
 ; =============================================================================
-buebeam_nt_addr_hi_table:  jsr     ppu_addr_2020
+gutsdozer_nt_addr_hi_table:  jsr     ppu_addr_2020
         and     ($21,x)
         and     ($21,x)
         and     ($21,x)
         and     ($21,x)
-buebeam_nt_addr_lo_table:  .byte   $C7,$E6,$EE,$06,$26,$44,$64,$85
+gutsdozer_nt_addr_lo_table:  .byte   $C7,$E6,$EE,$06,$26,$44,$64,$85
         .byte   $A5,$C5,$E6
-buebeam_nt_length_table:  .byte   $03,$05,$02,$0A,$0A,$0D,$0F,$0E
+gutsdozer_nt_length_table:  .byte   $03,$05,$02,$0A,$0A,$0D,$0F,$0E
         .byte   $0E,$0F,$0E
-buebeam_nt_tile_data:  .byte   $00,$00,$00,$00,$00,$00,$83,$84
+gutsdozer_nt_tile_data:  .byte   $00,$00,$00,$00,$00,$00,$83,$84
         .byte   $85,$86,$87,$88,$89,$8A,$8B,$8C
         .byte   $8D,$8D,$8D,$8E,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$8F,$90,$91,$92
@@ -4535,7 +4535,7 @@ buebeam_nt_tile_data:  .byte   $00,$00,$00,$00,$00,$00,$83,$84
         .byte   $D4,$D5,$D6,$D7,$D8,$D9,$DA,$DB
         .byte   $DC,$DD,$DE,$DF,$DC,$DD,$DE,$DF
         .byte   $DC,$DD,$DE,$DF,$DC,$DD,$E0,$E1
-buebeam_attr_data:  .byte   $FF,$3F,$0F,$FF,$FF,$FF,$FF,$33
+gutsdozer_attr_data:  .byte   $FF,$3F,$0F,$FF,$FF,$FF,$FF,$33
         .byte   $44,$FD,$FF,$FF,$FF,$7F,$D0,$FF
         .byte   $FF,$FF,$FF,$F7,$F5,$FF,$FF,$FF
         .byte   $AF

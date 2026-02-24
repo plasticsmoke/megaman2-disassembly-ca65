@@ -1,7 +1,7 @@
 .segment "BANK07"
 
 ; =============================================================================
-; Bank $07 — Stage Data 8
+; Bank $07 — Bubble Man Stage (stage index $03)
 ; CHR tile patterns and level layout data.
 ; This bank contains no executable code — all bytes are data.
 ; =============================================================================

@@ -2896,9 +2896,9 @@ springer_shot_vel_x_hi:  .byte   $04,$02,$01,$A9,$00,$9D,$80,$06
         sta     $02
         jsr     check_horiz_tile_collision
         lda     $0110,x
-        bne     frog_dec_timer
+        bne     kerog_dec_timer
         lda     $00
-        beq     frog_apply_physics
+        beq     kerog_apply_physics
         lda     #$3E
         sta     $04E0,x
         inc     $06A0,x
@@ -2906,9 +2906,9 @@ springer_shot_vel_x_hi:  .byte   $04,$02,$01,$A9,$00,$9D,$80,$06
         sta     $0620,x
         sta     $0600,x
         inc     $0110,x
-        bne     frog_apply_physics
-frog_dec_timer:  dec     $04E0,x
-        bne     frog_apply_physics
+        bne     kerog_apply_physics
+kerog_dec_timer:  dec     $04E0,x
+        bne     kerog_apply_physics
         dec     $06A0,x
         dec     $0110,x
         jsr     entity_face_player
@@ -2920,7 +2920,7 @@ frog_dec_timer:  dec     $04E0,x
         sta     $0620,x
         lda     #$04
         sta     $0640,x
-frog_apply_physics:  jsr     apply_entity_physics
+kerog_apply_physics:  jsr     apply_entity_physics
         rts
 
         .byte   $BD,$20,$06,$D0,$68,$BD,$E0,$04
@@ -5192,27 +5192,27 @@ drop_boss_dec_timer:  dec     $04E0,x
         rts
 
         .byte   $BD
-        bpl     wall_walker_init
+        bpl     scworm_init
         .byte   $F0
 
 ; =============================================================================
-; wall_walker_init -- Enemy AI: Wall Walker — wall-crawling enemy with tile check ($B01F)
+; scworm_init -- Enemy AI: Scworm — pipe worm, tile-check movement ($B01F)
 ; =============================================================================
-wall_walker_init:  .byte   $03
-        jmp     wall_walker_anim
+scworm_init:  .byte   $03
+        jmp     scworm_anim
 
         ldy     #$00
         sty     $0B
         lda     $0420,x
         and     #$40
-        bne     wall_walker_calc_tile
+        bne     scworm_calc_tile
         iny
-wall_walker_calc_tile:  clc
+scworm_calc_tile:  clc
         lda     $0460,x
-        adc     wall_walker_x_offset_table,y
+        adc     scworm_x_offset_table,y
         sta     jump_ptr
         lda     $0440,x
-        adc     wall_walker_x_page_table,y
+        adc     scworm_x_page_table,y
         sta     $09
         clc
         lda     $04A0,x
@@ -5221,28 +5221,28 @@ wall_walker_calc_tile:  clc
         jsr     lookup_tile_from_map
         ldx     $2B
         lda     $00
-        beq     wall_walker_flip
+        beq     scworm_flip
         lda     $04A0,x
         sta     $0A
         jsr     lookup_tile_from_map
         ldx     $2B
         lda     $00
-        beq     wall_walker_set_speed
-wall_walker_flip:  lda     $0420,x
+        beq     scworm_set_speed
+scworm_flip:  lda     $0420,x
         eor     #$40                    ; flip facing direction
         sta     $0420,x
-wall_walker_set_speed:  lda     #$00
+scworm_set_speed:  lda     #$00
         sta     $0600,x
         lda     #$41
         sta     $0620,x
         sec
         lda     $04A0
         sbc     $04A0,x
-        bcs     wall_walker_check_dist
+        bcs     scworm_check_dist
         eor     #$FF
         adc     #$01
-wall_walker_check_dist:  cmp     #$05
-        bcs     wall_walker_resume
+scworm_check_dist:  cmp     #$05
+        bcs     scworm_resume
         lda     #$00
         sta     $0620,x
         lda     #$02
@@ -5254,7 +5254,7 @@ wall_walker_check_dist:  cmp     #$05
         sta     $0420,x
         lda     $00
         cmp     #$11
-        bcs     wall_walker_resume
+        bcs     scworm_resume
         lda     #$01
         sta     $06A0,x
         sec
@@ -5267,23 +5267,23 @@ wall_walker_check_dist:  cmp     #$05
         and     #$F7
         sta     $0420,x
         inc     $0110,x
-        bne     wall_walker_anim
-wall_walker_resume:  lda     #$00
+        bne     scworm_anim
+scworm_resume:  lda     #$00
         sta     $06A0,x
         lda     #$07
         sta     $06E0,x
         jsr     apply_entity_physics
         rts
 
-wall_walker_anim:  lda     $06A0,x
+scworm_anim:  lda     $06A0,x
         cmp     #$05
-        bne     wall_walker_set_speed_val
+        bne     scworm_set_speed_val
         lda     #$01
         sta     $06A0,x
-wall_walker_set_speed_val:  lda     #$09
+scworm_set_speed_val:  lda     #$09
         sta     $06E0,x
         dec     $04E0,x
-        bne     wall_walker_physics
+        bne     scworm_physics
         dec     $0110,x
         lda     #$00
         sta     $06A0,x
@@ -5291,11 +5291,11 @@ wall_walker_set_speed_val:  lda     #$09
         lda     $04A0,x
         adc     #$08
         sta     $04A0,x
-wall_walker_physics:  jsr     apply_entity_physics_alt
+scworm_physics:  jsr     apply_entity_physics_alt
         rts
 
-wall_walker_x_offset_table:  .byte   $08,$F8 ; Wall walker X check offset
-wall_walker_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
+scworm_x_offset_table:  .byte   $08,$F8 ; Scworm X check offset
+scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
         .byte   $47,$20,$B5,$95,$90,$01,$60
         lda     $0460
         sta     $0460,x

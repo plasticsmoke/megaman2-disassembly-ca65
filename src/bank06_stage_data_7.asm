@@ -1,7 +1,7 @@
 .segment "BANK06"
 
 ; =============================================================================
-; Bank $06 — Stage Data 7
+; Bank $06 — Quick Man Stage (stage index $04)
 ; CHR tile patterns and level layout data.
 ; This bank contains no executable code — all bytes are data.
 ; =============================================================================

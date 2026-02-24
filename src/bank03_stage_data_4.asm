@@ -1,7 +1,7 @@
 .segment "BANK03"
 
 ; =============================================================================
-; Bank $03 — Stage Data 4
+; Bank $03 — Heat Man Stage (stage index $00)
 ; CHR tile patterns and level layout data.
 ; This bank contains no executable code — all bytes are data.
 ; =============================================================================

@@ -1,7 +1,7 @@
 .segment "BANK08"
 
 ; =============================================================================
-; Bank $08 — Stage Data 9
+; Bank $08 — Wily Stages 1-2 (stage indices $08-$09)
 ; CHR tile patterns and level layout data.
 ; This bank contains no executable code — all bytes are data.
 ; =============================================================================
