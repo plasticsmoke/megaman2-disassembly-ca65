@@ -687,207 +687,207 @@ stage_palette_data:  .byte   $0F,$20,$11,$2C,$0F,$20,$29,$19
 ; =============================================================================
 weapon_palette_base:  .byte   $0F,$0F,$0F,$0F,$0F,$0F,$30,$38
 stage_palette_per_boss:  .byte   $0F,$0F,$28
-        ora     $0F,x
+        .byte   $15,$0F
         .byte   $0F,$28
-        ora     $0F,x
+        .byte   $15,$0F
         .byte   $0F,$28
-        ora     ($0F),y
+        .byte   $11,$0F
         .byte   $0F,$28
-        ora     ($0F),y
+        .byte   $11,$0F
         .byte   $0F,$30
-        and     #$0F
+        .byte   $29,$0F
         .byte   $0F,$36,$17,$0F,$0F,$30,$19,$0F
         .byte   $0F,$30
-        ora     $0F0F,y
-        bmi     data_852D
+        .byte   $19,$0F,$0F
+        .byte   $30,$28
         .byte   $0F,$0F
-        plp
-        ora     $0F,x
-        bmi     data_853C
-        plp
+        .byte   $28
+        .byte   $15,$0F
+        .byte   $30,$30
+        .byte   $28
         .byte   $0F,$0F,$30,$12,$0F,$0F,$30,$15
         .byte   $0F,$0F,$28
-        ora     $0F,x
+        .byte   $15,$0F
         .byte   $0F,$30
-        bmi     data_852D
+        .byte   $30,$0F
         .byte   $0F
-        bmi     data_8537
-weapon_flash_tile_lo:  brk
-weapon_flash_tile_hi:  brk
+        .byte   $30,$16
+weapon_flash_tile_lo:  .byte   $00
+weapon_flash_tile_hi:  .byte   $00
         .byte   $07,$10,$17,$20,$17,$20,$17
-        jsr     addr_2017
+        .byte   $20,$17,$20
 data_852D:  .byte   $17,$20,$17
         .byte   $20
-intro_ppu_addr_hi:  and     ($20,x)
-        and     ($20,x)
+intro_ppu_addr_hi:  .byte   $21,$20
+        .byte   $21,$20
         .byte   $20
         .byte   $22
 data_8537:  .byte   $22
         .byte   $22
 intro_ppu_addr_lo:  .byte   $86,$8E,$96
-data_853C:  stx     $96
-        stx     boss_get_init_ppu
+data_853C:  .byte   $86,$96
+        .byte   $8E,$86,$96
 
 ; =============================================================================
 ; Boss Portrait OAM Data — sprite data for stage select boss icons
 ; =============================================================================
-boss_portrait_oam_data:  and     #$0A
-        ora     ($31,x)
-        plp
+boss_portrait_oam_data:  .byte   $29,$0A
+        .byte   $01,$31
+        .byte   $28
         .byte   $0B,$00,$3D,$28,$0C,$00,$45
-        rol     $27
+        .byte   $26,$27
         .byte   $02
-        sei
-        rol     $0125
-        ror     $2E,x
-        rol     $01
-        ror     $2336,x
-        ora     ($70,x)
-        rol     $24,x
-        ora     ($83,x)
+        .byte   $78
+        .byte   $2E,$25,$01
+        .byte   $76,$2E
+        .byte   $26,$01
+        .byte   $7E,$36,$23
+        .byte   $01,$70
+        .byte   $36,$24
+        .byte   $01,$83
         .byte   $17,$2E,$01,$C8,$26,$28,$00
-        cpy     #$2E
-        and     #$00
-        bcs     data_859C
-        rol     a
-        brk
+        .byte   $C0,$2E
+        .byte   $29,$00
+        .byte   $B0,$2E
+        .byte   $2A
+        .byte   $00
         .byte   $B8,$2E,$2B,$00,$C0,$36,$2C,$00
         .byte   $B8,$36,$2D,$00,$C0
-        jmp     (zp_temp_06)
+        .byte   $6C,$06,$00
 
         .byte   $3B,$6C,$07,$00,$43,$74
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $3B,$74
-        ora     #$00
+        .byte   $09,$00
         .byte   $43,$5F
-        ora     data_B000
+        .byte   $0D,$00,$B0
         .byte   $5F,$0E,$00,$B8,$5F,$0F,$00,$C0
         .byte   $67
-        bpl     data_859C
-data_859C:  bcs     boss_oam_size_table
-        ora     ($00),y
-        clv
+        .byte   $10,$00
+data_859C:  .byte   $B0,$67
+        .byte   $11,$00
+        .byte   $B8
         .byte   $67,$12,$00,$C0,$6F,$13,$00,$B7
         .byte   $6F,$14,$00,$BF,$77
-        ora     $00,x
+        .byte   $15,$00
         .byte   $B7,$77,$16,$00,$BF,$9F,$1F,$00
         .byte   $38,$A7
-        jsr     addr_3800
+        .byte   $20,$00,$38
         .byte   $AF,$21,$00,$3B,$AF,$22,$00,$43
         .byte   $A7,$17,$01,$71,$A7,$18,$00,$79
         .byte   $A7,$19,$02,$81,$AF,$1A,$01,$71
         .byte   $AF,$1B,$00,$79,$AF
 data_85DA:  .byte   $1C,$00
-data_85DC:  sta     ($B7,x)
-        ora     $7900,x
+data_85DC:  .byte   $81,$B7
+        .byte   $1D,$00,$79
         .byte   $B7,$1E,$00,$81,$9D,$04,$00,$C0
         .byte   $A5
-data_85EA:  ora     $00
-data_85EC:  cpy     #$AD
-        brk
+data_85EA:  .byte   $05,$00
+data_85EC:  .byte   $C0,$AD
         .byte   $00
-        ldx     $AD,y
-        ora     ($00,x)
-        ldx     $02B5,y
-        brk
+        .byte   $00
+        .byte   $B6,$AD
+        .byte   $01,$00
+        .byte   $BE,$B5,$02
+        .byte   $00
         .byte   $B6,$B5,$03,$00,$BE
 
 ; =============================================================================
 ; Boss OAM Layout Tables — offsets, sizes, collision boxes
 ; =============================================================================
 boss_oam_offset_table:  .byte   $3C,$0C,$4C
-        brk
-        jsr     addr_7484
+        .byte   $00
+        .byte   $20,$84,$74
         .byte   $A4
-boss_oam_size_table:  bpl     data_861B
-        plp
+boss_oam_size_table:  .byte   $10,$14
+        .byte   $28
         .byte   $0C,$1C,$20,$10,$18
 collision_box_table:  .byte   $F8,$2F,$00,$F9,$F8,$2F,$00,$1F
         .byte   $1E,$2F,$00,$F9,$1E,$2F
 data_861B:  .byte   $00,$1F
 collision_x_offset_table:  .byte   $60,$20,$20,$20,$60
-        ldy     #$A0
-        ldy     #$60
-collision_y_offset_table:  bvs     data_8658
-        bvs     data_85DA
-        bcs     data_85DC
-        bvs     data_865E
-        bmi     data_8690
-        jsr     addr_2060
-        jsr     ending_column_skip
-        ldy     #$30
-        bvs     data_85EA
-        bmi     data_85EC
-        bvs     data_866E
+        .byte   $A0,$A0
+        .byte   $A0,$60
+collision_y_offset_table:  .byte   $70,$30
+        .byte   $70,$B0
+        .byte   $B0,$B0
+        .byte   $70,$30
+        .byte   $30,$60
+        .byte   $20,$60,$20
+        .byte   $20,$A0,$A0
+        .byte   $A0,$30
+        .byte   $70,$B0
+        .byte   $30,$B0
+        .byte   $70,$30
         .byte   $B0
 
 ; =============================================================================
 ; Nametable Fill Table — tile pattern for stage select background
 ; =============================================================================
-nametable_fill_table:  brk
-        brk
+nametable_fill_table:  .byte   $00
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$2D,$20,$20,$20
         .byte   $20,$20,$20,$2C,$00,$00,$00
 data_8658:  .byte   $00,$00,$00,$00,$00,$00
-data_865E:  brk
+data_865E:  .byte   $00
 
 ; =============================================================================
 ; Stage Select Index/Entity Tables — mapping and entity data per boss
 ; =============================================================================
-stage_select_index_table:  php
+stage_select_index_table:  .byte   $08
         .byte   $03,$01,$04,$02,$07,$05,$06,$00
         .byte   $00,$08,$02,$10,$04,$20
 data_866E:  .byte   $80,$40,$01
-stage_entity_x_table:  tya
-        sta     boss_get_palette_data_2,y
+stage_entity_x_table:  .byte   $98
+        .byte   $99,$9A,$9B
         .byte   $9C,$9D,$AB,$AC,$AD,$AA,$AB,$AC
         .byte   $AC,$AD,$AE,$AF,$B0,$B1,$98,$99
         .byte   $9A,$9B,$9C,$9D,$90,$91,$92,$93
         .byte   $94
-        sta     $9E,x
+        .byte   $95,$9E
 data_8690:  .byte   $9F,$96,$97,$9E,$9F,$B0,$B1,$B2
         .byte   $B3,$AA,$AB,$AE,$AF,$B0,$B1,$B2
         .byte   $B3
 stage_entity_bank_table:  .byte   $06,$06,$06,$06,$06,$06,$05,$05
         .byte   $05,$06,$06,$06
-        asl     zp_temp_06
-        asl     zp_temp_06
-        asl     zp_temp_06
+        .byte   $06,$06
+        .byte   $06,$06
+        .byte   $06,$06
         .byte   $07,$07,$07,$07,$07,$07,$07,$07
         .byte   $07,$07,$07,$07,$06,$06,$07,$07
         .byte   $07,$07,$03,$03,$03,$03,$05,$05
         .byte   $05,$05,$05,$05,$05,$05
 boss_bitmask_table:  .byte   $01,$02,$04,$08
-        bpl     data_86F7
-        rti
+        .byte   $10,$20
+        .byte   $40
 
         .byte   $80
-intro_health_tile_data:  jsr     addr_0508
-        ora     ($14,x)
+intro_health_tile_data:  .byte   $20,$08,$05
+        .byte   $01,$14
         .byte   $0D
         .byte   $01
-data_86E0:  asl     addr_2020
-        jsr     $0120
-        ora     #$12
-        ora     $0E01
-        jsr     addr_2020
+data_86E0:  .byte   $0E,$20,$20
+        .byte   $20,$20,$01
+        .byte   $09,$12
+        .byte   $0D,$01,$0E
+        .byte   $20,$20,$20
         .byte   $17,$0F,$0F,$04,$0D,$01,$0E,$20
         .byte   $20
 data_86F7:  .byte   $02,$15,$02,$02,$0C
-data_86FC:  ora     $0D
-        ora     ($0E,x)
-        jsr     addr_1120
-        ora     $09,x
+data_86FC:  .byte   $05,$0D
+        .byte   $01,$0E
+        .byte   $20,$20,$11
+        .byte   $15,$09
         .byte   $03
         .byte   $0B,$0D,$01,$0E,$20,$20,$06,$0C
         .byte   $01,$13,$08,$0D,$01,$0E
-        jsr     addr_0D20
-        ora     $14
-        ora     ($0C,x)
-        ora     $0E01
-        jsr     addr_0320
+        .byte   $20,$20,$0D
+        .byte   $05,$14
+        .byte   $01,$0C
+        .byte   $0D,$01,$0E
+        .byte   $20,$20,$03
         .byte   $12,$01,$13,$08,$0D,$01,$0E,$20
 
 ; =============================================================================
@@ -895,39 +895,39 @@ data_86FC:  ora     $0D
 ; =============================================================================
 player_sprite_y_table:  .byte   $10
 player_sprite_x_table:  .byte   $18,$10,$80,$10,$D0,$14,$40
-data_8731:  clc
-        bcc     data_875C
-        sei
-        bmi     data_8757
-        bmi     data_8731
-        sec
-        bcs     data_877C
-        inx
-        tya
-        bcc     data_86E0
-        rti
+data_8731:  .byte   $18
+        .byte   $90,$28
+        .byte   $78
+        .byte   $30,$20
+        .byte   $30,$F8
+        .byte   $38
+        .byte   $B0,$40
+        .byte   $E8
+        .byte   $98
+        .byte   $90,$A0
+        .byte   $40
 
         .byte   $A0,$E8,$B0,$90,$B8,$68,$C0,$18
         .byte   $C8,$70,$C8,$C0,$D0,$D8,$D8,$60
         .byte   $D8,$C8,$18,$50,$08,$50
-data_8757:  clc
-        sed
-        jsr     addr_2008
-data_875C:  tay
-        bmi     data_879F
-        sec
-        bne     data_87AA
-        bvc     data_86FC
-        clv
-        tay
-        sei
-        bcs     data_8769
-data_8769:  clv
-        plp
-        cpy     #$C8
-        bne     data_878F
-        cpx     #$88
-        bit     $D0
+data_8757:  .byte   $18
+        .byte   $F8
+        .byte   $20,$08,$20
+data_875C:  .byte   $A8
+        .byte   $30,$40
+        .byte   $38
+        .byte   $D0,$48
+        .byte   $50,$98
+        .byte   $B8
+        .byte   $A8
+        .byte   $78
+        .byte   $B0,$00
+data_8769:  .byte   $B8
+        .byte   $28
+        .byte   $C0,$C8
+        .byte   $D0,$20
+        .byte   $E0,$88
+        .byte   $24,$D0
         .byte   $34,$88,$3C,$30,$9C,$20,$A4,$D0
         .byte   $B4
 data_877C:  .byte   $58,$D4,$E8,$D4,$A0
@@ -937,12 +937,12 @@ data_877C:  .byte   $58,$D4,$E8,$D4,$A0
 ; =============================================================================
 projectile_anim_base_idx:  .byte   $00,$18,$29,$32,$37,$41,$49,$4F
 projectile_anim_max_frame:  .byte   $17,$10,$08,$04,$09,$07
-data_878F:  ora     $04
+data_878F:  .byte   $05,$04
 projectile_frame_duration:  .byte   $02,$03,$08
-        php
-        ora     zp_temp_06
-        php
-        php
+        .byte   $08
+        .byte   $05,$06
+        .byte   $08
+        .byte   $08
 projectile_frame_index:  .byte   $03,$02,$02,$01,$01,$00
 data_879F:  .byte   $27,$28,$27,$28,$27,$28,$27,$28
         .byte   $27,$28,$27
@@ -951,7 +951,7 @@ data_87AA:  .byte   $28,$27,$28,$27,$28,$27,$00,$1E
         .byte   $1B,$1C,$1D,$1C,$1D,$1C,$1D,$1B
         .byte   $26,$23,$24,$25,$24,$25,$24,$25
         .byte   $23,$04,$04,$04
-        ora     zp_temp_06
+        .byte   $05,$06
         .byte   $0F,$07,$08,$09,$0A,$0B,$0C,$0D
         .byte   $0E,$09,$16,$10,$11,$12,$13,$14
         .byte   $15,$12,$1A,$17,$17,$17,$18,$19
@@ -962,19 +962,19 @@ data_87AA:  .byte   $28,$27,$28,$27,$28,$27,$00,$1E
 ; =============================================================================
 projectile_sprite_ptr_lo:  .byte   $3F,$78,$A9,$D2,$FF,$28,$59,$8A
         .byte   $BB,$EC,$1D,$4E,$83,$B8
-        sbc     $4F1E
-        sty     $BD
+        .byte   $ED,$1E,$4F
+        .byte   $84,$BD
         .byte   $F2,$27,$5C,$91,$CA,$EF,$1C,$41
         .byte   $6A,$AF
-        sed
-        eor     ($8E,x)
+        .byte   $F8
+        .byte   $41,$8E
         .byte   $BB,$F0,$25,$5E,$9F,$DC,$1D,$62
         .byte   $A7
-projectile_sprite_ptr_hi:  dey
-        dey
-        dey
-        dey
-        dey
+projectile_sprite_ptr_hi:  .byte   $88
+        .byte   $88
+        .byte   $88
+        .byte   $88
+        .byte   $88
         .byte   $89,$89,$89,$89,$89,$8A,$8A,$8A
         .byte   $8A,$8A,$8B,$8B,$8B,$8B,$8B,$8C
         .byte   $8C,$8C,$8C,$8C,$8D,$8D
@@ -982,25 +982,25 @@ projectile_sprite_ptr_hi:  dey
 ; =============================================================================
 ; Sprite Definition Data — raw OAM data for projectile/weapon sprites
 ; =============================================================================
-sprite_def_data_8831:  sta     sprite_def_data_8D8D
-        stx     sprite_def_data_8E8E
-        stx     sprite_def_data_8F8F
+sprite_def_data_8831:  .byte   $8D,$8D,$8D
+        .byte   $8E,$8E,$8E
+        .byte   $8E,$8F,$8F
         .byte   $8F,$8F,$90,$90,$90,$0E
-        cpx     #$A0
+        .byte   $E0,$A0
         .byte   $03,$FA,$E8
-        lda     ($03,x)
-        beq     sprite_def_data_8831
-        ldx     #$03
-        sed
-        inx
+        .byte   $A1,$03
+        .byte   $F0,$E8
+        .byte   $A2,$03
+        .byte   $F8
+        .byte   $E8
         .byte   $A3,$03,$00,$E8,$A4,$03,$08,$F0
         .byte   $A5,$03,$F0,$F0,$A6,$03,$F8,$F0
         .byte   $A7,$03,$00,$F0,$A8,$03,$08,$F0
-        cpy     #$01
+        .byte   $C0,$01
         .byte   $FA,$F8,$A9,$03,$F0,$F8,$AA,$03
         .byte   $F8,$F8,$AB,$03,$00,$F8,$AC,$03
         .byte   $08,$0C
-        cpx     #$AD
+        .byte   $E0,$AD
         .byte   $03,$FA,$E0,$AD,$03,$04,$E8,$AE
         .byte   $03,$F4,$E8,$AF,$03,$FC,$E8,$B0
         .byte   $03,$04,$F0,$B1,$03,$F4,$F0,$B2
@@ -1018,30 +1018,30 @@ sprite_def_data_8831:  sta     sprite_def_data_8D8D
         .byte   $F0,$E2,$03
 sprite_def_data_88EE:  .byte   $F4,$F0,$E3,$03,$FC,$F0,$E4,$03
         .byte   $04,$F8
-        sbc     $03
+        .byte   $E5,$03
         .byte   $F7,$F8,$E6,$03,$04,$0A,$E0
-        ldy     #$03
-        sed
-        inx
-        lda     ($03,x)
+        .byte   $A0,$03
+        .byte   $F8
+        .byte   $E8
+        .byte   $A1,$03
         .byte   $F7,$E8,$A2,$03,$FF,$F0,$A3,$03
         .byte   $F0,$F0,$A4,$03,$F8,$F0
-        lda     $03
-        brk
+        .byte   $A5,$03
+        .byte   $00
         .byte   $F8,$A6,$03,$F0,$F8,$A7,$03,$F8
         .byte   $F8,$A8,$03,$00,$F8,$A9,$03,$08
         .byte   $0C,$E0,$AA,$03,$F2,$E0,$AB,$03
-        sed
-        inx
-        ldy     $F003
-        inx
-        lda     $F803
-        inx
-        ldx     a:$03
-        beq     sprite_def_data_88EE
+        .byte   $F8
+        .byte   $E8
+        .byte   $AC,$03,$F0
+        .byte   $E8
+        .byte   $AD,$03,$F8
+        .byte   $E8
+        .byte   $AE,$03,$00
+        .byte   $F0,$AF
         .byte   $03,$F0,$F0,$B0,$03,$F8,$F0
-        lda     ($03),y
-        brk
+        .byte   $B1,$03
+        .byte   $00
         .byte   $F8
 sprite_def_data_894A:  .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
         .byte   $B4,$03,$00,$F8,$B5,$03,$08,$0C
@@ -1052,30 +1052,30 @@ sprite_def_data_894A:  .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
         .byte   $F8,$BE,$03,$F0,$F8,$BF,$03,$F8
         .byte   $F8,$C0,$03,$00,$F8,$C1,$03,$08
         .byte   $0C,$E0,$A0,$03,$F4
-        cpx     #$A1
+        .byte   $E0,$A1
         .byte   $03,$04,$E8
-        ldx     #$03
+        .byte   $A2,$03
         .byte   $F4,$E8,$A3,$03,$FC,$E8,$A4,$03
         .byte   $04,$EC,$BF
-        ora     ($FC,x)
-        beq     sprite_def_data_894A
+        .byte   $01,$FC
+        .byte   $F0,$A5
         .byte   $03,$F4,$F0,$A6,$03,$FC,$F0,$A7
         .byte   $03,$04,$F8,$A8,$03,$F4,$F8,$A9
         .byte   $03,$FC
-        sed
-        tax
+        .byte   $F8
+        .byte   $AA
         .byte   $03,$04,$0C
-        cpx     #$A0
+        .byte   $E0,$A0
         .byte   $03,$F0,$E0,$A1,$03,$00,$E8,$B6
         .byte   $03,$EC,$E8,$B7,$03,$F4,$E8,$B8
         .byte   $03,$FC,$EC,$BF,$01,$F8,$F0,$B9
         .byte   $03,$F4,$F0,$BA,$03,$FC,$F0,$BB
         .byte   $03,$04,$F8,$BC,$03,$F4,$F8,$BD
         .byte   $03,$FC
-        sed
-        ldx     $0403,y
+        .byte   $F8
+        .byte   $BE,$03,$04
         .byte   $0C
-        cpx     #$AB
+        .byte   $E0,$AB
         .byte   $03,$04,$E8,$AC,$03,$F4,$E8,$AD
         .byte   $03,$FC,$E8,$AE,$03,$04,$EE,$BF
         .byte   $01,$FB,$F0,$AF,$03,$F4,$F0,$B0
@@ -1083,8 +1083,8 @@ sprite_def_data_894A:  .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
         .byte   $03,$EC,$F8,$B3,$03,$F4,$F8,$B4
         .byte   $03,$FC,$F8,$B5,$03,$04,$0C,$E0
         .byte   $AB,$03,$04
-        inx
-        cpy     #$02
+        .byte   $E8
+        .byte   $C0,$02
         .byte   $F4,$E8,$AD,$03,$FC,$E8,$AE,$03
         .byte   $04,$EE,$BF,$01,$FB,$F0,$AF,$03
         .byte   $F4,$F0,$B0,$03,$FC,$F0,$B1,$03
@@ -1098,23 +1098,23 @@ sprite_def_data_894A:  .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
         .byte   $03,$EC,$F8,$B3,$03,$F4,$F8,$B4
         .byte   $03,$FC,$F8,$B5,$03,$04,$0D,$E0
         .byte   $C5,$02,$04,$E8,$AC,$03,$F4
-        inx
-        cpy     $02
+        .byte   $E8
+        .byte   $C4,$02
         .byte   $FC,$E8,$C3,$03,$FC,$E8,$AE,$03
         .byte   $04,$EE,$BF,$01,$FB,$F0,$AF,$03
         .byte   $F4,$F0,$B0,$03,$FC,$F0,$B1,$03
         .byte   $04,$F8,$B2,$03,$EC,$F8,$B3,$03
         .byte   $F4,$F8,$B4,$03,$FC,$F8,$B5,$03
         .byte   $04
-        ora     $C6E0
+        .byte   $0D,$E0,$C6
         .byte   $02,$04
-sprite_def_data_8ABD:  inx
-        ldy     $F403
-        inx
-        lda     $FC03
-        inx
-        ldx     $0403
-        inx
+sprite_def_data_8ABD:  .byte   $E8
+        .byte   $AC,$03,$F4
+        .byte   $E8
+        .byte   $AD,$03,$FC
+        .byte   $E8
+        .byte   $AE,$03,$04
+        .byte   $E8
         .byte   $C7,$02,$04,$EE,$BF,$01,$FB,$F0
         .byte   $AF,$03,$F4,$F0,$B0,$03,$FC,$F0
         .byte   $B1,$03,$04,$F8,$B2,$03,$EC,$F8
@@ -1123,39 +1123,39 @@ sprite_def_data_8ABD:  inx
         .byte   $E8,$AC,$03,$F4,$E8,$AD,$03,$FC
         .byte   $E8,$AE,$03,$04,$EE,$BF,$01,$FB
         .byte   $F0,$AF,$03,$F4,$F0,$B0,$03,$FC
-        beq     sprite_def_data_8ABD
+        .byte   $F0,$B1
         .byte   $03,$04,$F8,$B2,$03,$EC,$F8,$B3
         .byte   $03,$F4,$F8,$B4,$03,$FC,$F8,$B5
         .byte   $03,$04,$0C,$E0
-        ldy     #$03
+        .byte   $A0,$03
         .byte   $F3,$E0,$A1,$03,$03,$E8,$F5,$03
         .byte   $F2,$E8,$F6,$03,$FA,$E8,$F7,$03
         .byte   $02,$EC,$BF,$01
 sprite_def_data_8B36:  .byte   $FB,$F0,$F8,$03,$F4
-        beq     sprite_def_data_8B36
+        .byte   $F0,$F9
         .byte   $03,$FC,$F0,$FA,$03,$04,$F8,$FB
         .byte   $03,$F4,$F8,$FC,$03,$FC,$00,$FD
         .byte   $03,$FD,$0D,$E0,$A0,$03,$FC
-sprite_def_data_8B54:  inx
-        lda     ($03,x)
-        inc     $E8,x
-        ldx     #$03
-        inc     password_dot_data,x
+sprite_def_data_8B54:  .byte   $E8
+        .byte   $A1,$03
+        .byte   $F6,$E8
+        .byte   $A2,$03
+        .byte   $FE,$E8,$A3
         .byte   $03,$06,$EB,$F4,$01,$FB,$F0,$A4
         .byte   $03,$F0,$F0,$A5,$03,$F8,$F0,$A6
         .byte   $03,$00,$F0,$A7,$03,$08,$F8,$A8
         .byte   $03,$F0,$F8,$A9,$03,$F8,$F8,$AA
         .byte   $03,$00,$F8,$AB,$03,$08,$0E,$E0
         .byte   $AC,$03,$F1,$E0
-        ldy     #$03
-        inc     credits_text_data_2,x
+        .byte   $A0,$03
+        .byte   $FE,$E8,$AD
         .byte   $03,$F0,$E8,$AE,$03,$F8,$E8,$AF
         .byte   $03,$00,$E8
-        bcs     sprite_def_data_8B9F
-        php
+        .byte   $B0,$03
+        .byte   $08
         .byte   $EB,$F4
-sprite_def_data_8B9F:  ora     ($FD,x)
-        beq     sprite_def_data_8B54
+sprite_def_data_8B9F:  .byte   $01,$FD
+        .byte   $F0,$B1
         .byte   $03,$F8,$F0,$B2,$03,$00,$F0,$B3
         .byte   $03,$08,$F8,$B4,$03,$F0,$F8,$B5
         .byte   $03,$F8,$F8,$B6,$03,$00,$F8,$B7
@@ -1168,8 +1168,8 @@ sprite_def_data_8B9F:  ora     ($FD,x)
         .byte   $C2,$03,$00,$F8,$C3,$03,$08,$0D
         .byte   $E8,$B8,$03,$F0,$E8,$C4,$03,$F8
         .byte   $E8
-        cmp     $03
-        brk
+        .byte   $C5,$03
+        .byte   $00
         .byte   $E8,$BB,$03,$08,$ED,$F4,$01,$FD
         .byte   $F0,$BC,$03,$F0,$F0,$BD,$03,$F8
         .byte   $F0,$BE,$03,$00,$F0,$BF,$03,$08
@@ -1187,19 +1187,19 @@ sprite_def_data_8B9F:  ora     ($FD,x)
         .byte   $01,$FD,$F0,$BC,$02,$F0,$F0,$BD
         .byte   $03,$F8,$F0,$BE,$03,$00,$F0
 sprite_def_data_8C7E:  .byte   $BF,$02,$08
-        sed
-        cpy     #$02
-        beq     sprite_def_data_8C7E
-sprite_def_data_8C86:  iny
+        .byte   $F8
+        .byte   $C0,$02
+        .byte   $F0,$F8
+sprite_def_data_8C86:  .byte   $C8
         .byte   $02,$F8,$F8,$C9,$03,$00,$F8,$C3
         .byte   $02
-        php
-        asl     boss_sprite_data_ACE0
+        .byte   $08
+        .byte   $0E,$E0,$AC
         .byte   $03,$F1,$E0,$A0,$03,$FE,$E8,$AD
         .byte   $03,$F0,$E8,$AE,$03,$F8,$E8,$AF
         .byte   $03,$00,$E8,$B0,$03,$08,$EB,$F4
-        ora     ($FD,x)
-sprite_def_data_8CAE:  beq     sprite_def_data_8C86
+        .byte   $01,$FD
+sprite_def_data_8CAE:  .byte   $F0,$D6
         .byte   $03,$F8,$F0,$D7,$03,$00,$F0,$D8
 sprite_def_data_8CB8:  .byte   $03,$08,$F8,$D9,$03,$F8,$F8,$DA
         .byte   $03,$00,$00,$DB,$03,$F8,$00,$DC
@@ -1210,23 +1210,23 @@ sprite_def_data_8CB8:  .byte   $03,$08,$F8,$D9,$03,$F8,$F8,$DA
         .byte   $A7,$03,$FC,$F8,$A8,$03,$04,$0B
         .byte   $E8,$A9,$03,$F4,$E8,$AA,$03,$FC
         .byte   $E8,$AB,$03,$04,$EA,$A0,$01,$F6
-        beq     sprite_def_data_8CAE
+        .byte   $F0,$AC
         .byte   $03
-        sbc     ($F0),y
-        lda     $F903
-        beq     sprite_def_data_8CB8
+        .byte   $F1,$F0
+        .byte   $AD,$03,$F9
+        .byte   $F0,$AE
         .byte   $03
-        ora     ($F8,x)
+        .byte   $01,$F8
         .byte   $AF,$03,$EC
-        sed
-        bcs     sprite_def_data_8D16
+        .byte   $F8
+        .byte   $B0,$03
         .byte   $F4,$F8,$B1
 sprite_def_data_8D16:  .byte   $03,$FC,$F8,$B2,$03,$04,$09,$E8
         .byte   $B3,$03,$F4,$E8,$B4,$03,$FC,$E8
         .byte   $B5,$03,$04,$E9,$A0,$01,$FC,$F0
         .byte   $B6,$03,$F9,$F0,$B7,$03,$01
-        sed
-        clv
+        .byte   $F8
+        .byte   $B8
         .byte   $03,$F4,$F8,$B9,$03,$FC,$F8,$BA
         .byte   $03,$04,$0A,$E8,$A1,$03,$F8,$E8
         .byte   $BB,$03,$00,$E9,$A0,$01,$F9,$F0
@@ -1237,125 +1237,125 @@ sprite_def_data_8D16:  .byte   $03,$FC,$F8,$B2,$03,$04,$09,$E8
         .byte   $E0,$A1,$03,$F8,$E0,$A2,$03,$00
         .byte   $E0,$A3,$03,$08,$E8,$A4,$03,$F0
         .byte   $E8
-        lda     $03
-        sed
-        inx
-        ldx     $03
-        brk
+        .byte   $A5,$03
+        .byte   $F8
+        .byte   $E8
+        .byte   $A6,$03
+        .byte   $00
         .byte   $E8,$A7,$03,$08,$F0,$A8
 sprite_def_data_8D8D:  .byte   $03,$F0,$F0,$A9,$03,$F8,$F0,$AA
         .byte   $03,$00,$F0
 sprite_def_data_8D98:  .byte   $AB,$03,$08,$F8,$AC,$03
-        beq     sprite_def_data_8D98
-        lda     $F803
-        sed
-        ldx     a:$03
-        sed
+        .byte   $F0,$F8
+        .byte   $AD,$03,$F8
+        .byte   $F8
+        .byte   $AE,$03,$00
+        .byte   $F8
         .byte   $AF,$03,$08,$E2,$DE
-sprite_def_data_8DAD:  ora     ($FB,x)
+sprite_def_data_8DAD:  .byte   $01,$FB
         .byte   $12
-        cpx     #$B0
+        .byte   $E0,$B0
         .byte   $03,$F6,$E0,$B1,$03,$FE,$E0,$B2
         .byte   $03,$06,$E0,$B3,$03,$0E
-        inx
-        ldy     $03,x
-        beq     sprite_def_data_8DAD
-        lda     $03,x
-        sed
-        inx
-        ldx     $03,y
-        brk
+        .byte   $E8
+        .byte   $B4,$03
+        .byte   $F0,$E8
+        .byte   $B5,$03
+        .byte   $F8
+        .byte   $E8
+        .byte   $B6,$03
+        .byte   $00
         .byte   $E8,$B7,$03,$08,$E8,$B8,$03,$10
         .byte   $F0,$B9,$03,$F0,$F0,$BA,$03,$F8
         .byte   $F0,$BB,$03,$00,$F0
-        ldy     $0803,x
-        sed
-        lda     $F003,x
-        sed
-        ldx     $F803,y
-        sed
+        .byte   $BC,$03,$08
+        .byte   $F8
+        .byte   $BD,$03,$F0
+        .byte   $F8
+        .byte   $BE,$03,$F8
+        .byte   $F8
         .byte   $BF,$03,$00,$F8,$C0,$03,$08,$E4
         .byte   $DE
-        ora     ($FB,x)
+        .byte   $01,$FB
         .byte   $12,$E0,$B0,$03,$F6,$E0
-        lda     ($03),y
-        inc     password_blink_check,x
+        .byte   $B1,$03
+        .byte   $FE,$E0,$B2
         .byte   $03,$06,$E0,$B3,$03,$0E,$E8,$B4
         .byte   $03,$F0,$E8
-        cmp     ($03,x)
-        sed
-        inx
+        .byte   $C1,$03
+        .byte   $F8
+        .byte   $E8
         .byte   $C2,$03,$00,$E8,$B7,$03,$08,$E8
         .byte   $B8,$03,$10,$F0,$B9,$03,$F0,$F0
         .byte   $C3,$03,$F8,$F0,$C4,$03,$00,$F0
         .byte   $BC,$03,$08,$F8,$BD,$03,$F0,$F8
         .byte   $BE,$03,$F8,$F8,$BF,$03,$00,$F8
         .byte   $C0,$03
-        php
-        cpx     $DE
-        ora     ($FB,x)
+        .byte   $08
+        .byte   $E4,$DE
+        .byte   $01,$FB
         .byte   $13,$E0,$B0,$03
-        inc     $E0,x
-        lda     ($03),y
-        inc     password_blink_check,x
+        .byte   $F6,$E0
+        .byte   $B1,$03
+        .byte   $FE,$E0,$B2
         .byte   $03,$06,$E0,$B3,$03,$0A,$E8,$B4
         .byte   $03,$F0,$E8
-        lda     $03,x
-        sed
-        inx
-        ldx     $03,y
-        brk
+        .byte   $B5,$03
+        .byte   $F8
+        .byte   $E8
+        .byte   $B6,$03
+        .byte   $00
         .byte   $E8,$B7,$03,$08,$E8,$B8,$03,$10
         .byte   $F0,$C5,$03,$F0,$F0,$C6,$03,$F8
         .byte   $F0,$C7,$03,$00,$F0,$C8,$03,$08
         .byte   $F8,$C9,$03,$F5,$F8,$CA,$03,$FD
         .byte   $F8,$CB,$03
-sprite_def_data_8E81:  ora     $00
-        cpy     $F503
-        brk
+sprite_def_data_8E81:  .byte   $05,$00
+        .byte   $CC,$03,$F5
+        .byte   $00
         .byte   $CD,$03,$05,$E4
-        dec     $FB01,x
+        .byte   $DE,$01,$FB
 sprite_def_data_8E8E:  .byte   $0B,$E8,$A0,$03,$F8,$E8,$A1,$03
         .byte   $00,$F0,$A2,$03,$F0,$F0,$A3,$03
         .byte   $F8,$F0,$A4,$03,$00,$F0
-sprite_def_data_8EA4:  lda     $03
-        php
-        sed
-        ldx     $03
-        beq     sprite_def_data_8EA4
+sprite_def_data_8EA4:  .byte   $A5,$03
+        .byte   $08
+        .byte   $F8
+        .byte   $A6,$03
+        .byte   $F0,$F8
         .byte   $A7,$03,$F8,$F8,$A8,$03,$00,$F8
         .byte   $A9,$03,$08,$ED,$F3,$01,$FA,$0D
         .byte   $E0
 sprite_def_data_8EBD:  .byte   $AA,$03,$F0,$E0,$AB,$03,$F8,$E8
-        ldy     $F003
-        inx
-        lda     $F803
-        inx
-        ldx     a:$03
-        beq     sprite_def_data_8E81
+        .byte   $AC,$03,$F0
+        .byte   $E8
+        .byte   $AD,$03,$F8
+        .byte   $E8
+        .byte   $AE,$03,$00
+        .byte   $F0,$AF
         .byte   $03,$F0,$F0,$B0,$03,$F8,$F0
-        lda     ($03),y
-        brk
+        .byte   $B1,$03
+        .byte   $00
         .byte   $F8,$B2
 sprite_def_data_8EDE:  .byte   $03,$F0,$F8,$B3,$03,$F8,$F8,$B4
         .byte   $03,$00,$F8,$B5,$03,$08,$ED,$F3
         .byte   $01,$F9,$0D,$E8
-sprite_def_data_8EF2:  ldx     $03,y
-        beq     sprite_def_data_8EDE
+sprite_def_data_8EF2:  .byte   $B6,$03
+        .byte   $F0,$E8
         .byte   $B7,$03,$F8,$E8,$B8,$03,$00,$E8
         .byte   $B9,$03,$08
-        beq     sprite_def_data_8EBD
+        .byte   $F0,$BA
         .byte   $03,$F0,$F0,$BB,$03,$F8,$F0,$BC
         .byte   $03,$00,$F0,$BD,$03,$08,$F8,$BE
         .byte   $03,$F0,$F8,$BF,$03,$F8,$F8,$C0
         .byte   $03,$00,$F8,$C1,$03,$08,$ED,$F3
         .byte   $01,$FC,$0E,$E8,$B6,$03,$EE,$E8
         .byte   $B7,$03,$F6
-        inx
-        clv
+        .byte   $E8
+        .byte   $B8
         .byte   $03,$FE,$E8
-        lda     $0603,y
-        beq     sprite_def_data_8EF2
+        .byte   $B9,$03,$06
+        .byte   $F0,$BA
         .byte   $03,$EE,$F0,$BB,$03,$F6,$F0,$BC
         .byte   $03,$FE,$F0,$BD,$03,$06,$F8,$C2
         .byte   $03,$F8,$F8,$C3,$03,$00,$F8,$C4
@@ -1363,26 +1363,26 @@ sprite_def_data_8EF2:  ldx     $03,y
         .byte   $03,$00,$ED,$F3,$01,$FB,$10,$E0
         .byte   $A0,$03,$F8,$E0,$A1,$03,$00,$E0
         .byte   $A2,$03,$08,$E8,$A3,$03,$F0,$E8
-        ldy     $03
-        sed
-sprite_def_data_8F73:  inx
-        lda     $03
-        brk
+        .byte   $A4,$03
+        .byte   $F8
+sprite_def_data_8F73:  .byte   $E8
+        .byte   $A5,$03
+        .byte   $00
         .byte   $E8,$A6,$03,$08,$F0,$A7,$03,$F0
         .byte   $F0,$A8,$03,$F8,$F0,$A9,$03,$00
         .byte   $F0,$AA,$03,$08,$F8,$AB,$03,$F0
-sprite_def_data_8F8F:  sed
-        ldy     $F803
-        sed
-        ldy     a:$43
-        sed
-        lda     $0803
+sprite_def_data_8F8F:  .byte   $F8
+        .byte   $AC,$03,$F8
+        .byte   $F8
+        .byte   $AC,$43,$00
+        .byte   $F8
+        .byte   $AD,$03,$08
         .byte   $E7,$F4,$02,$FA,$0F,$E0,$AE,$03
         .byte   $F8,$E0,$AF,$03,$00,$E0,$B0,$03
         .byte   $08,$E8,$B1,$03,$F0,$E8,$B2,$03
         .byte   $F8,$E8,$B3,$03,$00,$E8,$B4,$03
-        php
-        beq     sprite_def_data_8F73
+        .byte   $08
+        .byte   $F0,$B5
         .byte   $03,$F5,$F0,$B6,$03,$FD,$F0
 sprite_def_data_8FC5:  .byte   $B7,$03,$05,$F8,$B8,$03,$F0,$F8
         .byte   $B9,$03,$F8,$F8,$BA,$03,$00,$F8
@@ -1390,90 +1390,90 @@ sprite_def_data_8FC5:  .byte   $B7,$03,$05,$F8,$B8,$03,$F0,$F8
         .byte   $E0,$AE,$03,$F8,$E0,$AF,$03,$00
         .byte   $E0,$B0,$03,$08,$E8,$BC,$03,$F0
         .byte   $E8
-        lda     $F803,x
-        inx
-        ldx     a:$03,y
-        inx
+        .byte   $BD,$03,$F8
+        .byte   $E8
+        .byte   $BE,$03,$00
+        .byte   $E8
         .byte   $BF,$03,$08,$F0,$C0,$03,$F0,$F0
         .byte   $C1,$03,$F8
-        beq     sprite_def_data_8FC5
+        .byte   $F0,$C2
         .byte   $03,$00,$F0
 sprite_def_data_9006:  .byte   $C3,$03
-        php
-        sed
-        clv
+        .byte   $08
+        .byte   $F8
+        .byte   $B8
         .byte   $03
-        beq     sprite_def_data_9006
-        lda     $F803,y
-        sed
-        tsx
+        .byte   $F0,$F8
+        .byte   $B9,$03,$F8
+        .byte   $F8
+        .byte   $BA
         .byte   $03,$00,$F8,$BB,$03
-        php
-        inx
+        .byte   $08
+        .byte   $E8
         .byte   $F4,$02,$FA,$11,$E0,$A0,$03,$F8
         .byte   $E0,$A1,$03,$00,$E0,$CC,$03,$08
         .byte   $E8,$CD,$03,$F0,$E8
-        dec     $F803
-        inx
+        .byte   $CE,$03,$F8
+        .byte   $E8
         .byte   $A5
 sprite_def_data_9034:  .byte   $03
-        brk
+        .byte   $00
         .byte   $E8,$CF,$03,$08,$F0,$D0,$03,$F0
         .byte   $F0,$D1,$03,$F8,$F0,$D2,$03,$00
         .byte   $F0
 sprite_def_data_9047:  .byte   $D3
 sprite_def_data_9048:  .byte   $03,$08,$F8,$D4,$03
-        beq     sprite_def_data_9047
-        cmp     $03,x
-        sed
-        sed
-        cmp     $03,x
-sprite_def_data_9055:  brk
+        .byte   $F0,$F8
+        .byte   $D5,$03
+        .byte   $F8
+        .byte   $F8
+        .byte   $D5,$03
+sprite_def_data_9055:  .byte   $00
         .byte   $F8,$D6,$03,$08,$E7,$F4,$02,$FA
         .byte   $E0,$CB
 sprite_def_data_9060:  .byte   $03,$F0,$11,$E0,$C1,$03
-        beq     sprite_def_data_9048
+        .byte   $F0,$E0
         .byte   $C2,$03,$F8,$E0,$C3,$03,$00,$E0
         .byte   $C4,$03,$08,$E8
-        cmp     $03
-        beq     sprite_def_data_9060
-        ldx     #$03
-        sed
-        inx
-        dec     $03
-        brk
+        .byte   $C5,$03
+        .byte   $F0,$E8
+        .byte   $A2,$03
+        .byte   $F8
+        .byte   $E8
+        .byte   $C6,$03
+        .byte   $00
         .byte   $E8,$C7,$03,$08,$F0,$C8,$03,$F0
         .byte   $F0
-        ldx     $03
-        sed
-        beq     sprite_def_data_9034
+        .byte   $A6,$03
+        .byte   $F8
+        .byte   $F0,$A7
         .byte   $03,$00,$F0
-        cmp     #$03
-        php
+        .byte   $C9,$03
+        .byte   $08
         .byte   $F0
-sprite_def_data_9094:  cpy     #$01
+sprite_def_data_9094:  .byte   $C0,$01
         .byte   $FA
-        sed
-        dex
+        .byte   $F8
+        .byte   $CA
         .byte   $03
-        beq     sprite_def_data_9094
+        .byte   $F0,$F8
         .byte   $CB,$03,$F8
-        sed
-        cpy     a:$03
-        sed
-        cmp     $0803
-        ora     ($E0),y
-        dec     $F003
-        cpx     #$CF
+        .byte   $F8
+        .byte   $CC,$03,$00
+        .byte   $F8
+        .byte   $CD,$03,$08
+        .byte   $11,$E0
+        .byte   $CE,$03,$F0
+        .byte   $E0,$CF
         .byte   $03,$F8,$E0,$D0,$03,$00,$E0,$D1
         .byte   $03,$08,$E8,$D2,$03,$F0,$E8
-        ldx     #$03
-        sed
-        inx
+        .byte   $A2,$03
+        .byte   $F8
+        .byte   $E8
         .byte   $D3,$03,$00,$E8,$D4,$03,$08,$F0
         .byte   $D5,$03,$F0,$F0,$A6,$03,$F8,$F0
         .byte   $A7,$03,$00,$F0,$C9,$03,$08,$F0
-        cpy     #$01
+        .byte   $C0,$01
         .byte   $FA,$F8,$CA,$03,$F0,$F8,$CB,$03
         .byte   $F8,$F8,$CC,$03,$00,$F8,$CD,$03
         .byte   $08
@@ -2086,7 +2086,7 @@ hp_bar_write_oam:  sta     $0201,y
         rts
 
 hp_bar_x_positions:  .byte   $4C,$44,$3C,$34,$2C,$24,$1C
-hp_bar_empty_tiles:  sty     $93,x
+hp_bar_empty_tiles:  .byte   $94,$93
         .byte   $92,$91
 
 ; =============================================================================
@@ -2133,20 +2133,20 @@ wselect_header_oam:  .byte   $34,$11,$01,$0C,$34,$95,$01,$1C
         .byte   $34,$98,$01,$34
 wselect_icon_tile_ids:  .byte   $1F,$9F,$9B,$99,$9D,$9C,$9A,$9E
         .byte   $10,$15,$16,$17
-wselect_label_oam_data:  ldy     $96
-        ora     ($0C,x)
-        ldy     #$8D
-        brk
+wselect_label_oam_data:  .byte   $A4,$96
+        .byte   $01,$0C
+        .byte   $A0,$8D
+        .byte   $00
         .byte   $18,$A0,$8D,$40,$20,$A8,$8E,$01
         .byte   $18,$A8,$8E,$41
-        jsr     addr_1EA4
-        ora     ($2C,x)
-wselect_weapon_pal_idx:  tya
-        txs
-        sta     boss_get_bounce_check,y
-        tya
-        txs
-        tya
+        .byte   $20,$A4,$1E
+        .byte   $01,$2C
+wselect_weapon_pal_idx:  .byte   $98
+        .byte   $9A
+        .byte   $99,$9C,$98
+        .byte   $98
+        .byte   $9A
+        .byte   $98
         .byte   $9B,$9B,$9B,$9B
 weapon_bitmask_table:  .byte   $00,$01,$02,$04,$08,$10,$20,$40
 boss_get_screen_init:
@@ -2811,17 +2811,17 @@ boss_get_flash_palette_data:  .byte   $0F,$11,$11,$11,$0F,$11,$11,$11
 ; Entity Sprite Pointer Tables — lo/hi pointers for get screen sprites
 ; =============================================================================
 entity_sprite_ptr_lo:  .byte   $E9,$2A,$5B,$8C
-        lda     $0FE6,x
+        .byte   $BD,$E6,$0F
         .byte   $0F,$50,$61,$6A
 entity_sprite_ptr_hi:  .byte   $9B,$9C,$9C,$9C,$9C,$9C,$9D,$9D
         .byte   $9D,$9D,$9D,$10,$00,$48,$03,$08
         .byte   $00,$49,$03,$10,$00
-        eor     #$43
-        clc
-        brk
+        .byte   $49,$43
+        .byte   $18
+        .byte   $00
         .byte   $48,$43,$20,$08,$4A,$03,$00,$08
         .byte   $4B,$03,$08,$08
-        jmp     addr_1003
+        .byte   $4C,$03,$10
 
         .byte   $08,$4C,$43,$18,$08,$4B,$43,$20
         .byte   $08,$4A,$43,$28,$10,$4D,$03,$00
@@ -2829,28 +2829,28 @@ entity_sprite_ptr_hi:  .byte   $9B,$9C,$9C,$9C,$9C,$9C,$9D,$9D
         .byte   $10,$4F,$43,$18,$10,$4E,$43,$20
         .byte   $10,$4D,$43,$28,$0C,$00,$50,$02
         .byte   $00
-        brk
-        eor     ($02),y
-        php
-        brk
+        .byte   $00
+        .byte   $51,$02
+        .byte   $08
+        .byte   $00
         .byte   $52,$02,$10,$00,$52,$42,$18,$00
         .byte   $51,$42
-        jsr     addr_5000
+        .byte   $20,$00,$50
         .byte   $42,$28,$08,$53,$02,$00,$08,$54
         .byte   $02,$08,$08,$55,$02,$10,$08,$55
         .byte   $42,$18,$08,$54,$42,$20,$08,$53
         .byte   $42,$28,$0C,$00,$56,$02,$00,$00
         .byte   $57,$02,$08,$00,$58,$02,$10,$00
-        eor     $1802,y
-        brk
+        .byte   $59,$02,$18
+        .byte   $00
         .byte   $5A,$02,$20,$00,$5B,$02,$28,$08
         .byte   $53,$02,$00,$08,$54,$02,$08,$08
         .byte   $55,$02,$10,$08,$55,$42,$18,$08
         .byte   $54,$42,$20,$08,$53,$42,$28,$0C
         .byte   $00,$5B,$42,$00,$00,$5A,$42,$08
         .byte   $00,$59,$42,$10,$00,$58,$42
-        clc
-        brk
+        .byte   $18
+        .byte   $00
         .byte   $57,$42,$20,$00,$56,$42,$28,$08
         .byte   $53,$02,$00,$08,$54,$02,$08,$08
         .byte   $55,$02,$10,$08,$55,$42,$18,$08
@@ -2864,29 +2864,29 @@ entity_sprite_ptr_hi:  .byte   $9B,$9C,$9C,$9C,$9C,$9C,$9D,$9D
         .byte   $08,$00,$47,$01,$10,$00,$42,$01
         .byte   $18,$00,$69,$43,$20,$08,$6A,$03
         .byte   $00,$08,$43,$01
-        php
-        php
+        .byte   $08
+        .byte   $08
         .byte   $44,$01,$10,$08,$45,$01,$18,$08
         .byte   $6A,$43,$20
-        bpl     sprite_data_9D19
+        .byte   $10,$08
         .byte   $5C,$03,$08,$08,$5D,$03,$10
-        php
-sprite_data_9D19:  eor     $1843,x
-        php
+        .byte   $08
+sprite_data_9D19:  .byte   $5D,$43,$18
+        .byte   $08
         .byte   $5C,$43
-        jsr     addr_5E10
+        .byte   $20,$10,$5E
         .byte   $03,$08,$10,$5F,$03,$10,$10,$5F
         .byte   $43,$18,$10,$5E,$43,$20,$18,$60
         .byte   $02,$08,$18,$61,$02,$10,$18
-        adc     ($42,x)
-        clc
-        clc
-        rts
+        .byte   $61,$42
+        .byte   $18
+        .byte   $18
+        .byte   $60
 
         .byte   $42,$20,$20,$62,$02,$08,$20,$63
         .byte   $02,$10,$20,$63,$42,$18,$20,$62
         .byte   $42,$20,$04
-        bpl     boss_get_letter_oam
+        .byte   $10,$64
         .byte   $03,$10,$10,$64,$43,$18,$18,$65
         .byte   $02,$10,$18,$65,$42,$18,$02,$10
         .byte   $66,$03,$14,$18,$67,$02,$14,$01
@@ -2895,32 +2895,32 @@ star_y_offset:  .byte   $00
 star_tile_1:  .byte   $6B
 star_attr:  .byte   $00
 star_x_offset:  .byte   $60,$00,$6C,$00
-        pla
-        brk
-        adc     $7000
-        php
+        .byte   $68
+        .byte   $00
+        .byte   $6D,$00,$70
+        .byte   $08
         .byte   $6E
-data_9D7D:  brk
-        rts
+data_9D7D:  .byte   $00
+        .byte   $60
 
-        php
+        .byte   $08
         .byte   $6F,$00,$68
 bounce_entity_type:  .byte   $00,$00,$07,$08,$09
 bounce_accel_sub:  .byte   $18,$E9
 bounce_accel_whole:  .byte   $00,$FF
-boss_get_header_oam:  cpy     #$73
+boss_get_header_oam:  .byte   $C0,$73
         .byte   $02,$10,$88,$73,$02,$40,$A0,$73
         .byte   $02,$60,$A8,$73,$02,$88
-data_9D9C:  bvs     data_9E11
+data_9D9C:  .byte   $70,$73
         .byte   $02,$98,$8C,$75,$02,$B4,$8C,$75
         .byte   $42,$BC
 boss_get_scroll_start:  .byte   $94
-boss_get_scroll_end:  ror     $02,x
+boss_get_scroll_end:  .byte   $76,$02
         .byte   $B4
-        sty     $76,x
+        .byte   $94,$76
         .byte   $42,$BC,$00,$30,$48,$5C,$7C,$98
         .byte   $D0
-boss_get_letter_oam:  cpy     #$71
+boss_get_letter_oam:  .byte   $C0,$71
         .byte   $03
         clc
         cpy     #$70
@@ -4530,19 +4530,19 @@ credits_skip_palette:  .byte   $0F,$03,$13,$24,$0F,$0F,$11,$0C
         .byte   $0F,$04,$14,$27,$0F,$00,$10,$30
         .byte   $0F,$0F,$2C,$11,$0F,$0F,$30,$38
         .byte   $0F,$30,$2C
-        ora     ($0F),y
-        brk
+        .byte   $11,$0F
+        .byte   $00
         .byte   $10,$30
 ending_black_palette:  .byte   $0F,$0F,$0F,$0F,$0F,$0F,$0F,$0F
         .byte   $0F,$0F,$0F,$0F,$0F,$00,$10,$30
-ending_ground_palette:  rol     $15
-        jsr     addr_0F06
-        bmi     data_AAF2
-        ora     $26,x
-        and     ($20,x)
+ending_ground_palette:  .byte   $26,$15
+        .byte   $20,$06,$0F
+        .byte   $30,$2C
+        .byte   $15,$26
+        .byte   $21,$20
         .byte   $0B,$0F,$00,$10,$30
 ending_star_oam_positions:  .byte   $2F,$3C,$02,$C0,$37,$3D,$02
-        cpy     #$3F
+        .byte   $C0,$3F
         .byte   $3B,$02,$C0,$3F,$3A,$02,$B8,$3F
         .byte   $39,$02,$B0
 
@@ -4553,18 +4553,18 @@ entity_sprite_y_offset:  .byte   $00
 entity_sprite_tile_id:  .byte   $30
 entity_sprite_attr:  .byte   $02
 entity_sprite_x_offset:  .byte   $C0,$00
-        and     ($02),y
-        iny
-        php
+        .byte   $31,$02
+        .byte   $C8
+        .byte   $08
         .byte   $32,$02,$C0,$08,$33,$02
-data_AAF2:  iny
-        bpl     data_AB29
+data_AAF2:  .byte   $C8
+        .byte   $10,$34
         .byte   $02,$C0,$10,$35,$02,$C8,$00,$30
         .byte   $02,$E0
-        brk
-        and     ($02),y
-        inx
-        php
+        .byte   $00
+        .byte   $31,$02
+        .byte   $E8
+        .byte   $08
         .byte   $32,$02,$E0,$08,$33,$02,$E8,$10
         .byte   $34,$02,$E0,$10,$35,$02,$E8,$00
         .byte   $36,$03,$98,$08,$37,$03,$98,$10
@@ -4578,124 +4578,124 @@ data_AB29:  .byte   $57,$80,$A9,$D2,$FB,$0C,$35
 boss_sprite_def_ptr_hi:  .byte   $AB,$AB,$AB,$AB,$AB,$AC,$AC,$AC
         .byte   $AC,$AC,$AC,$AD,$AD,$0B,$00,$00
         .byte   $01
-        iny
-        brk
+        .byte   $C8
+        .byte   $00
         .byte   $01,$01,$D0,$00,$02,$01,$D8,$08
         .byte   $03,$00,$C8,$08,$04,$00,$D0,$08
         .byte   $05,$00,$D8,$08,$1F,$01,$C8,$08
-        jsr     fixed_sprite_data_D001
-        bpl     boss_sprite_data_AB66
-        brk
+        .byte   $20,$01,$D0
+        .byte   $10,$06
+        .byte   $00
         .byte   $C8,$10,$07,$00,$D0
-boss_sprite_data_AB66:  bpl     boss_sprite_data_AB70
-        brk
+boss_sprite_data_AB66:  .byte   $10,$08
+        .byte   $00
         .byte   $D8,$0B,$00,$09,$01,$C8,$00
-boss_sprite_data_AB70:  asl     a
-        ora     ($D0,x)
-        brk
+boss_sprite_data_AB70:  .byte   $0A
+        .byte   $01,$D0
+        .byte   $00
         .byte   $0B,$01,$D8,$08,$03,$00,$C8,$08
         .byte   $04,$00,$D0,$08,$05,$00,$D8,$08
         .byte   $1F,$01,$C8,$08
-        jsr     fixed_sprite_data_D001
-        bpl     boss_sprite_data_AB93
-        brk
+        .byte   $20,$01,$D0
+        .byte   $10,$06
+        .byte   $00
         .byte   $C8,$10,$07,$00,$D0
-boss_sprite_data_AB93:  bpl     boss_sprite_data_AB9D
-        brk
+boss_sprite_data_AB93:  .byte   $10,$08
+        .byte   $00
         .byte   $D8,$0C,$00,$0C,$01,$C8,$00
-boss_sprite_data_AB9D:  ora     fixed_sprite_data_D001
-        brk
+boss_sprite_data_AB9D:  .byte   $0D,$01,$D0
+        .byte   $00
         .byte   $02,$01,$D8,$00,$21,$00,$D0,$08
         .byte   $03
-        brk
-        iny
-        php
+        .byte   $00
+        .byte   $C8
+        .byte   $08
         .byte   $04,$00,$D0,$08
-        ora     $00
-        cld
-        php
+        .byte   $05,$00
+        .byte   $D8
+        .byte   $08
         .byte   $23,$01,$C8,$08
-        bit     $01
-        bne     boss_sprite_data_ABCD
-        asl     $00
-        iny
-        bpl     boss_sprite_data_ABC9
-        brk
+        .byte   $24,$01
+        .byte   $D0,$10
+        .byte   $06,$00
+        .byte   $C8
+        .byte   $10,$07
+        .byte   $00
         .byte   $D0,$10,$08,$00,$D8,$0C
 boss_sprite_data_ABC9:  .byte   $00,$0C,$01,$C8
 boss_sprite_data_ABCD:  .byte   $00,$0E,$01,$D0,$00,$02,$01,$D8
         .byte   $00,$22,$00,$D0,$08,$03,$00,$C8
         .byte   $08,$04,$00,$D0,$08
-        ora     $00
-        cld
-        php
+        .byte   $05,$00
+        .byte   $D8
+        .byte   $08
         .byte   $23,$01,$C8,$08
-        bit     $01
-        bne     boss_sprite_data_ABFE
-        asl     $00
-        iny
-        bpl     boss_sprite_data_ABFA
-        brk
+        .byte   $24,$01
+        .byte   $D0,$10
+        .byte   $06,$00
+        .byte   $C8
+        .byte   $10,$07
+        .byte   $00
         .byte   $D0,$10,$08,$00,$D8,$0D
 boss_sprite_data_ABFA:  .byte   $00,$0F,$01,$C8
 boss_sprite_data_ABFE:  .byte   $00,$10,$01,$D0
-        brk
-        ora     ($01),y
-        cld
-        brk
+        .byte   $00
+        .byte   $11,$01
+        .byte   $D8
+        .byte   $00
         .byte   $25,$00,$C8,$00,$26,$00,$D0,$08
         .byte   $03,$00,$C8,$08,$04,$00,$D0,$08
-        ora     $00
-        cld
-        php
+        .byte   $05,$00
+        .byte   $D8
+        .byte   $08
         .byte   $1F,$01,$C8,$08
-        jsr     fixed_sprite_data_D001
-        bpl     boss_sprite_data_AC2A
-        brk
+        .byte   $20,$01,$D0
+        .byte   $10,$06
+        .byte   $00
         .byte   $C8,$10,$07,$00,$D0
-boss_sprite_data_AC2A:  bpl     boss_sprite_data_AC34
-        brk
+boss_sprite_data_AC2A:  .byte   $10,$08
+        .byte   $00
         .byte   $D8,$0A,$00,$12,$00,$C8,$00
 boss_sprite_data_AC34:  .byte   $13,$00,$D0,$00,$14,$00,$D8,$08
         .byte   $03,$00,$C8,$08,$15,$00,$D0,$08
         .byte   $05,$00,$D8,$10,$06,$00,$C8,$10
         .byte   $07,$00,$D0
-        bpl     boss_sprite_data_AC59
-        brk
+        .byte   $10,$08
+        .byte   $00
         .byte   $D8,$06,$27,$01,$CF,$0A,$00
 boss_sprite_data_AC59:  .byte   $12,$00,$C8,$00,$16,$00,$D0,$00
         .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
         .byte   $18,$00,$D0,$08,$19,$00,$D8,$10
         .byte   $06,$00,$C8,$10,$07,$00,$D0
-        bpl     boss_sprite_data_AC82
-        brk
+        .byte   $10,$08
+        .byte   $00
         .byte   $D8,$06
-        plp
-        ora     ($CF,x)
-        asl     a
-        brk
+        .byte   $28
+        .byte   $01,$CF
+        .byte   $0A
+        .byte   $00
 boss_sprite_data_AC82:  .byte   $12,$00,$C8,$00,$1A,$00,$D0,$00
         .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
         .byte   $1B,$00,$D0,$08,$05,$00,$D8,$10
         .byte   $06,$00,$C8,$10,$07,$00,$D0
-        bpl     boss_sprite_data_ACAB
-        brk
+        .byte   $10,$08
+        .byte   $00
         .byte   $D8,$06
-        plp
-        ora     ($CF,x)
-        asl     a
-        brk
+        .byte   $28
+        .byte   $01,$CF
+        .byte   $0A
+        .byte   $00
 boss_sprite_data_ACAB:  .byte   $1C,$00,$C8,$00,$1D,$00,$D0,$00
         .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
         .byte   $18,$00,$D0,$08,$05,$00,$D8,$10
         .byte   $06,$00,$C8,$10,$07,$00,$D0
-        bpl     boss_sprite_data_ACD4
-        brk
+        .byte   $10,$08
+        .byte   $00
         .byte   $D8,$06
-        plp
-        ora     ($CF,x)
-        asl     a
-        brk
+        .byte   $28
+        .byte   $01,$CF
+        .byte   $0A
+        .byte   $00
 boss_sprite_data_ACD4:  .byte   $1C,$00,$C8,$00,$1E,$00,$D0,$00
         .byte   $17,$00,$D8,$08
 
@@ -4705,53 +4705,53 @@ boss_sprite_data_ACD4:  .byte   $1C,$00,$C8,$00,$1E,$00,$D0,$00
 boss_sprite_data_ACE0:  .byte   $03,$00,$C8,$08,$18,$00,$D0,$08
         .byte   $05,$00,$D8,$10,$06,$00,$C8,$10
         .byte   $07,$00,$D0
-        bpl     boss_sprite_data_ACFD
-        brk
+        .byte   $10,$08
+        .byte   $00
         .byte   $D8,$06
-        plp
-        ora     ($CF,x)
+        .byte   $28
+        .byte   $01,$CF
         .byte   $04,$F8
-boss_sprite_data_ACFD:  rol     a
-        brk
+boss_sprite_data_ACFD:  .byte   $2A
+        .byte   $00
         .byte   $D0
-        brk
-        rol     a
-        brk
+        .byte   $00
+        .byte   $2A
+        .byte   $00
         .byte   $D0
-        php
-        rol     a
-        brk
+        .byte   $08
+        .byte   $2A
+        .byte   $00
         .byte   $D0,$10,$2A,$00,$D0,$0A,$F8,$2F
         .byte   $00,$D0,$00
-        bit     $C800
-        brk
+        .byte   $2C,$00,$C8
+        .byte   $00
         .byte   $2D,$00,$D0,$00,$2C,$40,$D8,$08
         .byte   $2C,$00,$C8,$08,$2D,$00,$D0,$08
         .byte   $2C,$40,$D8,$10,$2B,$00,$C8,$10
         .byte   $2E,$00,$D0,$10,$2B,$40,$D8,$04
         .byte   $08,$2F,$00,$D0,$10,$2B,$00,$C8
         .byte   $10,$2E,$00,$D0
-        bpl     credits_text_data
-        rti
+        .byte   $10,$2B
+        .byte   $40
 
         .byte   $D8,$00,$00,$00,$C9,$CE,$00,$D4
         .byte   $C8,$C5,$00,$D9,$C5,$C1,$D2,$00
         .byte   $CF
-        dec     $00
-        ldx     #$A0
-        ldy     #$D8
-        cmp     a:$00,x
-        brk
+        .byte   $C6,$00
+        .byte   $A2,$A0
+        .byte   $A0,$D8
+        .byte   $DD,$00,$00
+        .byte   $00
         .byte   $00,$C1,$00,$D3,$D5,$D0,$C5,$D2
         .byte   $00,$D2,$CF,$C2,$CF,$D4
-        brk
+        .byte   $00
 
 ; =============================================================================
 ; Credits Text Data — ASCII text for ending credit screens
 ; =============================================================================
-credits_text_data:  dec     $CDC1
-        cmp     $C4
-        brk
+credits_text_data:  .byte   $CE,$C1,$CD
+        .byte   $C5,$C4
+        .byte   $00
         .byte   $CD,$C5,$C7,$C1,$CD,$C1,$CE,$00
         .byte   $00,$00,$00,$00,$00,$00,$D7,$C1
         .byte   $D3,$00,$C3,$D2,$C5,$C1,$D4,$C5
@@ -4759,9 +4759,9 @@ credits_text_data:  dec     $CDC1
         .byte   $00,$00,$00,$C4,$D2,$DC,$CC,$C9
         .byte   $C7,$C8,$D4,$00,$C3,$D2,$C5,$C1
         .byte   $D4,$C5,$C4,$00,$CD,$C5,$C7
-        cmp     ($CD,x)
-        cmp     ($CE,x)
-        brk
+        .byte   $C1,$CD
+        .byte   $C1,$CE
+        .byte   $00
         .byte   $00,$00,$D4,$CF,$00,$D3,$D4,$CF
         .byte   $D0,$00,$D4,$C8,$C5,$00,$C5,$D6
         .byte   $C9,$CC,$00,$C4,$C5,$D3,$C9,$D2
@@ -4786,20 +4786,20 @@ credits_text_data_2:  .byte   $00,$C8,$CF,$D7,$C5,$D6,$C5,$D2
 credits_fade_brightness:  .byte   $0F,$00,$10,$20,$30,$30,$30,$30
         .byte   $30,$30,$30,$30,$30,$30,$30,$30
         .byte   $30
-        bmi     data_AE97
-        bmi     data_AE99
-        bmi     data_AE9B
-        bmi     data_AE9D
-        bmi     data_AE9F
-        bmi     data_AE91
-        bpl     credits_fade_data_2
+        .byte   $30,$30
+        .byte   $30,$30
+        .byte   $30,$30
+        .byte   $30,$30
+        .byte   $30,$30
+        .byte   $30,$20
+        .byte   $10,$00
 credits_fade_data_2:  .byte   $0F,$30,$30,$30,$20
-        bpl     credits_fade_data_3
+        .byte   $10,$00
 credits_fade_data_3:  .byte   $0F
 ending_teleport_anim_table:  .byte   $0C,$0B,$0A,$06,$06,$09,$09,$08
         .byte   $08,$07,$07,$06,$06,$06,$06
-        asl     zp_temp_06
-        ora     $05
+        .byte   $06,$06
+        .byte   $05,$05
         .byte   $04,$04,$03
 data_AE91:  .byte   $03,$02,$02
         .byte   $01
@@ -4809,16 +4809,16 @@ data_AE97:  .byte   $47
         .byte   $A3
 data_AE99:  .byte   $A7
         .byte   $A5
-data_AE9B:  lda     ($A1,x)
-data_AE9D:  brk
+data_AE9B:  .byte   $A1,$A1
+data_AE9D:  .byte   $00
         .byte   $C3
-data_AE9F:  cmp     ($D0,x)
+data_AE9F:  .byte   $C1,$D0
         .byte   $C3
         .byte   $CF,$CD,$00,$C3,$CF,$DC,$CC,$D4
         .byte   $C4,$1F,$21
-        sta     ($D4,x)
-        cmp     $C100
-        dec     a:$C4
+        .byte   $81,$D4
+        .byte   $CD,$00,$C1
+        .byte   $CE,$C4,$00
         .byte   $A3,$A7,$A5,$A1,$A5,$00,$C3,$C1
         .byte   $D0,$C3,$CF,$CD,$00,$D5,$DC,$D3
         .byte   $DC,$C1,$DC,$DD,$C9,$CE,$C3,$DC
@@ -4839,7 +4839,7 @@ password_target_palette:  .byte   $0F,$35,$21,$11,$0F,$30,$3C,$21
         .byte   $20,$2C,$11,$0F,$20,$26,$36,$0F
         .byte   $00,$2C,$11,$0F,$16,$35,$20
 password_ppu_layout_data:  .byte   $25
-password_ppu_layout_data_2:  sty     $4009
+password_ppu_layout_data_2:  .byte   $8C,$09,$40
         .byte   $53,$54,$41,$52,$54,$40,$40,$40
         .byte   $25,$CC,$0A,$40,$50,$41,$53,$53
         .byte   $57,$4F,$52,$44,$40,$25,$8C,$09
@@ -4847,14 +4847,14 @@ password_ppu_layout_data_2:  sty     $4009
         .byte   $40,$25,$CC,$0A,$45,$52,$52,$4F
         .byte   $52,$40,$5F,$40,$40,$40,$25,$8B
         .byte   $08,$43,$4F,$4E,$54,$49,$4E
-        eor     $45,x
-        and     $CB
+        .byte   $55,$45
+        .byte   $25,$CB
         .byte   $0C,$53,$54,$41,$47,$45,$40,$53
         .byte   $45,$4C,$45,$43,$54,$26,$0B,$09
         .byte   $50,$41,$53,$53,$57,$4F,$52,$44
         .byte   $40,$22,$66,$0E
-data_AF94:  bvc     data_AFE8
-        eor     $53
+data_AF94:  .byte   $50,$52
+        .byte   $45,$53
         .byte   $53,$40,$41,$94,$42,$55,$54,$54
         .byte   $4F,$4E,$26,$CA,$09,$50,$41,$53
         .byte   $53,$57,$4F,$52,$44,$40,$27,$0A
@@ -4869,80 +4869,80 @@ password_grid_oam_data:  .byte   $30,$25,$00,$44,$30,$26,$00,$54
         .byte   $54,$E2,$02,$30,$64
 data_AFE8:  .byte   $E3,$02,$30,$74,$E4,$02,$30,$84
         .byte   $E5,$02
-        bmi     data_AF94
+        .byte   $30,$A0
         .byte   $3F,$00,$D0
-        ldy     $2D,x
-        ora     ($D0,x)
-password_grid_y_table:  rti
+        .byte   $B4,$2D
+        .byte   $01,$D0
+password_grid_y_table:  .byte   $40
 
-        rti
+        .byte   $40
 
         .byte   $40,$40,$40
 data_B000:  .byte   $50
-        bvc     data_B053
-        bvc     data_B055
-        rts
+        .byte   $50,$50
+        .byte   $50,$50
+        .byte   $60
 
-        rts
+        .byte   $60
 
         .byte   $60,$60,$60,$70,$70,$70,$70,$70
         .byte   $80,$80,$80,$80,$80
-password_grid_x_table:  eor     ($51,x)
-        adc     ($71,x)
-        sta     ($41,x)
-        eor     ($61),y
-        adc     ($81),y
-        eor     ($51,x)
-        adc     ($71,x)
-        sta     ($41,x)
-        eor     ($61),y
-        adc     ($81),y
-        eor     ($51,x)
-        adc     ($71,x)
+password_grid_x_table:  .byte   $41,$51
+        .byte   $61,$71
+        .byte   $81,$41
+        .byte   $51,$61
+        .byte   $71,$81
+        .byte   $41,$51
+        .byte   $61,$71
+        .byte   $81,$41
+        .byte   $51,$61
+        .byte   $71,$81
+        .byte   $41,$51
+        .byte   $61,$71
         .byte   $81
-cursor_move_right_table:  ora     ($02,x)
+cursor_move_right_table:  .byte   $01,$02
         .byte   $03,$04,$00,$06,$07,$08,$09,$05
         .byte   $0B,$0C,$0D,$0E,$0A,$10,$11,$12
         .byte   $13,$0F,$15,$16,$17,$18,$14
 cursor_move_left_table:  .byte   $04,$00,$01,$02,$03,$09
-        ora     zp_temp_06
+        .byte   $05,$06
         .byte   $07
-        php
-        asl     $0B0A
+        .byte   $08
+        .byte   $0E,$0A,$0B
 data_B053:  .byte   $0C
         .byte   $0D
 data_B055:  .byte   $13
         .byte   $0F
-        bpl     data_B06A
+        .byte   $10,$11
         .byte   $12,$18,$14,$15,$16,$17
 cursor_move_up_table:  .byte   $14
-        ora     $16,x
+        .byte   $15,$16
         .byte   $17,$18,$00,$01,$02,$03,$04,$05
-data_B06A:  asl     $07
-        php
-        ora     #$0A
+data_B06A:  .byte   $06,$07
+        .byte   $08
+        .byte   $09,$0A
         .byte   $0B,$0C,$0D,$0E,$0F,$10,$11,$12
         .byte   $13
-cursor_move_down_table:  ora     zp_temp_06
+cursor_move_down_table:  .byte   $05,$06
 data_B07A:  .byte   $07,$08
-        ora     #$0A
+        .byte   $09,$0A
         .byte   $0B,$0C,$0D,$0E,$0F,$10,$11,$12
         .byte   $13,$14,$15,$16,$17,$18,$00,$01
         .byte   $02,$03,$04
 password_blink_colors:  .byte   $0F,$00,$10,$20,$30
-        jsr     addr_0010
-password_sprite_offsets:  brk
+        .byte   $20,$10,$00
+password_sprite_offsets:  .byte   $00
         .byte   $3E,$01,$00,$00,$3E
-        eor     ($08,x)
-        php
-        rol     a:$81,x
-        php
-        rol     $08C1,x
-password_bit_mask_table:  brk
+        .byte   $41,$08
+        .byte   $08
+        .byte   $3E,$81,$00
+        .byte   $08
+        .byte   $3E,$C1,$08
+password_bit_mask_table:  .byte   $00
         .byte   $01
 data_B0AB:  .byte   $00,$10,$04,$20,$00,$08,$10,$80
         .byte   $08,$02,$04,$00
-        ora     ($40,x)
+        .byte   $01,$40
         .byte   $80,$02,$20,$40
 password_byte_index_table:  .byte   $00,$00,$00,$00,$01,$00,$00,$01
         .byte   $01,$00,$00,$01,$00,$00,$01,$01
@@ -4950,12 +4950,12 @@ password_byte_index_table:  .byte   $00,$00,$00,$00,$01,$00,$00,$01
 password_beaten_oam_data:  .byte   $60,$2F,$00,$60,$70,$1F,$00,$60
         .byte   $60,$1B,$00,$80,$70,$19,$00,$70
         .byte   $60,$1D,$00,$70,$60,$1C,$00
-        bcc     credits_init_scroll
+        .byte   $90,$70
         .byte   $1A,$00,$90,$70,$1E,$00,$80,$80
         .byte   $20,$00,$60,$80
-        and     $00
-        bvs     data_B07A
-        rol     $00
+        .byte   $25,$00
+        .byte   $70,$80
+        .byte   $26,$00
         .byte   $80,$80,$27,$00
         .byte   $90                     ; data byte (was wrongly decoded as BCC)
 ; --- ending_chr_load -- Ending: CHR bank load entry ($B101, dispatch entry 4) ---
@@ -5213,11 +5213,11 @@ wily_castle_attr_data_2:  .byte   $FF,$FF,$55,$55,$55,$55,$55,$FF
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$E0,$E2,$E4,$E6,$E8
         .byte   $EA
-        cpx     $E6
-        inx
-        nop
-        cpx     $E6
-        brk
+        .byte   $E4,$E6
+        .byte   $E8
+        .byte   $EA
+        .byte   $E4,$E6
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$E0,$E2,$E4,$E6,$E8
@@ -5756,17 +5756,17 @@ ending_palette_per_scene:  .byte   $0F,$26,$26,$27,$0F,$17,$28,$05
         .byte   $0F,$25,$35,$17,$0F,$10,$10,$00
         .byte   $0F,$00,$18,$05,$0F,$00,$10,$00
         .byte   $0F,$30,$21,$1C,$0F,$19,$37
-        asl     $0F,x
-        ora     $182A,y
+        .byte   $16,$0F
+        .byte   $19,$2A,$18
 
 ; =============================================================================
 ; Ending Sky Color Table — 2-byte sky color for each scene/phase
 ; =============================================================================
-ending_sky_color_table:  bit     $2811
-        ora     $30,x
-        brk
+ending_sky_color_table:  .byte   $2C,$11,$28
+        .byte   $15,$30
+        .byte   $00
         .byte   $34,$24,$30,$11,$2C,$11
-ending_scene_timer_lo:  bit     $3232
+ending_scene_timer_lo:  .byte   $2C,$32,$32
         .byte   $32,$32,$90
 ending_scene_timer_hi:  .byte   $03,$02,$02,$02
 data_BA85:  .byte   $02,$02
@@ -5775,12 +5775,12 @@ ending_sprite_y_table:  .byte   $00,$08,$10,$20,$28,$30,$40,$48
         .byte   $B8,$C0,$D0,$D8,$E0,$E8
 ending_sprite_x_table:  .byte   $D8,$70,$18,$B0,$88,$40,$A0,$F8
         .byte   $20,$58,$C8,$08,$88,$38
-        bcs     data_BA85
-        bvs     ending_walk_vel_whole
-        clv
-        php
-        tya
-        pha
+        .byte   $B0,$D8
+        .byte   $70,$28
+        .byte   $B8
+        .byte   $08
+        .byte   $98
+        .byte   $48
 ending_sprite_tile_table:  .byte   $0C,$0D,$0E,$0D,$1B,$1C,$1B,$1C
         .byte   $2C,$2D,$2E,$2D,$3B,$3B,$3B,$3B
 ending_sprite_fade_table:  .byte   $1B,$1A,$19,$0F,$2C,$1F,$1E,$1D
