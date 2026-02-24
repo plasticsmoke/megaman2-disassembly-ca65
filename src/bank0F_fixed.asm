@@ -462,7 +462,7 @@ boss_intro_loop:  jsr     boss_fight_frame
         lda     current_stage
         cmp     #WILY_STAGE_START
         bne     boss_intro_done
-        lda     $37
+        lda     transition_type
         cmp     #$03
         bne     boss_intro_done
         lda     #$00
@@ -585,7 +585,7 @@ nametable_col_copy_byte:  lda     ($FE),y
         dey
         bpl     nametable_col_copy_byte
         lda     #$20
-        sta     $47
+        sta     col_update_count
         clc
         lda     $FE
         adc     #$20
@@ -804,20 +804,20 @@ chr_upload_palette_copy:  lda     ($0A),y
         sta     $4C
         sta     $4D
         lda     $BB18,y
-        sta     $17
+        sta     metatile_ptr_hi
         lda     $BB1E,y
-        sta     $16
+        sta     metatile_ptr_lo
         lda     $BB24,y
-        sta     $19
+        sta     column_ptr_hi
         lda     $BB2A,y
-        sta     $18
+        sta     column_ptr_lo
         lda     $BB30,y
-        sta     $38
+        sta     current_screen
         lda     $BB36,y
-        sta     $14
+        sta     scroll_screen_lo
         lda     $BB3C,y
-        sta     $15
-        ldx     $38
+        sta     scroll_screen_hi
+        ldx     current_screen
         jsr     scroll_col_load_palette
         tya
         clc
@@ -877,7 +877,7 @@ find_active_entity_slot:  lda     ent_flags,x ; check entity flags (bit 7=active
         dex
         cpx     #$01
         bne     find_active_entity_slot
-        lda     $47
+        lda     col_update_count
         beq     scroll_column_setup
         jsr     wait_for_vblank
 scroll_column_setup:  lda     col_update_addr_hi
@@ -1039,7 +1039,7 @@ column_copy_loop:  lda     (jump_ptr),y
         dey
         bpl     column_copy_loop
         lda     #$20
-        sta     $47
+        sta     col_update_count
         lda     #$0D
         jsr     bank_switch
         rts
@@ -1056,7 +1056,7 @@ column_copy_from_ram:  lda     $9CD0,x
         lda     #$00
         sta     col_update_addr_lo
         lda     #$20
-        sta     $47
+        sta     col_update_count
         lda     #$0D
         jsr     bank_switch
         rts
@@ -1069,7 +1069,7 @@ column_copy_from_ptr:  lda     ($FE),y
         dey
         bpl     column_copy_from_ptr
         lda     #$20
-        sta     $47
+        sta     col_update_count
         lda     #$0D
         jsr     bank_switch
         rts
@@ -1105,7 +1105,7 @@ column_copy_from_bank:  lda     (jump_ptr),y
         dey
         bpl     column_copy_from_bank
         lda     #$20
-        sta     $47
+        sta     col_update_count
         lda     #$0D
         jsr     bank_switch
         rts
@@ -1286,7 +1286,7 @@ div16_next:  dey
         sta     $030C,x
         rts
 
-        ldx     $51
+        ldx     attr_update_count
         ldy     #$08
         lda     jump_ptr_hi
         and     #$01
@@ -1313,7 +1313,7 @@ div16_next:  dey
         pha
         lda     jump_ptr
         pha
-        ldx     $51
+        ldx     attr_update_count
         lda     $0A
         and     #$E0
         lsr     a
@@ -1405,7 +1405,7 @@ metatile_render_loop:  clc
         beq     metatile_set_base_nt
         ldy     #$24
 metatile_set_base_nt:  sty     $0D
-        lda     $1A
+        lda     column_index
         sta     $0C
         lsr     a
         ror     $0C
@@ -1423,7 +1423,7 @@ metatile_set_base_nt:  sty     $0D
         lda     $0D
         ora     #$03
         sta     $0308,x
-        lda     $1A
+        lda     column_index
         sta     $0C
         lsr     a
         lsr     a
@@ -1618,7 +1618,7 @@ scroll_col_copy_loop:  lda     (jump_ptr),y
         dey
         bpl     scroll_col_copy_loop
         lda     #$20
-        sta     $47
+        sta     col_update_count
         inc     $FD
         inc     $FD
         pla
@@ -2246,75 +2246,85 @@ nmi_handler:  pha                       ; NMI handler — called every VBLANK
         jmp     nmi_tail
 
 nmi_do_vblank:                          ; Main VBLANK processing path
-        lda     ppuctrl_shadow                     ; PPUCTRL shadow
-        and     #$7C                    ; Disable NMI, clear nametable select
+        lda     ppuctrl_shadow
+        and     #$7C                    ; Disable NMI + clear nametable bits
         sta     ppuctrl_shadow
-        sta     PPUCTRL                   ; Apply to PPUCTRL
-        lda     ppumask_shadow                     ; PPUMASK shadow
-        and     #$E7                    ; Disable sprite/bg rendering
+        sta     PPUCTRL
+        lda     ppumask_shadow
+        and     #$E7                    ; Disable sprite/bg rendering during updates
         sta     ppumask_shadow
-        sta     PPUMASK                   ; Apply to PPUMASK (rendering off)
-        lda     PPUSTATUS                   ; Read PPUSTATUS (reset addr latch)
+        sta     PPUMASK
+        lda     PPUSTATUS               ; Reset PPUADDR latch
         lda     #$00
-        sta     OAMADDR                   ; OAMADDR = 0
+        sta     OAMADDR
         lda     #$02
-        sta     OAMDMA                   ; OAM DMA from $0200
-        lda     ppu_buffer_count                     ; PPU buffer transfer count
-        beq     nmi_update_palette      ; Skip if no buffer data
+        sta     OAMDMA                  ; OAM DMA from $0200 (sprite data)
+        lda     ppu_buffer_count
+        beq     nmi_update_palette      ; Skip if no buffered PPU writes
         jsr     ppu_buffer_transfer
-nmi_update_palette:  jsr     upload_palette
-        lda     $47
+nmi_update_palette:  jsr     upload_palette  ; Always refresh palette from RAM
+        lda     col_update_count                     ; col_update_count: queued column tiles?
         beq     nmi_check_scroll_update
-        jsr     ppu_scroll_column_update
-nmi_check_scroll_update:  lda     $51
+        jsr     ppu_scroll_column_update ; write vertical tile column to nametable
+nmi_check_scroll_update:  lda     attr_update_count ; attr_update_count: queued attribute writes?
         beq     nmi_check_ppu_update
-        jsr     ppu_attribute_update
-nmi_check_ppu_update:                   ; Set scroll position
-        lda     PPUSTATUS                   ; Reset PPUADDR latch
+        jsr     ppu_attribute_update    ; write attribute table entries
+; ---------------------------------------------------------------------------
+; PPU Scroll Register Setup
+; ---------------------------------------------------------------------------
+; The NES PPUSCROLL register takes two sequential writes: X then Y.
+; Camera offsets ($B8/$B9 for X, $B6 for Y) are subtracted to implement
+; screen shake effects (boss explosions, Mecha Dragon, etc.).
+; After scroll writes, PPUCTRL bit 0 selects which nametable is the
+; "base" — computed as nametable_select XOR scroll_x_carry, which
+; ensures seamless horizontal scrolling across both nametables.
+; ---------------------------------------------------------------------------
+nmi_check_ppu_update:
+        lda     PPUSTATUS               ; Reset PPUADDR/PPUSCROLL latch
         lda     #$00
-        sta     temp_01                     ; Scroll X high byte (nametable bit)
-        lda     scroll_x                     ; Scroll X position
-        sta     temp_00
-        lda     $B8                     ; Camera X offset (shake/split)
-        beq     nmi_set_scroll_x        ; Skip if no offset
+        sta     temp_01                 ; scroll X high bit (nametable select)
+        lda     scroll_x
+        sta     temp_00                 ; temp_00 = base scroll X
+        lda     camera_x_offset                     ; camera_x_offset (screen shake)
+        beq     nmi_set_scroll_x        ; zero = no shake, skip subtraction
         sec
         lda     temp_00
-        sbc     $B8
+        sbc     camera_x_offset                     ; subtract low byte of X offset
         sta     temp_00
         lda     #$00
-        sbc     $B9
-        and     #$01
-        sta     temp_01
+        sbc     camera_x_offset_hi                     ; subtract high byte (borrow → nametable flip)
+        and     #$01                    ; keep only nametable bit
+        sta     temp_01                 ; XOR'd with nametable_select below
 nmi_set_scroll_x:
         lda     temp_00
-        sta     PPUSCROLL                   ; PPUSCROLL X
-        lda     scroll_y                     ; Scroll Y position
-        sta     temp_00
-        lda     $B6                     ; Camera Y offset (shake/split)
-        beq     nmi_set_scroll_y
+        sta     PPUSCROLL               ; First write: scroll X (0-255)
+        lda     scroll_y
+        sta     temp_00                 ; temp_00 = base scroll Y
+        lda     camera_y_offset                     ; camera_y_offset (screen shake)
+        beq     nmi_set_scroll_y        ; zero = no shake
         sec
         lda     temp_00
-        sbc     $B6
+        sbc     camera_y_offset                     ; subtract Y offset
         sta     temp_00
 nmi_set_scroll_y:
         lda     temp_00
-        sta     PPUSCROLL                   ; PPUSCROLL Y
-        lda     ppumask_shadow                     ; PPUMASK shadow
-        ora     #$1E                    ; Enable sprites + background
+        sta     PPUSCROLL               ; Second write: scroll Y (0-239)
+        lda     ppumask_shadow
+        ora     #$1E                    ; Re-enable sprites + background
         sta     ppumask_shadow
-        sta     PPUMASK                   ; Re-enable rendering
-        lda     ppuctrl_shadow                     ; PPUCTRL shadow
+        sta     PPUMASK
+        lda     ppuctrl_shadow
         ora     #$80                    ; Re-enable NMI
         sta     ppuctrl_shadow
-        lda     nametable_select                     ; Base nametable select
-        eor     temp_01                     ; XOR with scroll high bit
-        and     #$01                    ; Keep bit 0 only
-        ora     ppuctrl_shadow
-        ora     $AE                     ; OR with sprite size flag
+        lda     nametable_select        ; base nametable (0 or 1)
+        eor     temp_01                 ; XOR with carry from scroll_x - camera offset
+        and     #$01                    ; isolate bit 0 (horizontal nametable select)
+        ora     ppuctrl_shadow          ; merge with NMI + increment mode bits
+        ora     $AE                     ; merge sprite size flag (8×16 if set)
         sta     ppuctrl_shadow
-        sta     PPUCTRL                   ; Write final PPUCTRL
-        sta     vblank_done                     ; Set "VBLANK done" flag (nonzero)
-        inc     frame_counter                     ; Increment frame counter
+        sta     PPUCTRL                 ; Write final PPUCTRL
+        sta     vblank_done             ; Set "VBLANK done" flag (nonzero = processed)
+        inc     frame_counter
 nmi_tail:  lda     $68                  ; NMI exit path (also handles interrupted bank switches)
         beq     nmi_restore_bank
         inc     $67
@@ -2490,64 +2500,83 @@ ppu_buffer_alt_byte:  lda     $0302,x
         sta     ppu_buffer_count
         rts
 
-ppu_scroll_column_update:  lda     col_update_addr_hi; Update nametable column during scroll
+; -----------------------------------------------------------------------------
+; ppu_scroll_column_update — Write one tile column to nametable VRAM.
+; PPUCTRL increment mode must be +32 (vertical) so each PPUDATA write
+; advances one row. col_update_addr = target VRAM address ($2000+),
+; col_update_tiles = tile buffer, $47 = number of tiles to write.
+; Called from NMI when col_update_count ($47) is nonzero.
+; -----------------------------------------------------------------------------
+ppu_scroll_column_update:  lda     col_update_addr_hi ; set PPU write address (high byte)
         sta     PPUADDR
-        lda     col_update_addr_lo
+        lda     col_update_addr_lo      ; set PPU write address (low byte)
         sta     PPUADDR
         ldx     #$00
-ppu_col_write_loop:  lda     col_update_tiles,x
-        sta     PPUDATA
+ppu_col_write_loop:  lda     col_update_tiles,x ; write one tile from buffer
+        sta     PPUDATA                 ; PPUDATA auto-increments by 32 (vertical)
         inx
-        dec     $47
+        dec     col_update_count                     ; decrement col_update_count
         bne     ppu_col_write_loop
         rts
 
-ppu_attribute_update:  lda     ppuctrl_shadow      ; Update attribute table during scroll
-        ora     #$04
+; -----------------------------------------------------------------------------
+; ppu_attribute_update — Write attribute table entries during scroll.
+; Sets PPUCTRL bit 2 (+32 increment) for attribute table writes, which
+; span columns across rows. Three modes based on $54 (attr_update_mode):
+;   $54 = 0:  Normal mode — write attribute bytes from buffer at $03B5+
+;   $54 < 0:  Read-modify-write — read existing attr, merge with new data
+;   $54 > 0:  Overwrite mode — write sequential values directly
+; $51 bit 7 selects fill mode (bulk 2×2 metatile attribute region fill).
+; Called from NMI when attr_update_count ($51) is nonzero.
+; -----------------------------------------------------------------------------
+ppu_attribute_update:  lda     ppuctrl_shadow
+        ora     #$04                    ; set PPUCTRL bit 2: +32 increment mode
         sta     PPUCTRL
-        lda     $54
-        bne     attr_update_special
-        ldy     $51
-        bmi     attr_update_fill_mode
-attr_update_loop:  lda     $03B5,y
+        lda     attr_update_mode                     ; check attr_update_mode
+        bne     attr_update_special     ; nonzero = special write mode
+        ldy     attr_update_count                     ; attr_update_count
+        bmi     attr_update_fill_mode   ; bit 7 set = fill mode
+attr_update_loop:  lda     $03B5,y         ; attribute addr high byte
         sta     PPUADDR
-        lda     $03BB,y
+        lda     $03BB,y                 ; attribute addr low byte
         sta     PPUADDR
-        lda     $03C1,y
-        sta     PPUDATA
+        lda     $03C1,y                 ; attribute value
+        sta     PPUDATA                 ; write first byte
         clc
         adc     #$01
-        sta     PPUDATA
+        sta     PPUDATA                 ; write adjacent byte (+32 = next row)
         dey
         bne     attr_update_loop
-attr_update_done:  sty     $51
+attr_update_done:  sty     attr_update_count             ; clear attr_update_count (Y=0)
         lda     ppuctrl_shadow
-        and     #$FB
+        and     #$FB                    ; restore normal +1 increment mode
         sta     PPUCTRL
         rts
 
+; Fill mode (bit 7 of $51): fills 2×2 metatile attribute regions with
+; sequential palette index values, used during room transition rendering.
 attr_update_fill_mode:  tya
-        and     #$7F
+        and     #$7F                    ; strip fill mode bit to get count
         tay
 attr_fill_outer:  lda     #$02
-        sta     temp_00
+        sta     temp_00                 ; 2 passes (2 columns)
         lda     #$E4
-        sta     temp_01
-attr_fill_write_addr:  lda     $03B5,y
+        sta     temp_01                 ; starting attribute value
+attr_fill_write_addr:  lda     $03B5,y  ; set PPU address for this attr entry
         sta     PPUADDR
         lda     $03BB,y
         sta     PPUADDR
         lda     #$02
-        sta     temp_02
+        sta     temp_02                 ; 2 bytes per column (2 rows)
 attr_fill_write_byte:  lda     temp_01
-        sta     PPUDATA
-        inc     temp_01
+        sta     PPUDATA                 ; write attribute byte
+        inc     temp_01                 ; next palette index
         dec     temp_02
         bne     attr_fill_write_byte
         dec     temp_00
-        beq     attr_fill_next
+        beq     attr_fill_next          ; both columns done
         clc
-        lda     $03BB,y
+        lda     $03BB,y                 ; advance to adjacent column (+1)
         adc     #$01
         sta     $03BB,y
         jmp     attr_fill_write_addr
@@ -2555,36 +2584,39 @@ attr_fill_write_byte:  lda     temp_01
 attr_fill_next:  dey
         bne     attr_fill_outer
         beq     attr_update_done
+; Special mode: read-modify-write to avoid clobbering adjacent metatile palettes.
+; $54 < 0 (bit 7): read current attribute, merge new data with mask.
+; $54 > 0: direct overwrite with sequential values starting at $20.
 attr_update_special:  bpl     attr_special_default
-        lda     col_update_addr_hi
+        lda     col_update_addr_hi      ; read existing attribute value first
         sta     PPUADDR
         ldx     $03BC
         dex
         dex
         stx     PPUADDR
-        lda     PPUDATA
-        lda     PPUDATA
-        tax
+        lda     PPUDATA                 ; dummy read (PPU read buffer)
+        lda     PPUDATA                 ; actual read: current attribute byte
+        tax                             ; X = existing value to merge with
         jmp     attr_special_setup
 
-attr_special_default:  ldx     #$20
-attr_special_setup:  ldy     #$02
+attr_special_default:  ldx     #$20    ; default fill value
+attr_special_setup:  ldy     #$02    ; write 2 attribute entries
 attr_special_write_loop:  lda     col_update_addr_hi
         sta     PPUADDR
         lda     $03BC
         sta     PPUADDR
-        stx     PPUDATA
+        stx     PPUDATA                 ; write attribute byte
         inx
-        stx     PPUDATA
+        stx     PPUDATA                 ; write next sequential byte (+32 rows)
         inx
-        inc     $03BC
+        inc     $03BC                   ; advance to next attribute column
         dey
         bne     attr_special_write_loop
-        lda     $03C2
+        lda     $03C2                   ; second attribute region address
         sta     PPUADDR
         lda     $03C8
         sta     PPUADDR
-        lda     $54
+        lda     attr_update_mode
         bpl     attr_special_read_current
         lda     PPUDATA
         lda     PPUDATA
@@ -2610,7 +2642,7 @@ attr_special_merge:  and     $03D4
         lda     $03C8
         sta     PPUADDR
         stx     PPUDATA
-        sty     $54
+        sty     attr_update_mode
         jmp     attr_update_done
 
         lda     current_weapon

@@ -1627,7 +1627,7 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
         lda     dragon_column_addr_lo_table,x
         sta     col_update_addr_lo
         lda     dragon_column_length_table,x
-        sta     $47
+        sta     col_update_count
         sta     temp_00
         ldy     #$00
 
@@ -1668,7 +1668,7 @@ dragon_attr_copy_loop:  lda     dragon_attr_data,x
         iny
         cpy     #$04
         bne     dragon_attr_copy_loop
-        sty     $47
+        sty     col_update_count
         stx     $B2
         rts
 
@@ -1686,7 +1686,7 @@ dragon_clear_attr_loop_inner:  sta     col_update_tiles,x
         bpl     dragon_clear_attr_loop_inner
         clc
         lda     #$20
-        sta     $47
+        sta     col_update_count
         adc     col_update_addr_lo
         sta     col_update_addr_lo
         lda     col_update_addr_hi
@@ -2024,9 +2024,9 @@ dragon_apply_movement:  jsr     boss_apply_movement_physics
         lda     $B5
         sbc     $0661
         sta     $B5
-        lda     $B6
+        lda     camera_y_offset
         sbc     $0641
-        sta     $B6
+        sta     camera_y_offset
         beq     dragon_check_facing_dir
         ldy     $0641
         bpl     dragon_clamp_y_upper
@@ -2034,14 +2034,14 @@ dragon_apply_movement:  jsr     boss_apply_movement_physics
         bcs     dragon_check_facing_dir
         clc
         adc     #$10
-        sta     $B6
+        sta     camera_y_offset
         jmp     dragon_check_facing_dir
 
 dragon_clamp_y_upper:  cmp     #$11
         bcs     dragon_check_facing_dir
         sec
         sbc     #$10
-        sta     $B6
+        sta     camera_y_offset
 dragon_check_facing_dir:  lda     $0421
         and     #$40
         beq     dragon_move_facing_left
@@ -2049,24 +2049,24 @@ dragon_check_facing_dir:  lda     $0421
         lda     $B7
         adc     $0621
         sta     $B7
-        lda     $B8
+        lda     camera_x_offset
         adc     $0601
-        sta     $B8
-        lda     $B9
+        sta     camera_x_offset
+        lda     camera_x_offset_hi
         adc     #$00
-        sta     $B9
+        sta     camera_x_offset_hi
         rts
 
 dragon_move_facing_left:  sec
         lda     $B7
         sbc     $0621
         sta     $B7
-        lda     $B8
+        lda     camera_x_offset
         sbc     $0601
-        sta     $B8
-        lda     $B9
+        sta     camera_x_offset
+        lda     camera_x_offset_hi
         sbc     #$00
-        sta     $B9
+        sta     camera_x_offset_hi
         rts
 
         asl     flashman_data_overlap,x
@@ -2157,13 +2157,13 @@ picopico_attr_update_loop:  ldx     $0C
         lda     picopico_y_pos_table,x
         sta     $0A
         jsr     metatile_render
-        lda     $51
+        lda     attr_update_count
         bne     picopico_advance_phase
-        inc     $51
+        inc     attr_update_count
         inc     $0C
         bne     picopico_attr_update_loop
 picopico_advance_phase:  lda     #$82
-        sta     $51
+        sta     attr_update_count
         inc     $B2
         lda     $B2
         cmp     #$0E
@@ -2301,13 +2301,13 @@ gutsdozer_phase2_check:  cmp     #$02
         lda     gutsdozer_nt_addr_lo_table,x
         sta     col_update_addr_lo
         lda     gutsdozer_nt_length_table,x
-        sta     $47
+        sta     col_update_count
         ldy     #$00
 gutsdozer_fill_column_loop:  lda     $05A7
         sta     col_update_tiles,y
         inc     $05A7
         iny
-        cpy     $47
+        cpy     col_update_count
         bne     gutsdozer_fill_column_loop
         inx
         stx     $B2
@@ -2325,7 +2325,7 @@ gutsdozer_phase3_check:  lda     $04E1
         bne     gutsdozer_attr_update
         clc
         lda     #$20
-        sta     $47
+        sta     col_update_count
         adc     col_update_addr_lo
         sta     col_update_addr_lo
         lda     col_update_addr_hi
@@ -2359,7 +2359,7 @@ gutsdozer_attr_update:  clc
         adc     #$00
         sta     col_update_addr_hi
         lda     #$06
-        sta     $47
+        sta     col_update_count
         ldx     $B2
         cpx     #$1E
         beq     gutsdozer_setup_complete
@@ -2374,7 +2374,7 @@ gutsdozer_attr_copy_loop:  lda     gutsdozer_attr_data,x
         rts
 
 gutsdozer_setup_complete:  lda     #$00
-        sta     $47
+        sta     col_update_count
         sta     $04E1
         lda     #$8B
         sta     $05A7
@@ -2386,7 +2386,7 @@ gutsdozer_setup_complete:  lda     #$00
         lda     #$FF
         sta     $0461
         ldx     $04E1
-        lda     $B8
+        lda     camera_x_offset
         cmp     gutsdozer_spawn_screen_table,x
         bne     gutsdozer_jmp_movement
         cpx     #$01
@@ -2445,7 +2445,7 @@ gutsdozer_set_facing:  sta     $05A7
         jsr     gutsdozer_spawn_tick
         rts
 
-        lda     $B8
+        lda     camera_x_offset
         cmp     #$80
         bne     *+8
         lda     #$7D
@@ -2765,13 +2765,13 @@ boobeam_column_fill:  lda     projectile_x_velocity,x
         lda     projectile_y_velocity,x
         sta     col_update_addr_lo
         lda     projectile_timing,x
-        sta     $47
+        sta     col_update_count
         ldy     #$00
 boobeam_column_fill_loop:  lda     $05A7
         sta     col_update_tiles,y
         inc     $05A7
         iny
-        cpy     $47
+        cpy     col_update_count
         bne     boobeam_column_fill_loop
         inc     $B2
         rts
@@ -2783,7 +2783,7 @@ boobeam_tile_row_loop:  lda     projectile_anim_frames,x
         iny
         cpy     #$05
         bne     boobeam_tile_row_loop
-        sty     $47
+        sty     col_update_count
         stx     $B2
         clc
         lda     col_update_addr_lo
@@ -2935,14 +2935,14 @@ wily_machine_phase2:  ldx     $B2
         lda     projectile_y_velocity,x
         sta     col_update_addr_lo
         lda     projectile_timing,x
-        sta     $47
+        sta     col_update_count
         ldy     #$00
         ldx     $05A9
 wily_machine_tile_copy_loop:  lda     projectile_tile_ids,x
         sta     col_update_tiles,y
         inx
         iny
-        cpy     $47
+        cpy     col_update_count
         bne     wily_machine_tile_copy_loop
         stx     $05A9
         inc     $B2
@@ -3281,7 +3281,7 @@ alien_palette_table:  bmi     alien_palette_data_byte
         asl     $0F,x
         asl     $30,x
         bmi     alien_palette_block_2
-        asl     $38,x
+        asl     current_screen,x
         sec
         .byte   $0F,$16,$38,$29,$0F,$16,$38,$29
         .byte   $0F,$16,$29,$19
@@ -3306,12 +3306,12 @@ alien_palette_data_byte:  .byte   $03
         lda     $B7
         adc     #$60
         sta     $B7
-        lda     $B8
+        lda     camera_x_offset
         adc     #$01
-        sta     $B8
-        lda     $B9
+        sta     camera_x_offset
+        lda     camera_x_offset_hi
         adc     #$00
-        sta     $B9
+        sta     camera_x_offset_hi
         jsr     calc_player_boss_distance
         dec     $05A7
         bne     alien_frame_update
@@ -3425,7 +3425,7 @@ alien_palette_fill_loop:  sta     palette_ram,x
         lda     #$8D
         sta     $05A9
         lda     #$00
-        sta     $1A
+        sta     column_index
         sta     ppu_buffer_count
         beq     alien_scroll_update
         jsr     alien_palette_flash_tick
@@ -3447,7 +3447,7 @@ alien_scroll_update:  lda     #$0C
         lda     #$0D
         sta     current_stage
         inc     $05A7
-        inc     $1A
+        inc     column_index
         rts
 
 
@@ -3459,8 +3459,8 @@ alien_scroll_setup_entities:  inc     $04E1
         inc     ent_x_screen
         inc     $0441
         lda     #$00
-        sta     $B8
-        sta     $B9
+        sta     camera_x_offset
+        sta     camera_x_offset_hi
         ldx     #$10
 alien_load_palette_loop:  lda     alien_stage_palette,x
         sta     palette_ram,x

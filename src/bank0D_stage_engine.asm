@@ -384,7 +384,7 @@ intro_health_fill_loop:  lda     $FD
         lda     intro_health_tile_data,x
         sta     col_update_tiles
         lda     #$01
-        sta     $47
+        sta     col_update_count
         inc     $FE
         inc     col_update_addr_lo
 intro_health_fill_frame:  jsr     clear_oam_buffer
@@ -664,12 +664,12 @@ reset_scroll_state:  lda     #$00
         sta     scroll_x
         sta     nametable_select
         sta     scroll_y
-        sta     $21
+        sta     scroll_y_page
         sta     $B5
-        sta     $B6
+        sta     camera_y_offset
         sta     $B7
-        sta     $B8
-        sta     $B9
+        sta     camera_x_offset
+        sta     camera_x_offset_hi
         sta     $0354
         sta     $0355
         rts
@@ -1487,13 +1487,13 @@ main_stage_render:
         jsr     fixed_D2EF
         lda     $B5
         pha
-        lda     $B6
+        lda     camera_y_offset
         pha
         lda     $B7
         pha
-        lda     $B8
+        lda     camera_x_offset
         pha
-        lda     $B9
+        lda     camera_x_offset_hi
         pha
         lda     nametable_select
         pha
@@ -1509,14 +1509,14 @@ wselect_save_palette_loop:  lda     $0354,x
         dex
         bpl     wselect_save_palette_loop
         lda     #$00
-        sta     $B8
+        sta     camera_x_offset
         sta     $B7
         sta     $B5
-        sta     $B6
+        sta     camera_y_offset
         lda     current_stage
         cmp     #$04
         bne     wselect_check_boss_stage
-        lda     $38
+        lda     current_screen
         cmp     #$03
         bcc     wselect_check_boss_stage
         cmp     #$0F
@@ -1749,7 +1749,7 @@ wselect_weapon_selected:  lda     $FD
         tax
 wselect_store_weapon:  stx     current_weapon
         jsr     clear_oam_buffer_fixed
-        lda     $1A
+        lda     column_index
         pha
         ldx     #$00
 wselect_render_column:  stx     $FD
@@ -1767,7 +1767,7 @@ wselect_render_column:  stx     $FD
         ror     a
         sta     jump_ptr
         and     #$3F
-        sta     $1A
+        sta     column_index
         clc
         lda     jump_ptr_hi
         adc     #$85
@@ -1802,7 +1802,7 @@ wselect_render_col_call:  jsr     metatile_render_column
         jsr     fixed_D2ED
         jsr     wait_for_vblank_0D
         pla
-        sta     $1A
+        sta     column_index
         lda     current_stage
         cmp     #$0A
         bne     wselect_restore_palette
@@ -1826,13 +1826,13 @@ wselect_restore_pal_loop:  lda     $0700,x
         pla
         sta     nametable_select
         pla
-        sta     $B9
+        sta     camera_x_offset_hi
         pla
-        sta     $B8
+        sta     camera_x_offset
         pla
         sta     $B7
         pla
-        sta     $B6
+        sta     camera_y_offset
         pla
         sta     $B5
         lda     #$00
@@ -2590,9 +2590,9 @@ apply_gravity:  lda     scroll_y             ; Apply downward acceleration to en
         lda     $AE
         bne     gravity_rts
 gravity_accelerate:  clc
-        lda     $21
+        lda     scroll_y_page
         adc     #$80
-        sta     $21
+        sta     scroll_y_page
         lda     scroll_y
         adc     #$00
         cmp     #$F0
@@ -3055,7 +3055,7 @@ credits_fade_next:  dec     $FF
         dec     $FE
         bpl     credits_fade_outer
         lda     #$00
-        sta     $47
+        sta     col_update_count
         jsr     disable_nmi_and_rendering
         lda     #$00
         sta     $AE
@@ -3066,7 +3066,7 @@ credits_fade_next:  dec     $FF
         lda     #$8A
         sta     jump_ptr_hi
         lda     #$00
-        sta     $1A
+        sta     column_index
         sta     ppu_buffer_count
 
 ; =============================================================================
@@ -3074,7 +3074,7 @@ credits_fade_next:  dec     $FF
 ; =============================================================================
 credits_scroll_right_loop:  jsr     metatile_column_render
         inc     jump_ptr
-        inc     $1A
+        inc     column_index
         jsr     metatile_column_render
         jsr     ppu_buffer_and_increment
         lda     jump_ptr
@@ -3085,7 +3085,7 @@ credits_scroll_right_loop:  jsr     metatile_column_render
         lda     #$8A
         sta     jump_ptr_hi
         lda     #$00
-        sta     $1A
+        sta     column_index
         sta     ppu_buffer_count
 
 ; =============================================================================
@@ -3235,9 +3235,9 @@ ending_column_check:  lda     $FD
 ; Ending — Fall Acceleration (Wily castle crumbles)
 ; =============================================================================
 ending_fall_accel:  sec
-        lda     $21
+        lda     scroll_y_page
         sbc     #$80
-        sta     $21
+        sta     scroll_y_page
         lda     scroll_y
         sbc     #$00
         sta     scroll_y
@@ -3259,12 +3259,12 @@ ending_fall_check_col:  jsr     ending_update_entities
 ending_fall_decel_init:  lda     #$F0
         sta     scroll_y
         lda     #$00
-        sta     $21
+        sta     scroll_y_page
         sta     $AE
 ending_fall_decel_loop:  sec
-        lda     $21
+        lda     scroll_y_page
         sbc     #$80
-        sta     $21
+        sta     scroll_y_page
         lda     scroll_y
         sbc     #$00
         sta     scroll_y
@@ -3822,7 +3822,7 @@ ppu_buffer_and_increment:  lda     jump_ptr
         pla
         sta     jump_ptr
         inc     jump_ptr
-        inc     $1A
+        inc     column_index
         rts
 
 ; =============================================================================
@@ -3848,7 +3848,7 @@ ending_column_inner:  lda     #$46
         inx
         cpx     #$1B
         bne     ending_column_inner
-        stx     $47
+        stx     col_update_count
         sty     $FD
         rts
 
@@ -3874,7 +3874,7 @@ ending_attr_or_column:  sta     temp_00
         ora     #$C0
         sta     col_update_addr_lo
         lda     #$02
-        sta     $47
+        sta     col_update_count
         rts
 
 ending_nametable_column:  lda     temp_00
@@ -3920,7 +3920,7 @@ ending_column_copy_loop:  lda     (jump_ptr),y
         dey
         bpl     ending_column_copy_loop
         lda     #$20
-        sta     $47
+        sta     col_update_count
         rts
 
 ; =============================================================================
@@ -4251,11 +4251,11 @@ credits_skip_clear_ents:  sta     ent_x_screen,x
 ; Metatile Column Render Loop — render full screen of metatile columns
 ; =============================================================================
 metatile_column_render_loop:  lda     #$00
-        sta     $1A
+        sta     column_index
         sta     ppu_buffer_count
 metatile_col_pair_render:  jsr     metatile_column_render
         inc     jump_ptr
-        inc     $1A
+        inc     column_index
         jsr     metatile_column_render
         jsr     ppu_buffer_and_increment
         lda     jump_ptr
@@ -4411,14 +4411,14 @@ ppu_column_data_upload:  lda     ppu_column_table_index,x
         sta     col_update_addr_lo
         inx
         lda     password_ppu_layout_data,x
-        sta     $47
+        sta     col_update_count
         inx
         ldy     #$00
 ppu_column_data_inner:  lda     password_ppu_layout_data,x
         sta     col_update_tiles,y
         inx
         iny
-        cpy     $47
+        cpy     col_update_count
         bne     ppu_column_data_inner
         rts
 
@@ -4463,14 +4463,14 @@ scroll_right_rts:  rts
 ; =============================================================================
 metatile_full_screen_render:  lda     #$00
         sta     ppu_buffer_count
-        sta     $1A
+        sta     column_index
 metatile_render_loop:  lda     $FD
         sta     jump_ptr
         lda     $FE
         sta     jump_ptr_hi
         jsr     metatile_column_render
         inc     $FD
-        inc     $1A
+        inc     column_index
         jsr     wait_for_vblank_0D
         lda     $FD
         and     #$3F
@@ -5496,7 +5496,7 @@ ending_health_bar_loop:  lda     $FD
         beq     ending_health_bar_frame
         lda     ending_health_tile_data,x
         sta     col_update_tiles
-        inc     $47
+        inc     col_update_count
         inc     $FE
         inc     col_update_addr_lo
 ending_health_bar_frame:  jsr     render_player_sprites
@@ -5750,7 +5750,7 @@ ending_ground_pal_rts:  rts
 ; PPU Fill Column with Tile — fill 32-tile column for PPU upload
 ; =============================================================================
 ppu_fill_column_with_tile:  ldx     #$20
-        stx     $47
+        stx     col_update_count
         dex
 ppu_fill_col_loop:  sta     col_update_tiles,x
         dex
@@ -5862,7 +5862,7 @@ stage_intro_draw_name:  jsr     weapon_get_wait_frame
         ldx     current_stage
         lda     weapon_name_data,x
         sta     col_update_tiles
-        inc     $47
+        inc     col_update_count
         jsr     weapon_get_wait_frame
         jsr     weapon_get_draw_marker
         inc     col_update_addr_lo
@@ -6090,7 +6090,7 @@ weapon_get_draw_marker:  lda     #$24
         sta     col_update_addr_lo
         lda     #$94
         sta     col_update_tiles
-        inc     $47
+        inc     col_update_count
         rts
 
 ; =============================================================================
@@ -6149,7 +6149,7 @@ weapon_get_text_inner:  jsr     weapon_get_wait_frame
         bne     weapon_get_text_store
 weapon_get_text_byte:  lda     ($C9),y
 weapon_get_text_store:  sta     col_update_tiles
-        inc     $47
+        inc     col_update_count
         inc     col_update_addr_lo
         lda     $FE
         clc
@@ -6196,7 +6196,7 @@ weapon_get_clear_cols:  clc
         adc     #$00
         sta     col_update_addr_hi
         lda     #$0F
-        sta     $47
+        sta     col_update_count
         jsr     wait_for_vblank_0D
         dec     $FD
         bpl     weapon_get_clear_cols
@@ -6212,7 +6212,7 @@ weapon_get_draw_weapon:  jsr     weapon_get_wait_frame
         ldx     current_stage
         lda     ent_flags
         sta     col_update_tiles
-        inc     $47
+        inc     col_update_count
         jsr     weapon_get_wait_frame
         jsr     weapon_get_draw_marker
         inc     col_update_addr_lo

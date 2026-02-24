@@ -184,13 +184,13 @@ game_init_fill_timers:  sta     $0140,x
         jsr     chr_upload_run
         lda     #$00
         sta     scroll_x
-        sta     $1E
+        sta     scroll_subpixel
         sta     scroll_y
         sta     $B5
-        sta     $B6
+        sta     camera_y_offset
         sta     $B7
-        sta     $B8
-        sta     $B9
+        sta     camera_x_offset
+        sta     camera_x_offset_hi
         sta     ent_x_px
         sta     ent_x_sub
         sta     $43
@@ -203,7 +203,7 @@ game_init_fill_timers:  sta     $0140,x
         adc     #$01
         jsr     render_full_nametable
         lda     #$20
-        sta     $1A
+        sta     column_index
         jsr     clear_oam_buffer
         lda     ppumask_shadow
         ora     #$1E
@@ -273,7 +273,7 @@ main_loop_update_entities:  jsr     build_active_list ; scan entities within scr
         jsr     process_sound_and_bosses ; sound engine + boss check
         jsr     entity_ai_dispatch      ; run enemy AI for all entities
         jsr     render_all_sprites      ; build OAM buffer
-        lda     $37
+        lda     transition_type
         beq     main_loop_check_scroll
         jsr     check_screen_transition
 main_loop_check_scroll:  lda     $FB
@@ -361,7 +361,7 @@ wily_loop_update_entities:  jsr     build_active_list
         jsr     process_sound_and_bosses
         jsr     entity_ai_dispatch
         jsr     render_all_sprites
-        lda     $37
+        lda     transition_type
         beq     wily_loop_check_scroll
         jsr     check_screen_transition
 wily_loop_check_scroll:  lda     $FB
@@ -383,49 +383,56 @@ wily_gate_y_pos_table:                   ; Y pixel position per gate
 ; =============================================================================
 ; check_screen_transition -- Screen Transition Check — test scroll boundaries for room changes ($8278)
 ; =============================================================================
+; Called when scroll reaches a room boundary. Tests whether the current
+; scroll position matches $14 (left boundary) or $15 (right boundary).
+; $37 = transition_type: 0=none, 2=horizontal, 1/3=vertical/boss.
+; $38 = current_screen: room index. get_screen_boundary returns room
+; connectivity flags in Y; the mask tables select which flag bits
+; permit left vs right exits for the given transition_type.
+; =============================================================================
 check_screen_transition:  ldx     scroll_x
-        bne     check_vertical_transition ; scroll_x == 0, skip left check
+        bne     check_vertical_transition ; scroll_x != 0: not at boundary, skip
         ldx     nametable_select
-        beq     check_scroll_right
-        cpx     $14
+        beq     check_scroll_right      ; nametable 0: can't scroll further left
+        cpx     scroll_screen_lo                     ; at left boundary nametable?
         bne     check_scroll_right
-        ldy     $38
+        ldy     current_screen                     ; Y = current_screen - 1 (previous room)
         dey
-        jsr     get_screen_boundary
+        jsr     get_screen_boundary     ; Y = connectivity flags for previous room
         tya
-        ldy     $37
-        and     scroll_left_mask_table,y
-        beq     check_scroll_right
-        jsr     transition_screen_left
+        ldy     transition_type                     ; index mask table by transition_type
+        and     scroll_left_mask_table,y ; test if left exit allowed
+        beq     check_scroll_right      ; blocked: try right instead
+        jsr     transition_screen_left  ; execute full room transition left
         jmp     clear_scroll_request
 
-check_scroll_right:  cpx     $15
+check_scroll_right:  cpx     scroll_screen_hi             ; at right boundary nametable?
         bne     check_vertical_transition
-        ldy     $38
-        jsr     get_screen_boundary
+        ldy     current_screen                     ; Y = current_screen
+        jsr     get_screen_boundary     ; Y = connectivity flags for this room
         tya
-        ldy     $37
-        and     scroll_right_mask_table,y
-        beq     check_vertical_transition
-        jsr     transition_screen_right
+        ldy     transition_type                     ; index mask table by transition_type
+        and     scroll_right_mask_table,y ; test if right exit allowed
+        beq     check_vertical_transition ; blocked: check vertical
+        jsr     transition_screen_right ; execute full room transition right
         ldx     current_stage
         lda     nametable_select
-        cmp     stage_max_screen_table,x
+        cmp     stage_max_screen_table,x ; reached final screen of stage?
         bne     scroll_transition_done
-        jsr     boss_trigger_entrance
+        jsr     boss_trigger_entrance   ; trigger boss door sequence
 scroll_transition_done:  jmp     clear_scroll_request
 
-check_vertical_transition:  lda     $37
-        cmp     #$03                    ; transition type 3 = boss entrance
+check_vertical_transition:  lda     transition_type
+        cmp     #$03                    ; transition_type $03 = boss entrance
         bne     clear_scroll_request
         lda     #$01
         sta     game_substate
         jmp     boss_death_sequence
 
 clear_scroll_request:  lda     #$00
-        sta     $37
-scroll_left_mask_table:  rts
-
+        sta     transition_type                     ; clear transition request
+scroll_left_mask_table:  rts             ; (also serves as rts for no-transition path)
+                                        ; mask_table[0]=$60(rts opcode), [1]=$40, [2]=$00, [3]=$80
         .byte   $40,$00,$80
 scroll_right_mask_table:  .byte   $20,$80,$20,$40,$00 ; bitmask for right scroll boundary
 
@@ -554,9 +561,9 @@ extra_life_done:
 wily_door_transition:  jsr     set_palette_colors
         inc     nametable_select
         inc     ent_x_screen
-        inc     $38
-        inc     $14
-        inc     $15
+        inc     current_screen
+        inc     scroll_screen_lo
+        inc     scroll_screen_hi
         lda     #$20
         sta     ent_x_px
         lda     #$B4
@@ -622,15 +629,15 @@ wily_gate_mark_beaten:
         lda     #$28
         sta     nametable_select
         sta     ent_x_screen
-        sta     $14
-        sta     $15
+        sta     scroll_screen_lo
+        sta     scroll_screen_hi
         bne     wily_set_palette
 wily_fade_reverse:
         dec     nametable_select
         dec     ent_x_screen
-        dec     $38
-        dec     $14
-        dec     $15
+        dec     current_screen
+        dec     scroll_screen_lo
+        dec     scroll_screen_hi
 wily_set_palette:
         ldx     #$08
         jsr     set_palette_colors
@@ -669,8 +676,8 @@ palette_color_data:                      ; NES palette indices (PPU $3F00 values
         lda     #$29
         sta     nametable_select
         sta     ent_x_screen
-        sta     $14
-        sta     $15
+        sta     scroll_screen_lo
+        sta     scroll_screen_hi
         lda     #$00
         sta     $FD
         lda     #$15
@@ -702,7 +709,7 @@ entity_update_dispatch:  lda     $AA
         rts
 
 entity_dispatch_setup:  lda     #$00
-        sta     $37
+        sta     transition_type
         ldx     game_substate                     ; current player state index
         lda     player_state_ptr_lo,x
         sta     jump_ptr
@@ -1239,12 +1246,12 @@ player_horiz_movement:  ldx     ent_x_screen
         lda     $42
         and     #$40
         beq     player_move_left_check
-        cpx     $15
+        cpx     scroll_screen_hi
         bne     player_move_right
         cpy     #$EC
         bcc     player_move_right
         lda     #$02
-        sta     $37
+        sta     transition_type
         jmp     player_scroll_right
 
 player_move_right:  clc
@@ -1290,7 +1297,7 @@ player_right_check_delta:  sec
         sta     temp_00
         jmp     player_scroll_left
 
-player_move_left_check:  cpx     $14
+player_move_left_check:  cpx     scroll_screen_lo
         bne     player_move_left
         cpy     #$14
         bcs     player_move_left
@@ -1367,7 +1374,7 @@ tile_eval_loop:  ldy     $32,x
         lda     tile_type_flags,y
         bpl     tile_check_spike
         ldy     #$02
-        sty     $37
+        sty     transition_type
         bne     tile_combine_result
 tile_check_spike:  cmp     #$03
         bne     tile_combine_result
@@ -1546,14 +1553,14 @@ player_apply_gravity:  sec
         cmp     #$0A
         bne     player_gravity_falling
 player_set_scroll_trigger:  lda     #$01
-        sta     $37
+        sta     transition_type
         bne     player_gravity_falling
 player_check_fall_limit:  cpx     #$E8
         bcc     player_gravity_falling
         lda     $F9
         bmi     player_gravity_falling
         lda     #$03
-        sta     $37
+        sta     transition_type
 player_gravity_falling:  lda     ent_y_vel
         bmi     player_gravity_rising
         sec
@@ -1691,7 +1698,7 @@ floor_store_result:  sta     temp_00
         and     #$30
         beq     floor_tile_rts
         ldx     #$01
-        stx     $37
+        stx     transition_type
 floor_set_scroll_trigger:  sta     temp_00
 floor_tile_rts:  rts
 
@@ -1830,276 +1837,300 @@ platform_not_found:  jmp     platform_scan_next
 ; =============================================================================
 ; scroll_right_handler -- Scroll Right Handler — shift viewport right, update columns ($8DF5)
 ; =============================================================================
+; Incremental scroll: called each frame while player moves right.
+; Triggers when player X - scroll_x >= $80 (past screen midpoint).
+; temp_00 = pixel delta to scroll this frame.
+; Pixel→column conversion: (old_scroll_x_low_2bits + delta) >> 2 = tile columns
+; crossed, since each metatile column is 4 pixels wide in scroll units.
+; For each column crossed, copies tile data and advances column_index mod 64.
+; =============================================================================
 scroll_right_handler:  sec
         lda     ent_x_px
         sbc     scroll_x
-        cmp     #$80                    ; check if player past midpoint
+        cmp     #$80                    ; player past center of 256px viewport?
         bcs     scroll_right_exec
         rts
 
 scroll_right_exec:  clc
         lda     scroll_x
-        pha
-        adc     temp_00
+        pha                             ; save old scroll_x for column math
+        adc     temp_00                 ; scroll_x += pixel delta
         sta     scroll_x
         lda     nametable_select
-        adc     #$00
+        adc     #$00                    ; carry into nametable index
         sta     nametable_select
-        cmp     $15
+        cmp     scroll_screen_hi                     ; hit right boundary (scroll_screen_hi)?
         bne     scroll_right_clamp
-        sec
+        sec                             ; clamp: reduce delta by overshoot
         lda     temp_00
         sbc     scroll_x
         sta     temp_00
         lda     #$00
-        sta     scroll_x
-        sta     $1E
-scroll_right_clamp:  pla
-        and     #$03
-        adc     temp_00
+        sta     scroll_x               ; pin scroll_x to 0 at boundary
+        sta     scroll_subpixel                     ; clear sub-pixel accumulator
+scroll_right_clamp:  pla                ; A = old scroll_x
+        and     #$03                    ; low 2 bits = pixel offset within tile column
+        adc     temp_00                 ; add delta to get total pixel movement
+        lsr     a                       ; divide by 4 = number of tile columns crossed
         lsr     a
-        lsr     a
-        sta     temp_01
-        beq     scroll_right_rts
+        sta     temp_01                 ; temp_01 = columns to render
+        beq     scroll_right_rts        ; 0 columns: nothing to update
         clc
-        lda     $18
-        sta     jump_ptr
+        lda     column_ptr_lo                     ; advance column_ptr by columns crossed
+        sta     jump_ptr                ; jump_ptr = working copy for column_data_copy
         adc     temp_01
-        sta     $18
-        lda     $19
+        sta     column_ptr_lo
+        lda     column_ptr_hi
         sta     jump_ptr_hi
         adc     #$00
-        sta     $19
+        sta     column_ptr_hi
         clc
-        lda     $16
+        lda     metatile_ptr_lo                     ; advance metatile_ptr by columns crossed
         adc     temp_01
-        sta     $16
-        lda     $17
+        sta     metatile_ptr_lo
+        lda     metatile_ptr_hi
         adc     #$00
-        sta     $17
-scroll_right_column_loop:  jsr     column_data_copy ; copy column tile data to buffer
-        inc     $1A
-        lda     $1A
-        and     #$3F
-        sta     $1A
+        sta     metatile_ptr_hi
+scroll_right_column_loop:  jsr     column_data_copy ; decode metatile column → PPU buffer
+        inc     column_index                     ; advance column_index
+        lda     column_index
+        and     #$3F                    ; wrap mod 64 (2 nametables × 32 columns)
+        sta     column_index
         clc
-        lda     jump_ptr
+        lda     jump_ptr                ; advance working pointer to next column
         adc     #$01
         sta     jump_ptr
         lda     jump_ptr_hi
         adc     #$00
         sta     jump_ptr_hi
-        dec     temp_01
+        dec     temp_01                 ; one fewer column to render
         bne     scroll_right_column_loop
 scroll_right_rts:  rts
 
 ; =============================================================================
 ; scroll_left_handler -- Scroll Left Handler — shift viewport left, update columns ($8E65)
 ; =============================================================================
+; Mirror of scroll_right_handler for leftward movement.
+; Triggers when player X - scroll_x < $80 (player behind midpoint).
+; EOR #$FF inverts the low bits for leftward pixel→column conversion.
+; Pointers and column_index are decremented instead of incremented.
+; =============================================================================
 scroll_left_handler:  sec
         lda     ent_x_px
         sbc     scroll_x
-        cmp     #$80
+        cmp     #$80                    ; player behind center of viewport?
         bcc     scroll_left_exec
         rts
 
 scroll_left_exec:  sec
         lda     scroll_x
-        pha
-        sbc     temp_00
+        pha                             ; save old scroll_x for column math
+        sbc     temp_00                 ; scroll_x -= pixel delta
         sta     scroll_x
         lda     nametable_select
-        sbc     #$00
+        sbc     #$00                    ; borrow into nametable index
         sta     nametable_select
-        ldx     $14
-        dex
+        ldx     scroll_screen_lo                     ; left boundary (scroll_screen_lo)
+        dex                             ; one below = forbidden nametable
         cpx     nametable_select
-        bne     scroll_left_calc_columns
-        inc     nametable_select
+        bne     scroll_left_calc_columns ; not at boundary, continue
+        inc     nametable_select        ; undo: pin to boundary
         clc
-        lda     temp_00
+        lda     temp_00                 ; reduce delta by overshoot
         adc     scroll_x
         sta     temp_00
         lda     #$00
-        sta     scroll_x
-        sta     $1E
+        sta     scroll_x               ; pin scroll_x to 0
+        sta     scroll_subpixel                     ; clear sub-pixel accumulator
 scroll_left_calc_columns:  clc
-        pla
-        eor     #$FF
-        and     #$03
-        adc     temp_00
+        pla                             ; A = old scroll_x
+        eor     #$FF                    ; invert low bits for leftward math
+        and     #$03                    ; pixels remaining in current tile column
+        adc     temp_00                 ; add delta
+        lsr     a                       ; divide by 4 = columns crossed
         lsr     a
-        lsr     a
-        sta     temp_01
-        beq     scroll_left_rts
+        sta     temp_01                 ; temp_01 = columns to render
+        beq     scroll_left_rts         ; 0 columns: nothing to update
         sec
-        lda     $16
+        lda     metatile_ptr_lo                     ; retract metatile_ptr by columns crossed
         sta     jump_ptr
         sbc     temp_01
-        sta     $16
-        lda     $17
+        sta     metatile_ptr_lo
+        lda     metatile_ptr_hi
         sta     jump_ptr_hi
         sbc     #$00
-        sta     $17
+        sta     metatile_ptr_hi
         sec
-        lda     $18
+        lda     column_ptr_lo                     ; retract column_ptr by columns crossed
         sbc     temp_01
-        sta     $18
-        lda     $19
+        sta     column_ptr_lo
+        lda     column_ptr_hi
         sbc     #$00
-        sta     $19
-scroll_left_column_loop:  jsr     column_data_copy ; copy column tile data to buffer
-        dec     $1A
-        lda     $1A
-        and     #$3F
-        sta     $1A
+        sta     column_ptr_hi
+scroll_left_column_loop:  jsr     column_data_copy ; decode metatile column → PPU buffer
+        dec     column_index                     ; retract column_index
+        lda     column_index
+        and     #$3F                    ; wrap mod 64
+        sta     column_index
         sec
-        lda     jump_ptr
+        lda     jump_ptr                ; retract working pointer
         sbc     #$01
         sta     jump_ptr
         lda     jump_ptr_hi
         sbc     #$00
         sta     jump_ptr_hi
-        dec     temp_01
+        dec     temp_01                 ; one fewer column to render
         bne     scroll_left_column_loop
 scroll_left_rts:  rts
 
 ; =============================================================================
 ; transition_screen_left -- Screen Transition Left — full room scroll to previous screen ($8EDD)
 ; =============================================================================
+; Full room transition (not incremental): clears entities, renders the
+; destination nametable off-screen, runs smooth scroll animation, then
+; adjusts metatile/column pointers by -$40 (64 bytes = one full screen
+; of column data) and repopulates entities for the new room.
+; =============================================================================
 transition_screen_left:  jsr     reset_entity_slots ; clear all entities for new room
-        ldx     $14
+        ldx     scroll_screen_lo                     ; old left boundary → new right boundary
         dex
-        stx     $15
-        dec     $38
-        ldy     $38
-        jsr     get_screen_boundary
+        stx     scroll_screen_hi
+        dec     current_screen                     ; move to previous screen
+        ldy     current_screen
+        jsr     get_screen_boundary     ; get connectivity for new screen
         tya
-        and     #$1F
-        sta     $14
-        txa
+        and     #$1F                    ; low 5 bits = room width
+        sta     scroll_screen_lo
+        txa                             ; X = boundary base from get_screen_boundary
         sec
-        sbc     $14
-        sta     $14
-        lda     $15
-        jsr     render_full_nametable
-        dec     ent_x_screen
-        lda     $38
+        sbc     scroll_screen_lo                     ; compute new left boundary
+        sta     scroll_screen_lo
+        lda     scroll_screen_hi
+        jsr     render_full_nametable   ; render destination nametable (off-screen)
+        dec     ent_x_screen            ; player shifts one screen left
+        lda     current_screen
         sta     $FE
-        jsr     transition_scroll_setup
+        jsr     transition_scroll_setup ; execute smooth scroll animation
         dec     nametable_select
         sec
-        lda     $16
+        lda     metatile_ptr_lo                     ; retract metatile_ptr by $40 (one screen)
         sbc     #$40
-        sta     $16
-        lda     $17
+        sta     metatile_ptr_lo
+        lda     metatile_ptr_hi
         sbc     #$00
-        sta     $17
+        sta     metatile_ptr_hi
         sec
-        lda     $18
+        lda     column_ptr_lo                     ; retract column_ptr by $40 (one screen)
         sbc     #$40
-        sta     $18
-        lda     $19
+        sta     column_ptr_lo
+        lda     column_ptr_hi
         sbc     #$00
-        sta     $19
+        sta     column_ptr_hi
         jsr     wait_for_vblank
         sec
-        lda     $15
+        lda     scroll_screen_hi
         sbc     #$01
-        jsr     render_full_nametable
+        jsr     render_full_nametable   ; render adjacent nametable
         lda     #$00
         sta     $F9
         lda     #$00
         sta     $42
-        jsr     entity_spawn_scan
+        jsr     entity_spawn_scan       ; repopulate enemies for new room
         rts
 
 ; =============================================================================
 ; transition_screen_right -- Screen Transition Right — full room scroll to next screen ($8F39)
 ; =============================================================================
+; Full rightward room transition. Renders the off-screen nametable ahead,
+; optionally fills attribute tables for stages that require pre-rendering
+; (every 8th column triggers a metatile_render + metatile_attr_update batch),
+; runs the smooth scroll animation, then advances pointers by +$40 (64 bytes)
+; and repopulates entities. The attribute pre-fill uses $54/$51 to queue
+; PPU attribute writes that the NMI handler processes during VBLANK.
+; =============================================================================
 transition_screen_right:  jsr     reset_entity_slots ; clear all entities for new room
-        ldx     $15
-        inx
+        ldx     scroll_screen_hi                     ; current right boundary
+        inx                             ; next nametable = destination
         txa
-        pha
-        jsr     render_full_nametable
-        inc     ent_x_screen
-        lda     $37
-        and     #$01
+        pha                             ; save for later boundary calc
+        jsr     render_full_nametable   ; render destination nametable (off-screen)
+        inc     ent_x_screen            ; player shifts one screen right
+        lda     transition_type
+        and     #$01                    ; bit 0 set = vertical transition (skip attr fill)
         bne     transition_right_scroll
-        lda     #$18
+        lda     #$18                    ; 25 columns to pre-render attributes ($00-$18)
         sta     $FD
         lda     #$00
         sta     $FE
 transition_right_attr_loop:  ldx     current_stage
         lda     nametable_select
-        cmp     stage_min_screen_table,x
+        cmp     stage_min_screen_table,x ; skip attr fill if before stage start
         bcc     transition_right_scroll
         lda     $FD
-        and     #$07
+        and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_attr_step
         lda     #$34
-        jsr     bank_switch_enqueue
+        jsr     bank_switch_enqueue     ; switch to metatile data bank
         lda     nametable_select
         sta     jump_ptr_hi
         lda     #$F0
         sta     jump_ptr
         lda     $FD
         asl     a
-        adc     stage_attr_base_table,x
+        adc     stage_attr_base_table,x ; compute attribute table offset
         sta     $0A
         jsr     metatile_render
         jsr     metatile_attr_update
         lda     #$80
-        sta     $54
-        inc     $51
-transition_right_attr_step:  jsr     wait_for_vblank
+        sta     attr_update_mode                     ; attr_update_mode = read-modify-write
+        inc     attr_update_count                     ; queue attribute PPU write
+transition_right_attr_step:  jsr     wait_for_vblank ; let NMI process queued PPU writes
         dec     $FD
         bpl     transition_right_attr_loop
         lda     #$FE
-        jsr     bank_switch_enqueue
-transition_right_scroll:  lda     $38
+        jsr     bank_switch_enqueue     ; restore bank
+transition_right_scroll:  lda     current_screen
         sta     $FE
-        inc     $FE
-        jsr     transition_scroll_setup
+        inc     $FE                     ; $FE = destination screen index
+        jsr     transition_scroll_setup ; execute smooth scroll animation
         inc     nametable_select
         jsr     wait_for_vblank
         clc
-        lda     $15
-        adc     #$02
+        lda     scroll_screen_hi
+        adc     #$02                    ; render nametable 2 ahead (for next scroll)
         jsr     render_full_nametable
-        inc     $38
-        ldy     $38
-        jsr     get_screen_boundary
+        inc     current_screen                     ; advance to new screen
+        ldy     current_screen
+        jsr     get_screen_boundary     ; get new room's connectivity
         tya
-        and     #$1F
-        sta     $14
-        pla
+        and     #$1F                    ; low 5 bits = room width
+        sta     scroll_screen_lo
+        pla                             ; recover old scroll_screen_hi + 1
         tax
         clc
-        adc     $14
-        sta     $15
-        stx     $14
+        adc     scroll_screen_lo                     ; new right boundary = base + width
+        sta     scroll_screen_hi
+        stx     scroll_screen_lo                     ; new left boundary = old right + 1
         clc
-        lda     $18
+        lda     column_ptr_lo                     ; advance column_ptr by $40 (one screen)
         adc     #$40
-        sta     $18
-        lda     $19
+        sta     column_ptr_lo
+        lda     column_ptr_hi
         adc     #$00
-        sta     $19
+        sta     column_ptr_hi
         clc
-        lda     $16
+        lda     metatile_ptr_lo                     ; advance metatile_ptr by $40 (one screen)
         adc     #$40
-        sta     $16
-        lda     $17
+        sta     metatile_ptr_lo
+        lda     metatile_ptr_hi
         adc     #$00
-        sta     $17
+        sta     metatile_ptr_hi
         lda     #$00
         sta     $F9
-        lda     $37
-        and     #$01
+        lda     transition_type
+        and     #$01                    ; vertical transition? skip post-fill
         bne     transition_right_done
-        lda     #$00
+        lda     #$00                    ; post-scroll attribute fill for destination
         sta     $FD
         sta     $FE
 transition_right_col_loop:  ldx     current_stage
@@ -2116,7 +2147,7 @@ transition_right_col_loop:  ldx     current_stage
         cmp     #WILY_STAGE_START
         bcs     transition_right_done
 transition_right_col_step:  lda     $FD
-        and     #$07
+        and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_wait_frame
         lda     #$34
         jsr     bank_switch_enqueue
@@ -2132,60 +2163,69 @@ transition_right_col_step:  lda     $FD
         ldx     current_stage
         lda     stage_attr_mode_table,x
         jsr     metatile_attr_update
-        inc     $54
-        inc     $51
+        inc     attr_update_mode                     ; queue attribute update
+        inc     attr_update_count
 transition_right_wait_frame:  jsr     wait_for_vblank
         inc     $FD
         lda     $FD
-        cmp     #$19
+        cmp     #$19                    ; 25 columns rendered?
         bne     transition_right_col_loop
         lda     #$FE
-        jsr     bank_switch_enqueue
+        jsr     bank_switch_enqueue     ; restore bank
 transition_right_done:  lda     #$40
         sta     $42
-        jsr     entity_spawn_scan
+        jsr     entity_spawn_scan       ; repopulate enemies for new room
         rts
 
-stage_attr_base_table:  .byte   $60,$40,$40,$40,$40,$40,$40,$40 ; attribute base offset per stage
+; Per-stage scroll configuration tables. Indexed by current_stage (0-13).
+; Stages 0-7 = Robot Masters, 8-13 = Wily fortress.
+stage_attr_base_table:  .byte   $60,$40,$40,$40,$40,$40,$40,$40 ; attribute data base offset per stage
         .byte   $00,$00,$80,$80,$00,$80
-stage_attr_mode_table:  .byte   $00,$55,$AA,$00,$00,$55,$00,$AA ; attribute mode per stage
+stage_attr_mode_table:  .byte   $00,$55,$AA,$00,$00,$55,$00,$AA ; attribute merge mode per stage (→ $54)
         .byte   $00,$00,$00,$00,$00,$00
-stage_min_screen_table:  .byte   $15,$13,$15,$13,$15,$11,$13,$11 ; minimum screen index per stage
+stage_min_screen_table:  .byte   $15,$13,$15,$13,$15,$11,$13,$11 ; first nametable index per stage
         .byte   $00,$00,$26,$25,$00,$1E
-stage_max_screen_table:  .byte   $17,$15,$17,$15,$17,$13,$15,$13 ; maximum screen index per stage
+stage_max_screen_table:  .byte   $17,$15,$17,$15,$17,$13,$15,$13 ; last nametable index (boss trigger)
         .byte   $00,$27,$27,$26,$00,$1F
 
 ; =============================================================================
 ; render_full_nametable -- Full-Screen Nametable Render — upload all 32 columns to PPU ($907D)
 ; =============================================================================
+; Renders an entire nametable (32 tile columns) from metatile data.
+; A = nametable index to render. Converts to a metatile data pointer:
+;   ptr = (A >> 2) | (A << 6) + $8500   (256-byte aligned pages in ROM)
+; Processes columns in pairs (2 per loop), with a VBLANK wait between
+; pairs when rendering is enabled ($80 bit of ppuctrl_shadow).
+; Saves/restores column_index ($1A) since this is a bulk operation.
+; =============================================================================
 render_full_nametable:  ldx     #$00
-        stx     jump_ptr
+        stx     jump_ptr                ; build pointer: low byte = nametable << 6
         lsr     a
         ror     jump_ptr
         lsr     a
         ror     jump_ptr
         clc
-        adc     #$85
+        adc     #$85                    ; high byte = nametable >> 2 + $85
         sta     jump_ptr_hi
-        lda     $1A
-        pha
+        lda     column_index
+        pha                             ; save column_index
         lda     #$00
-        sta     $1A
-nametable_column_loop:  jsr     column_data_copy
+        sta     column_index                     ; start from column 0
+nametable_column_loop:  jsr     column_data_copy ; render column pair (even)
         inc     jump_ptr
-        inc     $1A
-        jsr     column_data_copy
+        inc     column_index
+        jsr     column_data_copy        ; render column pair (odd)
         lda     jump_ptr
         pha
         lda     jump_ptr_hi
         pha
         lda     ppuctrl_shadow
-        and     #$80
+        and     #$80                    ; NMI enabled = rendering active?
         beq     nametable_direct_upload
-        jsr     wait_for_vblank
+        jsr     wait_for_vblank         ; wait for VBLANK to transfer tiles
         jmp     nametable_advance_column
 
-nametable_direct_upload:  lda     ppu_buffer_count
+nametable_direct_upload:  lda     ppu_buffer_count ; rendering off: direct PPU write
         jsr     ppu_buffer_transfer
 nametable_advance_column:  clc
         pla
@@ -2193,60 +2233,69 @@ nametable_advance_column:  clc
         pla
         sta     jump_ptr
         inc     jump_ptr
-        inc     $1A
+        inc     column_index
         lda     jump_ptr
-        and     #$3F
+        and     #$3F                    ; 64 columns per nametable pair: done?
         bne     nametable_column_loop
         pla
-        sta     $1A
+        sta     column_index                     ; restore column_index
         rts
 
 ; =============================================================================
 ; transition_scroll_setup -- Transition Scroll Setup — configure and execute scroll animation ($90C9)
 ; =============================================================================
-transition_scroll_setup:  lda     $37
+; Dispatches to horizontal or vertical scroll animation based on
+; transition_type bit 0: 0 = horizontal, 1 = vertical.
+; =============================================================================
+transition_scroll_setup:  lda     transition_type
         and     #$01
         beq     transition_scroll_horizontal
         jmp     transition_scroll_vertical
 
+; -----------------------------------------------------------------------------
+; Horizontal scroll animation: 63 frames, scroll_x += 4/frame.
+; 63 × 4 = 252 pixels ≈ one nametable width (256 - 4 to finish at 0).
+; Player X nudged $C0 sub-pixels/frame (~3 px/frame) to track camera.
+; scroll_column_render queues PPU column writes each frame.
+; -----------------------------------------------------------------------------
 transition_scroll_horizontal:  jsr     transition_load_palette
         lda     #$00
         sta     $3E
         sta     $3F
         sta     $FD
-        ldy     #$3F
+        ldy     #$3F                    ; 63 frames ($3F)
 transition_scroll_frame_loop:  tya
         pha
         lda     #$01
         clc
         lda     scroll_x
-        adc     #$04
+        adc     #$04                    ; scroll 4 pixels/frame rightward
         sta     scroll_x
         clc
         lda     ent_x_sub
-        adc     #$C0
+        adc     #$C0                    ; nudge player X by $C0 sub-pixels/frame
         sta     ent_x_sub
         lda     ent_x_px
-        adc     #$00
+        adc     #$00                    ; carry into pixel position
         sta     ent_x_px
         lda     current_weapon
         cmp     #$01
         bne     transition_scroll_render
-        jsr     vert_scroll_update_entity
+        jsr     vert_scroll_update_entity ; sync companion entity (Item-1 riding)
 transition_scroll_render:  jsr     render_all_sprites
-        jsr     scroll_column_render
-        jsr     wait_for_vblank
+        jsr     scroll_column_render    ; queue tile column updates for NMI
+        jsr     wait_for_vblank         ; let NMI apply PPU writes + scroll
         pla
         tay
         dey
         bne     transition_scroll_frame_loop
-        sty     scroll_x
+        sty     scroll_x                ; Y=0: pin scroll_x to 0 at destination
         rts
 
 transition_load_palette:  ldx     current_stage
         cpx     #$03
         bne     transition_palette_check
-        ldy     $38
+        ldy     current_screen
         cpy     #$04
         beq     transition_palette_rts
 transition_palette_check:  ldy     stage_palette_offset_table,x
@@ -2280,63 +2329,69 @@ stage_palette_data:  .byte   $2B,$1B,$0B,$21,$01,$0F,$39,$18 ; palette color ent
 ; =============================================================================
 ; transition_scroll_vertical -- Vertical Scroll Transition — smooth scroll up/down between rooms ($9185)
 ; =============================================================================
-transition_scroll_vertical:  lda     $37
-        lsr     a
-        bne     vert_scroll_setup
-        ldx     #$09
+; Vertical scroll animation for ladder/pit transitions.
+; Direction from transition_type >> 1: index 0 = scroll up, index 1 = scroll down.
+; Frame counter $39 runs $3B→$FF (up, ~60 frames) or $00→$3C (down, 60 frames).
+; Each frame: update scroll_y, player Y position, and render sprites/columns.
+; Data tables provide per-direction initial values, step sizes, and deltas.
+; =============================================================================
+transition_scroll_vertical:  lda     transition_type
+        lsr     a                       ; bit 1 → carry, result = direction index
+        bne     vert_scroll_setup       ; nonzero = up/down (skip boss setup)
+        ldx     #$09                    ; transition_type 0 with vertical = boss warp
         stx     game_substate
         pha
         jsr     weapon_set_base_type
         pla
-vert_scroll_setup:  tax
-        lda     vert_scroll_y_start,x
+vert_scroll_setup:  tax                     ; X = direction index (0=up, 1=down)
+        lda     vert_scroll_y_start,x  ; initial frame counter value
         sta     $39
-        lda     vert_scroll_y_init,x
+        lda     vert_scroll_y_init,x   ; initial scroll_y position
         sta     scroll_y
         lda     #$00
         sta     $FD
 vert_scroll_frame_loop:  txa
         pha
         jsr     render_all_sprites
-        jsr     scroll_y_update
-        jsr     scroll_column_render
+        jsr     scroll_y_update         ; update Y scroll PPU registers
+        jsr     scroll_column_render    ; queue column writes if needed
         jsr     wait_for_vblank
         pla
         tax
         lda     current_weapon
         cmp     #$01
         bne     vert_scroll_update_pos
-        jsr     vert_scroll_update_entity
+        jsr     vert_scroll_update_entity ; sync companion entity
 vert_scroll_update_pos:  clc
-        lda     ent_y_sub
-        adc     vert_scroll_sub_step,x
+        lda     ent_y_sub               ; update player Y sub-pixel
+        adc     vert_scroll_sub_step,x  ; up: +$BF (~+3.75px), down: +$41 (~-3.75px)
         sta     ent_y_sub
-        lda     ent_y_px
-        adc     vert_scroll_pixel_step,x
+        lda     ent_y_px                ; update player Y pixel
+        adc     vert_scroll_pixel_step,x ; up: +$03 (up=+3), down: +$FC (down=-4)
         sta     ent_y_px
         lda     $F9
-        adc     vert_scroll_page_step,x
+        adc     vert_scroll_page_step,x ; up: +$00, down: +$FF (page decrement)
         sta     $F9
         clc
-        lda     scroll_y
-        adc     vert_scroll_y_delta,x
+        lda     scroll_y                ; update scroll Y position
+        adc     vert_scroll_y_delta,x   ; up: -4, down: +4
         sta     scroll_y
         clc
-        lda     $39
-        adc     vert_scroll_y_step,x
+        lda     $39                     ; update frame counter
+        adc     vert_scroll_y_step,x    ; up: -1 ($FF), down: +1
         sta     $39
-        bmi     vert_scroll_finish
+        bmi     vert_scroll_finish      ; up: counter went negative → done
         cmp     #$3C
-        beq     vert_scroll_finish
+        beq     vert_scroll_finish      ; down: counter reached $3C → done
         bne     vert_scroll_frame_loop
 vert_scroll_finish:  lda     #$00
-        sta     $21
-        sta     scroll_y
-        sta     ent_y_sub
+        sta     scroll_y_page                     ; clear scroll_y_page
+        sta     scroll_y                ; reset scroll_y to 0
+        sta     ent_y_sub               ; clear player sub-pixel
         jsr     render_all_sprites
         rts
 
-vert_scroll_update_entity:  lda     ent_x_px
+vert_scroll_update_entity:  lda     ent_x_px ; sync Item-1 entity position with player
         sta     $0462
         lda     ent_x_screen
         sta     $0442
@@ -2346,13 +2401,14 @@ vert_scroll_update_entity:  lda     ent_x_px
         sta     $0682
         rts
 
-vert_scroll_y_start:  .byte   $3B,$00   ; vertical scroll start positions
-vert_scroll_y_step:  .byte   $FF,$01
-vert_scroll_sub_step:  .byte   $BF,$41
-vert_scroll_pixel_step:  .byte   $03,$FC
-vert_scroll_y_delta:  .byte   $FC,$04
-vert_scroll_y_init:  .byte   $EF,$00
-vert_scroll_page_step:  .byte   $00,$FF
+; Vertical scroll data tables: index 0 = up, index 1 = down.
+vert_scroll_y_start:  .byte   $3B,$00   ; frame counter initial: up=$3B (counts down), down=$00 (counts up)
+vert_scroll_y_step:  .byte   $FF,$01   ; frame counter step: up=-1, down=+1
+vert_scroll_sub_step:  .byte   $BF,$41  ; player Y sub-pixel step per frame
+vert_scroll_pixel_step:  .byte   $03,$FC ; player Y pixel step: up=+3, down=-4
+vert_scroll_y_delta:  .byte   $FC,$04   ; scroll_y delta per frame: up=-4, down=+4
+vert_scroll_y_init:  .byte   $EF,$00   ; initial scroll_y: up=$EF (near bottom), down=$00 (top)
+vert_scroll_page_step:  .byte   $00,$FF ; Y page step: up=0, down=-1 (page decrement)
 
 ; =============================================================================
 ; reset_entity_slots -- Reset Entity Slots — clear all entity data, preserve boss if active ($9220)
@@ -3525,7 +3581,7 @@ woodman_walk_step:  lda     ent_x_screen,x
         ldy     #$76
 woodman_set_tile:  tya
         sta     $03C2,x
-        inc     $51
+        inc     attr_update_count
         ldx     current_entity_slot
         jsr     apply_entity_physics
         bcc     woodman_check_contact
@@ -6565,9 +6621,9 @@ wily4_timer_check:
         rts
 wily4_timer_positive:
         bne     wily4_boss_active
-        lda     $15
-        sta     $14
-        inc     $38
+        lda     scroll_screen_hi
+        sta     scroll_screen_lo
+        inc     current_screen
         lda     #$07
         sta     ent_hp,x
         lda     #$08

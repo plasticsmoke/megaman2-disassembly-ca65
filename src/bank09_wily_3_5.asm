@@ -288,105 +288,133 @@ copy_sprite_loop:  lda     ($08),y
         stx     $00
         rts
 
-        lda     $1C
+; =============================================================================
+; Vertical Scroll Routines — Wily Fortress Section-Based Scrolling
+; =============================================================================
+; These are the ONLY executable code in any stage data bank (bank09).
+; Used by Wily Stages 3-5 for vertical-scrolling fortress sections.
+; The scroll system divides the vertical area into sections ($06A0 = index).
+; Each frame, if frame_counter is aligned (every 4th frame), one column
+; tile is transferred to the PPU buffer. When a section boundary is
+; reached, advance to the next section.
+;
+; PPU buffer layout: $03B6/$03B7 = PPUADDR hi/lo, $03B8+ = tile data.
+; col_update_count ($47) signals NMI to perform the actual VRAM write.
+; =============================================================================
+
+; --- Incremental column scroll (called every 4th frame) ---
+        lda     $1C                     ; frame_counter
         and     #$03
-        bne     scroll_update_done
-        ldx     $06A0
-        lda     $0680
+        bne     scroll_update_done      ; only update every 4th frame
+        ldx     $06A0                   ; current scroll section index
+        lda     $0680                   ; column offset within section
         tay
-        cmp     scroll_boundary_table,x
+        cmp     scroll_boundary_table,x ; reached end of this section?
         beq     advance_scroll_section
         clc
-        adc     scroll_increment_table,x
+        adc     scroll_increment_table,x ; compute tile index offset
         tax
-        lda     column_tile_index,x
-        sta     $03B8
-        inc     $47
-        inc     $03B7
-        inc     $0680
+        lda     column_tile_index,x     ; look up tile ID for this column
+        sta     $03B8                   ; store in PPU buffer
+        inc     $47                     ; signal NMI: 1 tile to write
+        inc     $03B7                   ; advance PPU target address
+        inc     $0680                   ; advance column offset
         bne     scroll_update_done
-advance_scroll_section:  lda     $06A0  ; Move to next scroll section
-        and     #$01
+advance_scroll_section:                 ; Move to next scroll section
+        lda     $06A0
+        and     #$01                    ; only advance on even sections
         bne     scroll_update_done
-        inc     $06A0
+        inc     $06A0                   ; next section
         lda     #$00
-        sta     $0680
-        lda     #$25
+        sta     $0680                   ; reset column offset
+        lda     #$25                    ; PPU addr $25CC (nametable 1, row 14)
         sta     $03B6
         lda     #$CC
         sta     $03B7
-scroll_update_done:  rts                ; Return from scroll update
+scroll_update_done:  rts
 
+; --- Initialize metatile data pointer for section ---
         lda     #$8C
-        sta     $DF
+        sta     $DF                     ; metatile data pointer high
         lda     #$95
-        sta     $DE
+        sta     $DE                     ; metatile data pointer low ($DE/$DF)
         rts
 
+; --- Smooth vertical scroll update (sub-pixel accumulator) ---
+; Adds $78 sub-pixels to scroll_y_page ($21) each call, carries into
+; scroll_y ($22). Wraps at $F0 (NES visible scanline limit = 240).
+; When scroll_y crosses an 8-pixel boundary (AND #$07 = 0), triggers
+; a full column of blank tiles ($20 bytes) to clear the incoming row.
         clc
-        lda     $21
-        adc     #$78
+        lda     $21                     ; scroll_y_page (sub-pixel accumulator)
+        adc     #$78                    ; add $78 sub-pixels per frame
         sta     $21
-        lda     $22
-        adc     #$00
-        cmp     #$F0
+        lda     $22                     ; scroll_y (pixel position)
+        adc     #$00                    ; carry from sub-pixel addition
+        cmp     #$F0                    ; wrap at 240 (NES visible height)
         bcc     L8692
         lda     #$00
 L8692:  sta     $22
-        and     #$07
-        bne     check_scroll_boundary
-        sec
+        and     #$07                    ; crossed 8-pixel tile boundary?
+        bne     check_scroll_boundary   ; no: check section-based triggers instead
+        sec                             ; yes: clear an entire row of tiles
         lda     $22
-        sta     $01
-        jsr     calc_nametable_addr
+        sta     $01                     ; Y position for address calculation
+        jsr     calc_nametable_addr     ; compute PPU address for this row
         ldx     #$20
-        stx     $47
+        stx     $47                     ; 32 tiles to write (full row)
         dex
-        lda     #$00
-L86A7:  sta     $03B8,x
+        lda     #$00                    ; fill with blank tile ($00)
+L86A7:  sta     $03B8,x                ; clear PPU buffer
         dex
         bpl     L86A7
         rts
 
-check_scroll_boundary:  ldx     $06A0   ; Check if scroll reached section boundary
+; --- Section-based scroll trigger check ---
+; Each section has a specific scroll_y value that triggers column data
+; transfer from ROM (via $DE/$DF pointer) into the PPU buffer.
+check_scroll_boundary:  ldx     $06A0   ; current section index
+        lda     $22                     ; scroll_y
+        cmp     section_scroll_triggers,x ; at trigger position?
+        bne     column_copy_done        ; no: skip
         lda     $22
-        cmp     section_scroll_triggers,x
-        bne     column_copy_done
-        lda     $22
-        and     #$F8
+        and     #$F8                    ; align to 8-pixel boundary
         sta     $01
-        jsr     calc_nametable_addr
-        lda     section_ppu_buffer_hi,x
+        jsr     calc_nametable_addr     ; compute PPU target address
+        lda     section_ppu_buffer_hi,x ; set PPU buffer high byte
         sta     $03B7
-        lda     section_column_count,x
-        sta     $47
+        lda     section_column_count,x  ; tiles to copy this section
+        sta     $47                     ; → col_update_count for NMI
         ldy     #$00
         ldx     #$00
-copy_column_data:  lda     ($DE),y      ; Copy nametable column data to PPU buffer
-        sta     $03B8,x
+copy_column_data:  lda     ($DE),y      ; read tile from metatile data
+        sta     $03B8,x                 ; store in PPU buffer
         clc
-        lda     $DE
+        lda     $DE                     ; advance source pointer
         adc     #$01
         sta     $DE
         lda     $DF
         adc     #$00
         sta     $DF
         inx
-        cpx     $47
+        cpx     $47                     ; copied all tiles?
         bne     copy_column_data
-        inc     $06A0
+        inc     $06A0                   ; advance to next section
 column_copy_done:  rts
 
-calc_nametable_addr:  lda     #$08      ; Calculate nametable address from scroll position
+; --- Calculate nametable VRAM address from Y scroll position ---
+; Input: $01 = Y position (aligned to 8px). Output: $03B6/$03B7 = PPUADDR.
+; Formula: addr = $0800 | (Y << 2), where high byte accumulates via ROL.
+calc_nametable_addr:  lda     #$08      ; base high byte ($08 → $20xx or $28xx)
         sta     $00
-        lda     $01
+        lda     $01                     ; Y position
+        asl     a                       ; shift left twice: Y * 4
+        rol     $00                     ; carry into high byte
         asl     a
         rol     $00
-        asl     a
-        rol     $00
-        sta     $03B7
+        sta     $03B7                   ; PPU address low byte
         lda     $00
-        sta     $03B6
+        sta     $03B6                   ; PPU address high byte
         rts
 
 
