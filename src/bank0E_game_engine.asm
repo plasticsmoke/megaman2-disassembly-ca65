@@ -7053,11 +7053,15 @@ walker_ai_init:
 wily_final_check_physics:  jsr     apply_entity_physics
         rts
 
-        and     mecha_dragon_store_screen,x
-        .byte   $07
+        .byte   $3D,$3E                 ; unknown padding bytes
+; --- walker_setup_large -- Walker AI entry: large hitbox (7x8), jump to walker_check_state ($BCA9) ---
+walker_setup_large:
+        lda     #$07
         sta     $01
         ldy     #$08
         bne     walker_check_state
+; --- walker_setup_small -- Walker AI entry: small hitbox (3x4), fall through to walker_check_state ($BCB1) ---
+walker_setup_small:
         lda     #$03
         sta     $01
         ldy     #$04
