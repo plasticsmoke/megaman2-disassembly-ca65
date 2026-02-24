@@ -150,6 +150,42 @@ Wily stages share entity spawn banks with Robot Master stages — both stages' e
 
 **Dynamic spawning.** Entities spawn through two paths: static spawns from per-stage entity tables (scanned by `entity_spawn_scan` at $C196), and dynamic child spawns via `spawn_entity_from_parent` ($D162 in the fixed bank). Some bosses self-convert by writing directly to the entity type array rather than spawning a new slot.
 
+**Camera/scrolling system.** The scroll engine spans four banks:
+
+- **Bank $0E** — main scroll logic: boundary checks, incremental scroll handlers, full room transitions, smooth scroll animations
+- **Bank $0F** — NMI VBLANK handler: PPUSCROLL register writes, camera offset subtraction, nametable column/attribute PPU updates
+- **Bank $0D** — stage initialization: sets up scroll pointers, screen boundaries, metatile column rendering
+- **Bank $09** — Wily fortress vertical scroll routines (the only executable code in a data bank)
+
+Horizontal scrolling works at two levels. **Incremental scrolling** runs each frame: when the player passes the viewport midpoint (player_x - scroll_x >= $80), the camera advances by the player's movement delta. A pixel-to-column conversion (`(low_2bits + delta) >> 2`) determines how many metatile columns to decode, since each column is 4 pixels wide in scroll units. The `column_index` counter wraps mod 64 across both nametables. **Full room transitions** occur when scroll reaches a boundary ($14/$15): entities are cleared, the destination nametable is rendered off-screen, a 63-frame smooth scroll animation plays (scroll_x += 4/frame), then pointers advance by $40 (64 bytes = one screen of column data) and `entity_spawn_scan` repopulates enemies.
+
+Vertical transitions use direction-indexed data tables (index 0 = up, index 1 = down) that provide per-frame scroll_y deltas, player Y steps, and a frame counter that runs ~60 frames.
+
+Screen shake is implemented via camera offsets (`camera_x_offset`/`camera_y_offset` at $B8/$B6) subtracted from the scroll position in the NMI handler before writing PPUSCROLL. The nametable select bit is computed as `nametable_select XOR scroll_x_carry` to ensure seamless horizontal scrolling across both nametables.
+
+PPU updates are queued during gameplay and applied during VBLANK: `col_update_count` ($47) triggers vertical tile column writes, and `attr_update_count` ($51) triggers attribute table writes with three modes — normal overwrite, fill (bulk 2×2 metatile region), and read-modify-write (merge with existing attributes to avoid clobbering adjacent palettes).
+
+Key scroll variables (all in zero page):
+
+| Address | Name | Purpose |
+|---------|------|---------|
+| $14/$15 | `scroll_screen_lo/hi` | Left/right nametable boundary indices for current room |
+| $16/$17 | `metatile_ptr_lo/hi` | 16-bit pointer into metatile column data |
+| $18/$19 | `column_ptr_lo/hi` | 16-bit pointer into column tile buffer |
+| $1A | `column_index` | Current tile column counter (wraps mod 64) |
+| $1E | `scroll_subpixel` | Scroll sub-pixel accumulator |
+| $1F | `scroll_x` | Horizontal scroll position (0-255) |
+| $20 | `nametable_select` | Active nametable (bit 0) |
+| $21 | `scroll_y_page` | Scroll Y page / nametable vertical bit |
+| $22 | `scroll_y` | Vertical scroll position (0-239) |
+| $37 | `transition_type` | Room transition request (0=none, bit0=vertical, $03=boss) |
+| $38 | `current_screen` | Current room/screen index within stage |
+| $47 | `col_update_count` | PPU column tile write pending count |
+| $51 | `attr_update_count` | PPU attribute write pending count (bit 7 = fill mode) |
+| $54 | `attr_update_mode` | Attribute merge mode (0=overwrite, nonzero=read-modify-write) |
+| $B6 | `camera_y_offset` | Camera Y offset for screen shake |
+| $B8/$B9 | `camera_x_offset/hi` | Camera X offset for screen shake (16-bit) |
+
 **Skip-byte tricks.** The engine uses intentional instruction overlaps to save bytes. A `LDY #imm` ($A0) or `JMP abs` ($4C) opcode is placed so its operand bytes overlap the next instruction, creating two valid execution paths depending on the entry point. Example in bank $0C: `$A0` (LDY#) eats the next byte ($0A = ASL A opcode), so falling through executes `LDY #$0A` while jumping to the next label executes `ASL A`.
 
 **Password system.** Passwords use a 5x5 grid with exactly 9 dots. The grid encodes two pieces of state:
