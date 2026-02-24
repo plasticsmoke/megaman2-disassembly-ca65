@@ -32,8 +32,10 @@ data_ref_7171           := $7171
 data_ref_ED06           := $ED06
         jmp     hud_update_main
 
-        .byte   $C9,$FC,$D0,$03,$4C,$29,$81
-        cmp     #$FD
+        cmp     #$FC
+        bne     :+
+        jmp     weapon_cmd_fc_handler
+:       cmp     #$FD
         bne     weapon_dispatch_check_fd
         jmp     password_mode_init
 
@@ -109,7 +111,7 @@ chr_ram_tile_copy:  lda     ($E2),y     ; Copy tile data to CHR-RAM shadow at $0
         iny
         cpy     #$02
 chr_ram_tile_copy_end:  bne     chr_ram_tile_copy
-        .byte   $A0
+        .byte   $A0                     ; skip-byte: LDY# eats next byte ($0A=ASL A opcode)
 chr_ram_padding_fill:  asl     a:$A9     ; fill padding bytes in CHR shadow
 chr_ram_padding_byte:  sta     $0500,x
         inx
@@ -197,6 +199,7 @@ weapon_bit_advance_slot:  jsr     display_offset_next_slot
         sta     $E4
         rts
 
+weapon_cmd_fc_handler:
         iny
         sty     $E7
         rts
@@ -933,18 +936,16 @@ sound_stream_new_note:  and     #$07     ; extract note duration bits
 
 sound_stream_dispatch:  jsr     sound_dispatch_table
         .byte   $D3,$85,$DB,$85,$E5,$85,$F5,$85
-        .byte   $0F
-        stx     $40
-        stx     $56
-        stx     $20
-        ldy     #$86
+        .byte   $0F,$86,$40,$86,$56,$86
+        jsr     sound_data_read_byte    ; handler 0: set instrument type
         sta     $F2
         jmp     sound_stream_fetch
 
-        .byte   $20,$A0,$86,$A0,$10,$91
-        cpx     snd_data_924C
-        sta     $20
-        ldy     #$86
+        jsr     sound_data_read_byte    ; handler 1: set channel output reg
+        ldy     #$10
+        sta     ($EC),y
+        jmp     sound_stream_fetch
+        jsr     sound_data_read_byte    ; handler 2: set duty/volume
         sta     zp_F4
         ldy     #$13
         lda     ($EC),y
@@ -965,9 +966,13 @@ sound_cmd_store_param:  ldy     #$13
         sta     ($EC),y
         jmp     sound_stream_fetch
 
-        .byte   $20,$A0,$86,$8A,$F0,$06,$E4,$F3
-        .byte   $F0,$13,$E6,$F3
-        jsr     sound_data_read_byte
+        jsr     sound_data_read_byte    ; handler 4: set stream pointer
+        txa
+        beq     :+
+        cpx     $F3
+        beq     sound_stream_skip_update
+        inc     $F3
+:       jsr     sound_data_read_byte
         sta     zp_F4
         jsr     sound_data_read_byte
         sta     $F1
@@ -975,6 +980,7 @@ sound_cmd_store_param:  ldy     #$13
         sta     $F0
         jmp     sound_stream_fetch
 
+sound_stream_skip_update:
         lda     #$00
         sta     $F3
         lda     #$02
@@ -986,7 +992,8 @@ sound_cmd_store_param:  ldy     #$13
         sta     $F1
         jmp     sound_stream_fetch
 
-        .byte   $A9,$14,$85,$F4
+        lda     #$14
+        sta     zp_F4
 sound_cmd_load_regs:  jsr     sound_data_read_byte
         ldy     zp_F4
         sta     ($EC),y
@@ -996,12 +1003,29 @@ sound_cmd_load_regs:  jsr     sound_data_read_byte
         bne     sound_cmd_load_regs
         jmp     sound_stream_fetch
 
-        .byte   $A5,$F0,$38,$E9,$01,$85,$F0,$A5
-        .byte   $F1,$E9,$00,$85,$F1,$A5,$E0,$29
-        .byte   $0F,$85,$E0,$A9,$00,$85,$E1,$A5
-        .byte   $EF,$29,$FE,$85,$EF,$A0,$0A,$B1
-        .byte   $EC,$C8,$11,$EC,$D0,$13,$A6,$EB
-        .byte   $E8,$E8
+        lda     $F0
+        sec
+        sbc     #$01
+        sta     $F0
+        lda     $F1
+        sbc     #$00
+        sta     $F1
+        lda     $E0
+        and     #$0F
+        sta     $E0
+        lda     #$00
+        sta     $E1
+        lda     $EF
+        and     #$FE
+        sta     $EF
+        ldy     #$0A
+        lda     ($EC),y
+        iny
+        ora     ($EC),y
+        bne     sound_cmd_load_instrument
+        ldx     $EB
+        inx
+        inx
         ldy     $EE
         jsr     apu_sound_control
         ldy     #$00
@@ -1214,14 +1238,26 @@ sound_pattern_set_loop:  lda     #$80
 ; sound_cmd_dispatch — Sound Command Dispatch — execute pattern sub-commands via jump table ($87C0)
 ; =============================================================================
 sound_cmd_dispatch:  jsr     sound_dispatch_table
-        .byte   $D7,$87,$E1,$87,$EB,$87,$FB,$87
+        .byte   $D7,$87,$E1,$87,$EB,$87,$FB,$87  ; 10-entry dispatch table
         .byte   $15,$88,$5D,$88,$7A,$88,$8D,$88
-        .byte   $C7,$88,$17,$89,$20,$35,$89,$A0
-        .byte   $04,$91,$EC,$4C,$06,$87,$20,$35
-        .byte   $89,$A0,$09,$91,$EC,$4C,$06,$87
-        .byte   $20,$35,$89,$85,$F4,$A0,$0C,$B1
-        .byte   $EC,$29,$3F,$05,$F4,$4C,$0E,$88
-        .byte   $20,$35,$89,$A0,$02
+        .byte   $C7,$88,$17,$89
+        jsr     sound_stream_read_next  ; cmd 0: set envelope rate
+        ldy     #$04
+        sta     ($EC),y
+        jmp     sound_pattern_fetch
+        jsr     sound_stream_read_next  ; cmd 1: set noise period
+        ldy     #$09
+        sta     ($EC),y
+        jmp     sound_pattern_fetch
+        jsr     sound_stream_read_next  ; cmd 2: set duty cycle
+        sta     zp_F4
+        ldy     #$0C
+        lda     ($EC),y
+        and     #$3F
+        ora     zp_F4
+        jmp     sound_cmd_store_duty
+        jsr     sound_stream_read_next  ; cmd 3: set envelope type
+        ldy     #$02
         cpy     $EE
         beq     sound_cmd_store_duty
         sta     zp_F4
@@ -1233,8 +1269,11 @@ sound_cmd_store_duty:  ldy     #$0C
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
-        .byte   $20,$35,$89,$8A,$F0,$16,$A0,$05
-        .byte   $B1,$EC
+        jsr     sound_stream_read_next
+        txa
+        beq     sound_cmd_read_note_data
+        ldy     #$05
+        lda     ($EC),y
         and     #$7F
         sta     zp_F4
         cpx     zp_F4
@@ -1244,6 +1283,7 @@ sound_cmd_store_duty:  ldy     #$0C
         and     #$80
         ora     zp_F4
         sta     ($EC),y
+sound_cmd_read_note_data:
         jsr     sound_stream_read_next
         pha
         jsr     sound_stream_read_next
@@ -1269,7 +1309,7 @@ sound_cmd_skip_note:  lda     ($EC),y
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
-        .byte   $20,$35,$89
+        jsr     sound_stream_read_next
         ldx     #$85
         ldy     #$89
         stx     zp_F4
@@ -1285,12 +1325,15 @@ sound_cmd_skip_note:  lda     ($EC),y
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
-        .byte   $20,$35,$89,$2A,$2A,$2A
+        jsr     sound_stream_read_next
+        rol     a
+        rol     a
+        rol     a
 sound_cmd_set_detune:  rol     a
         and     #$07
         tay
-        .byte   $B9
-sound_cmd_detune_table_ref:  adc     $2089,x
+        .byte   $B9                     ; code/data overlap: LDA $897D,Y / JSR $8954 / JMP $8734
+sound_cmd_detune_table_ref:  adc     $2089,x ; (assembled bytes reinterpreted as LDA detune_table,Y)
         .byte   $54
         .byte   $89
 sound_cmd_jump_pattern:  .byte   $4C
@@ -1327,8 +1370,7 @@ sound_portamento_store:  sta     zp_F4
         sta     ($EC),y
         rts
 
-        .byte   $20
-        and     $89,x
+        jsr     sound_stream_read_next  ; cmd 9: set sweep
         sta     zp_F4
         ldy     #$06
         lda     ($EC),y
@@ -1376,10 +1418,19 @@ sound_instrument_next:  lda     #$01
         sta     $F5
         jmp     sound_instrument_byte
 
-        .byte   $A0,$00,$A9,$00,$91,$EC,$C8,$91
-        .byte   $EC,$A5,$E0,$29,$F0,$85,$E0,$A5
-        .byte   $EF,$4A,$90,$01,$60
-        ldx     $EB
+        ldy     #$00
+        lda     #$00
+        sta     ($EC),y
+        iny
+        sta     ($EC),y
+        lda     $E0
+        and     #$F0
+        sta     $E0
+        lda     $EF
+        lsr     a
+        bcc     :+
+        rts
+:       ldx     $EB
         inx
         inx
         ldy     $EE
@@ -1440,32 +1491,32 @@ sound_freq_mult_dec:  dey
 weapon_shift_table_1:  .byte   $00,$00,$02,$04,$08,$10,$20,$40
 weapon_shift_table_2:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
         .byte   $00,$00,$00,$00
-        brk
-        brk
+        .byte   $00
+        .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$F2,$07,$D6,$07
         .byte   $14,$07,$AE,$06,$4E
-        asl     $F3
-        ora     $94
-        ora     $4D
-        ora     $01
-        ora     $BB
+        .byte   $06,$F3
+        .byte   $05,$94
+        .byte   $05,$4D
+        .byte   $05,$01
+        .byte   $05,$BB
         .byte   $04,$75,$04,$36,$04,$F9,$03,$BF
         .byte   $03,$8A,$03,$57,$03,$27,$03,$FA
         .byte   $02,$CF,$02,$A7,$02,$81,$02,$5D
         .byte   $02,$3B,$02,$1A,$02,$FC,$01
-        cpx     #$01
-        cmp     $01
+        .byte   $E0,$01
+        .byte   $C5,$01
         .byte   $AB,$01,$93,$01,$7D,$01,$67,$01
         .byte   $53,$01,$40,$01,$2E,$01,$1D,$01
         .byte   $0D
-        ora     ($FE,x)
-        brk
+        .byte   $01,$FE
+        .byte   $00
         .byte   $F0,$00,$E2,$00
-        cmp     $00,x
-        cmp     #$00
-        ldx     snd_data_B300,y
-        brk
+        .byte   $D5,$00
+        .byte   $C9,$00
+        .byte   $BE,$00,$B3
+        .byte   $00
         .byte   $A9,$00,$A0,$00,$97,$00,$8E,$00
         .byte   $86,$00,$7F,$00,$78,$00,$71,$00
         .byte   $6A,$00,$64,$00,$5F,$00,$59,$00
@@ -1500,16 +1551,16 @@ weapon_data_unused_2:  .byte   $57,$B3
 weapon_data_unused_3:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
         .byte   $5B,$BB,$8E,$BB,$B6,$BB,$C8,$BB
         .byte   $D5,$BB,$03,$BC
-        and     $4CBC
-        ldy     snd_data_BC62,x
+        .byte   $2D,$BC,$4C
+        .byte   $BC,$62,$BC
         .byte   $9B,$BC,$B5,$BC,$F1,$BC,$00,$BD
         .byte   $25,$BD,$3D,$BD,$5D,$BD,$78,$BD
         .byte   $8F,$BD,$98,$BD,$B7,$BD,$CC,$BD
         .byte   $E1,$BD,$F6,$BD,$15,$BE,$35
-        ldx     snd_data_BE88,y
-        ldy     $BE
-        ldy     $F3BE,x
-        ldx     snd_data_BF2A,y
+        .byte   $BE,$88,$BE
+        .byte   $A4,$BE
+        .byte   $BC,$BE,$F3
+        .byte   $BE,$2A,$BF
         .byte   $3B,$BF,$48,$BF,$8F,$BF,$0F,$E1
         .byte   $8A,$F1,$8B,$A9,$8C,$83,$8D,$15
         .byte   $8E,$00,$06,$03,$3D,$07,$86,$10
@@ -1532,25 +1583,25 @@ weapon_data_unused_3:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
         .byte   $87,$80,$87,$85,$83,$21,$85,$C5
         .byte   $80,$85,$88,$8A,$80,$85,$8C,$8A
         .byte   $AC,$8A,$88,$8A,$8C,$80,$21,$A5
-        php
-        ora     ($A5,x)
-        php
-        brk
-        dey
+        .byte   $08
+        .byte   $01,$A5
+        .byte   $08
+        .byte   $00
+        .byte   $88
         .byte   $87,$80,$87,$80
-        dey
-        txa
+        .byte   $88
+        .byte   $8A
         .byte   $87,$21,$85,$21,$A5,$08,$01,$A5
         .byte   $08,$00,$80,$85,$88,$8C,$02,$C0
         .byte   $07,$A2,$10,$21,$CF,$08,$01,$CF
         .byte   $08,$00,$21,$AE,$08,$01,$AE
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $21,$AD
-        php
-        ora     ($AD,x)
-        php
-        brk
+        .byte   $08
+        .byte   $01,$AD
+        .byte   $08
+        .byte   $00
         .byte   $02,$80,$88,$06,$A5,$80,$85,$88
         .byte   $8A,$8B,$8C,$8B,$8C,$8A,$88,$85
         .byte   $83,$02,$C0,$21,$CF,$08,$01,$CF
@@ -1558,25 +1609,25 @@ weapon_data_unused_3:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
         .byte   $00,$21,$AD,$08,$01,$AD,$08,$00
         .byte   $02,$80,$88,$06,$A5,$80,$85,$88
         .byte   $8A,$91,$8C,$8C,$8C,$90,$93
-        stx     $98,y
+        .byte   $96,$98
         .byte   $04,$00,$4D,$8B,$00,$06,$02,$00
         .byte   $05,$17,$07,$E0,$10,$03,$38,$80
         .byte   $A5,$68
-        rts
+        .byte   $60
 
-        jmp     (data_ref_0660)
+        .byte   $6C,$60,$06
 
         .byte   $8F,$06,$8E
-        txa
-        asl     $8D
-        asl     $8C
-        dey
-        ror     a
-        rts
+        .byte   $8A
+        .byte   $06,$8D
+        .byte   $06,$8C
+        .byte   $88
+        .byte   $6A
+        .byte   $60
 
         .byte   $68,$60
-        adc     $63
-        rts
+        .byte   $65,$63
+        .byte   $60
 
         .byte   $65,$6F,$6F,$6F,$71,$80,$6F,$6F
         .byte   $6F,$71,$A0,$80,$6F,$6F,$6F,$71
@@ -1591,40 +1642,40 @@ weapon_data_unused_3:  .byte   $57,$B3,$57,$B3,$57,$B3,$22,$BB
         .byte   $68,$60,$68,$6A,$68,$67,$68,$60
         .byte   $67,$60,$67,$68,$67,$63,$65,$60
         .byte   $65,$60,$63
-snd_data_8C76:  sta     $63
-        adc     $60
-        adc     $60
+snd_data_8C76:  .byte   $85,$63
+        .byte   $65,$60
+        .byte   $65,$60
         .byte   $63,$85,$04,$03
-snd_data_8C80:  lsr     $028C,x
-        cpy     #$03
+snd_data_8C80:  .byte   $5E,$8C,$02
+        .byte   $C0,$03
         .byte   $3A,$07,$A2
-        bpl     snd_data_8C76
+        .byte   $10,$EC
 snd_data_8C8A:  .byte   $CB,$CA,$07
 snd_data_8C8D:  .byte   $86
 snd_data_8C8E:  .byte   $10,$02
-        brk
+        .byte   $00
         .byte   $80
-        dey
-        txa
-        dey
-        sty     chr_ram_padding_fill
-        dey
-        txa
-        dey
-        sty     chr_ram_padding_fill
-        dey
+        .byte   $88
+        .byte   $8A
+        .byte   $88
+        .byte   $8C,$88,$80
+        .byte   $88
+        .byte   $8A
+        .byte   $88
+        .byte   $8C,$88,$80
+        .byte   $88
         .byte   $87,$88,$04,$01,$82,$8C,$04,$00
         .byte   $5C
-        sty     $0600
+        .byte   $8C,$00,$06
         .byte   $03,$25,$05,$23,$03,$30
-        lda     $68
-        rts
+        .byte   $A5,$68
+        .byte   $60
 
         .byte   $6C,$60,$06,$8F,$06,$8E,$8A,$06
         .byte   $8D,$06,$8C,$88,$6A,$60,$68,$60
         .byte   $65,$63,$60,$85,$60,$85,$65,$60
-        sta     $65
-        rts
+        .byte   $85,$65
+        .byte   $60
 
         .byte   $85,$65,$60,$85,$65,$60,$85,$67
         .byte   $60,$87,$68,$60,$6C,$60,$A3,$04
@@ -1633,25 +1684,25 @@ snd_data_8C8E:  .byte   $10,$02
         .byte   $8C,$88,$6A,$60,$68,$60,$65,$63
         .byte   $60,$85,$60,$85,$65,$60,$85,$65
         .byte   $60
-        sta     $65
-        rts
+        .byte   $85,$65
+        .byte   $60
 
-        sta     $63
+        .byte   $85,$63
         .byte   $63
 snd_data_8D06:  .byte   $60,$63,$60,$63,$60,$63,$65,$01
-snd_data_8D0E:  bpl     snd_data_8D88
-        sei
+snd_data_8D0E:  .byte   $10,$78
+        .byte   $78
         .byte   $67,$66,$65,$64,$63,$05,$23,$03
         .byte   $30,$01,$00
-        sta     $85
+        .byte   $85,$85
         .byte   $80,$85,$65
-        pla
-        rts
+        .byte   $68
+        .byte   $60
 
         .byte   $6C,$60,$68,$85,$85,$85,$80,$85
         .byte   $65,$68,$60,$6C,$60
-        pla
-        sta     $83
+        .byte   $68
+        .byte   $85,$83
         .byte   $83,$80,$83,$63,$67,$60,$6A,$60
         .byte   $67,$83,$85,$85,$80,$85,$65,$68
         .byte   $60,$6C,$60,$68,$85,$04,$01,$16
@@ -1660,36 +1711,36 @@ snd_data_8D0E:  bpl     snd_data_8D88
         .byte   $88,$67,$60,$87,$67,$60,$87,$66
         .byte   $60,$86,$66,$60,$86,$80,$85,$87
         .byte   $85,$88
-snd_data_8D6D:  sta     $80
-        sta     $01
-        bpl     snd_data_8D0E
+snd_data_8D6D:  .byte   $85,$80
+        .byte   $85,$01
+        .byte   $10,$9B
         .byte   $9B,$8B,$8B,$7D,$7D,$8B,$8A,$8A
         .byte   $04,$01,$4C,$8D,$04
 snd_data_8D80:  .byte   $00,$16,$8D,$00,$06,$07,$84,$A0
 snd_data_8D88:  .byte   $03,$3F
-        ora     ($05,x)
+        .byte   $01,$05
 snd_data_8D8C:  .byte   $66
-snd_data_8D8D:  ora     ($00,x)
+snd_data_8D8D:  .byte   $01,$00
         .byte   $07,$82,$60,$03
-        rol     $64,x
+        .byte   $36,$64
         .byte   $64,$64,$04,$3B,$85,$8D,$07,$81
-        bpl     snd_data_8DA2
-        and     $1201,y
-snd_data_8DA2:  ror     $66
-        rts
+        .byte   $10,$03
+        .byte   $39,$01,$12
+snd_data_8DA2:  .byte   $66,$66
+        .byte   $60
 
         .byte   $66,$60,$66,$60,$66,$63,$63,$64
         .byte   $64,$65
 snd_data_8DAF:  .byte   $65
 snd_data_8DB0:  .byte   $66
-snd_data_8DB1:  ror     $03
-        rol     $1001,x
+snd_data_8DB1:  .byte   $66,$03
+        .byte   $3E,$01,$10
         .byte   $07,$82,$A0,$A4,$07,$84,$60
 snd_data_8DBD:  .byte   $06,$8D,$07,$82,$A0,$64,$64,$64
         .byte   $84,$07,$84,$60,$AD,$04,$07,$B2
-        sta     display_offset_next_slot
-        ldy     #$84
-        sty     $04
+        .byte   $8D,$07,$82
+        .byte   $A0,$84
+        .byte   $84,$04
         .byte   $02,$CE,$8D,$07,$84,$60,$AD,$07
         .byte   $82,$A0,$64,$60,$84,$07,$84,$60
         .byte   $AD,$04,$05,$DB,$8D,$07,$82,$A0
@@ -1701,9 +1752,9 @@ snd_data_8DBD:  .byte   $06,$8D,$07,$82,$A0,$64,$64,$64
         .byte   $8D,$00,$00,$80,$00,$02,$62,$80
         .byte   $00,$0F,$28,$8E,$E8,$8E,$9D,$8F
         .byte   $79,$90,$C0,$90
-        brk
-        ora     $03
-        and     $1905,x
+        .byte   $00
+        .byte   $05,$03
+        .byte   $3D,$05,$19
         .byte   $02,$80
 snd_data_8E30:  .byte   $07,$84,$70,$01,$30,$AB,$AB,$8B
         .byte   $8D,$AB,$8B,$8B,$80,$AB,$8B,$AB
@@ -1715,19 +1766,19 @@ snd_data_8E30:  .byte   $07,$84,$70,$01,$30,$AB,$AB,$8B
         .byte   $07,$90,$10,$A8,$08,$01,$A8,$08
         .byte   $00,$88,$87,$80,$88,$80,$85,$80
         .byte   $85,$88,$80
-        ldy     snd_data_AA21
-        php
-        ora     ($AA,x)
-        php
-        brk
+        .byte   $AC,$21,$AA
+        .byte   $08
+        .byte   $01,$AA
+        .byte   $08
+        .byte   $00
         .byte   $AA,$88,$8C,$80,$CA
-        txa
-        dey
-        asl     $CA
+        .byte   $8A
+        .byte   $88
+        .byte   $06,$CA
         .byte   $80,$8A
-        asl     $AC
-        tax
-        tay
+        .byte   $06,$AC
+        .byte   $AA
+        .byte   $A8
         .byte   $A7,$87,$88,$87,$C5,$8A,$80,$8A
         .byte   $A0,$8A,$80,$8A,$21,$88,$04,$01
         .byte   $68,$8E,$21,$A8,$08,$01,$A8,$08
@@ -1735,8 +1786,8 @@ snd_data_8E30:  .byte   $07,$84,$70,$01,$30,$AB,$AB,$8B
         .byte   $85,$88,$80,$AC,$06,$CA,$80,$88
         .byte   $A3,$A5,$A7,$AA,$21,$AB,$08,$01
         .byte   $AB
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $8B,$8A,$80,$8B,$80,$8B,$8B,$80
         .byte   $A8,$AB,$7D,$7C,$7B,$7A,$79,$78
         .byte   $77,$76,$75,$74,$73,$72,$71,$70
@@ -1762,39 +1813,39 @@ snd_data_8F46:  .byte   $80,$93,$A0,$93,$80,$93,$04,$01
         .byte   $A3,$A5,$A7,$AA,$CB,$8B,$8A,$80
         .byte   $8B,$80,$8B,$8B,$80,$A8,$8B,$08
         .byte   $00,$07
-snd_data_8F80:  dey
-        bpl     snd_data_8F86
+snd_data_8F80:  .byte   $88
+        .byte   $10,$03
         .byte   $3A,$73,$72
-snd_data_8F86:  adc     ($70),y
+snd_data_8F86:  .byte   $71,$70
         .byte   $6F,$6E,$6D,$6C
 snd_data_8F8C:  .byte   $6B
-snd_data_8F8D:  ror     a
-        adc     #$68
+snd_data_8F8D:  .byte   $6A
+        .byte   $69,$68
         .byte   $67
-        ror     $87
+        .byte   $66,$87
         .byte   $80,$87,$A0,$87,$80,$87,$04,$00
         .byte   $19,$8F
-        brk
-        ora     $03
-        ora     $05,x
-        and     ($01),y
-        bpl     snd_data_8F46
+        .byte   $00
+        .byte   $05,$03
+        .byte   $15,$05
+        .byte   $31,$01
+        .byte   $10,$A0
         .byte   $A7
         .byte   $04,$05,$A5,$8F,$91
-        adc     ($71),y
-        stx     snd_data_8C8E
-        sty     weapon_data_unused_2
-        ora     ($00,x)
-        ora     $25
-        adc     ($70),y
+        .byte   $71,$71
+        .byte   $8E,$8E,$8C
+        .byte   $8C,$8A,$8A
+        .byte   $01,$00
+        .byte   $05,$25
+        .byte   $71,$70
         .byte   $6F,$6E,$6D,$6C,$6B,$6A,$69,$68
         .byte   $67,$66,$65,$64,$83,$80,$83,$80
         .byte   $01,$10,$7D,$7D,$9D
-        sta     $019D,x
-        brk
-        and     ($85,x)
-        sta     $65
-        adc     $04
+        .byte   $9D,$9D,$01
+        .byte   $00
+        .byte   $21,$85
+        .byte   $85,$65
+        .byte   $65,$04
         .byte   $07,$D5,$8F,$86,$66,$66,$04,$06
         .byte   $DC,$8F,$86,$21,$83,$83,$63,$63
         .byte   $04,$02,$E6,$8F,$83,$21,$84,$84
@@ -1802,16 +1853,16 @@ snd_data_8F8D:  ror     a
         .byte   $87,$85,$88,$85,$80,$83,$80,$83
         .byte   $80,$63,$63,$83,$80
 snd_data_9006:  .byte   $83
-        and     ($85,x)
-        sta     $65
-        adc     $04
+        .byte   $21,$85
+        .byte   $85,$65
+        .byte   $65,$04
         .byte   $07,$09,$90,$86,$66,$66,$04,$06
         .byte   $10,$90
-        stx     $21
+        .byte   $86,$21
         .byte   $83,$83,$63,$63,$04,$02,$1A,$90
         .byte   $83,$21,$84,$84,$64,$64,$04,$03
         .byte   $24,$90,$80,$85,$87,$85,$88
-snd_data_9030:  sta     $80
+snd_data_9030:  .byte   $85,$80
         .byte   $83,$80,$83,$80,$63,$63,$83,$80
         .byte   $83,$21,$81,$81,$61,$61,$81,$81
         .byte   $04,$03,$3D,$90,$83,$63,$63,$83
@@ -1819,25 +1870,25 @@ snd_data_9030:  sta     $80
         .byte   $84,$84,$04,$03,$4F,$90,$65,$65
         .byte   $65,$60,$65,$60,$65,$65,$60,$65
         .byte   $65,$60,$65
-        adc     $84
+        .byte   $65,$84
         .byte   $80,$84,$80,$01,$10,$7D,$7D,$9D
         .byte   $9D,$9D,$01,$00,$21,$85,$04,$00
         .byte   $D5,$8F,$00,$05,$01,$10,$07,$83
         .byte   $60,$03,$3D,$A0
 snd_data_9083:  .byte   $AC,$04,$07,$82,$90,$07,$83,$60
         .byte   $01
-        sbc     $0465,x
+        .byte   $FD,$65,$04
         .byte   $03
-        sta     $6890
+        .byte   $8D,$90,$68
         .byte   $04,$03,$92,$90,$6A,$6A,$6A,$6C
         .byte   $6C,$6C,$01,$10,$8C,$80,$8C,$A0
         .byte   $8C,$80,$8C,$8C,$01,$10,$07,$82
         .byte   $A0,$84,$64,$64,$07,$84,$60,$8A
         .byte   $07,$82,$A0,$64,$64,$04,$2B,$A9
         .byte   $90,$04,$00
-        dey
-        bcc     snd_data_90C1
-snd_data_90C1:  brk
+        .byte   $88
+        .byte   $90,$00
+snd_data_90C1:  .byte   $00
         .byte   $80,$00,$02,$41,$80,$00,$0F,$D3
         .byte   $90,$70,$92,$91,$93,$30,$94,$7F
         .byte   $94,$00,$06,$03,$3C,$07,$8A,$10
@@ -1846,30 +1897,30 @@ snd_data_90C1:  brk
         .byte   $85,$A6,$87,$88,$88,$A0,$85,$A6
         .byte   $87,$60,$68,$60,$68,$68,$60,$88
         .byte   $85
-        stx     $05
+        .byte   $86,$05
         .byte   $23,$74,$60
-        ldy     $05,x
+        .byte   $B4,$05
         .byte   $17
-        dey
-        ldy     #$85
-        ldx     $87
-        rts
+        .byte   $88
+        .byte   $A0,$85
+        .byte   $A6,$87
+        .byte   $60
 
         .byte   $68,$60,$68,$68,$60
-        dey
-        sta     $05
+        .byte   $88
+        .byte   $85,$05
         .byte   $23,$74,$74,$60,$74,$76,$77
-        ror     $74,x
-        ora     $17
-        dey
-        ldy     #$85
-        ldx     $A7
-        ora     $23
+        .byte   $76,$74
+        .byte   $05,$17
+        .byte   $88
+        .byte   $A0,$85
+        .byte   $A6,$A7
+        .byte   $05,$23
         .byte   $74,$60,$04,$04,$21,$91,$60,$74
         .byte   $76,$77,$76,$74,$07
-        dey
-        bpl     snd_data_91A2
-        ldy     #$60
+        .byte   $88
+        .byte   $10,$6F
+        .byte   $A0,$60
         .byte   $6F,$60,$B2,$91,$60,$6F,$60,$6F
         .byte   $6F,$60,$6F,$60,$6F,$60,$B2,$91
         .byte   $90,$6F,$A0,$60,$6F,$60,$B2,$91
@@ -1878,42 +1929,42 @@ snd_data_90C1:  brk
         .byte   $2F,$91,$07,$90,$10,$03,$3D,$02
         .byte   $80,$8C,$80,$8C,$60,$6C,$6C,$60
         .byte   $6C,$60,$6C,$6A,$68
-        asl     $8A
-        tay
-        ldy     #$88
-        txa
-        dey
-        sty     snd_data_8C80
-        rts
+        .byte   $06,$8A
+        .byte   $A8
+        .byte   $A0,$88
+        .byte   $8A
+        .byte   $88
+        .byte   $8C,$80,$8C
+        .byte   $60
 
         .byte   $6C,$8D,$8C,$80,$22,$AF,$08,$01
         .byte   $AF,$01,$06
 snd_data_9188:  .byte   $AF,$01,$00,$08,$00,$74,$60
-snd_data_918F:  ldy     $8F,x
+snd_data_918F:  .byte   $B4,$8F
         .byte   $80,$8F,$60,$6F,$6F,$60,$6F,$60
         .byte   $6F,$6D,$6C,$06,$8D,$AC,$A0
         .byte   $8C
         .byte   $8D
-snd_data_91A2:  sty     chr_ram_padding_loop
+snd_data_91A2:  .byte   $8C,$8F,$80
         .byte   $8F,$60,$6F,$91,$8F,$80,$22,$B2
         .byte   $08,$01,$B2,$01,$06,$B2,$01,$00
         .byte   $08,$00,$74,$60,$B4,$94,$80,$94
         .byte   $60,$74,$74,$60,$74,$60,$74,$71
         .byte   $6F,$06,$91,$AF,$A0,$8F,$91,$8F
         .byte   $94,$80,$94,$60,$74,$96
-        sty     $80,x
-        and     ($B7,x)
+        .byte   $94,$80
+        .byte   $21,$B7
         .byte   $B7
-        ora     ($06,x)
+        .byte   $01,$06
         .byte   $B7,$01,$00,$08,$00,$74,$60,$B4
         .byte   $05,$2F,$8C,$80,$8C,$60,$6C,$6C
         .byte   $60,$6C,$60,$6C,$6A,$68,$06,$8A
         .byte   $A8,$A0
-        dey
-        txa
-        dey
-        sty     snd_data_8C80
-        rts
+        .byte   $88
+        .byte   $8A
+        .byte   $88
+        .byte   $8C,$80,$8C
+        .byte   $60
 
         .byte   $6C,$8D,$8C,$80,$22,$AF,$08,$01
         .byte   $8F,$AF,$08,$00,$68,$6C,$6F,$74
@@ -1932,14 +1983,14 @@ snd_data_924C:  .byte   $01,$AF,$08,$00,$6D,$60,$6D,$60
         .byte   $60,$74,$74,$60,$78,$78,$C0,$04
         .byte   $00,$2F,$91,$09,$00,$06,$07,$8A
         .byte   $10,$02,$40,$03
-        rol     $05,x
+        .byte   $36,$05
         .byte   $17,$60,$88,$A0,$85,$A6,$87,$60
         .byte   $68,$60,$68,$68,$60,$88,$85,$A6
         .byte   $87,$88,$88,$A0,$85,$A6,$87,$60
         .byte   $68,$60
-        pla
-        pla
-        rts
+        .byte   $68
+        .byte   $68
+        .byte   $60
 
         .byte   $88,$85,$66,$7B,$60,$BB,$60,$88
         .byte   $A0,$85,$A6,$87,$60,$68,$60,$68
@@ -1969,19 +2020,19 @@ snd_data_924C:  .byte   $01,$AF,$08,$00,$6D,$60,$6D,$60
         .byte   $80,$6F,$60,$AF,$04,$01,$3A,$93
         .byte   $AD,$8D,$60,$6D,$8D,$AA,$8D,$21
         .byte   $AC,$AC,$6A,$60
-        ror     a
-        rts
+        .byte   $6A
+        .byte   $60
 
         .byte   $6A,$8C,$6C,$04,$02,$67,$93,$AD
         .byte   $8D,$60,$6D
-        sta     snd_data_8DB1
-        jmp     (data_ref_606C)
+        .byte   $8D,$B1,$8D
+        .byte   $6C,$6C,$60
 
         .byte   $6F,$6F,$60,$74,$74,$C0,$04,$00
-        cpy     $0992
-        brk
-        asl     $03
-        and     $05
+        .byte   $CC,$92,$09
+        .byte   $00
+        .byte   $06,$03
+        .byte   $25,$05
         .byte   $23,$88,$80,$01,$10,$94,$01,$00
         .byte   $85,$A6,$87,$60,$68,$60,$68,$68
         .byte   $01,$10,$74,$94,$01,$00,$85,$86
@@ -1989,24 +2040,24 @@ snd_data_924C:  .byte   $01,$AF,$08,$00,$6D,$60,$6D,$60
         .byte   $80,$01,$10,$94,$01,$00,$85,$A6
         .byte   $87,$88,$88,$88,$88,$88,$68,$01
         .byte   $10,$7D,$7D,$7D,$7A,$7A,$78,$78
-        ora     ($00,x)
-        dey
+        .byte   $01,$00
+        .byte   $88
         .byte   $80,$01,$10,$94
-        ora     ($00,x)
-        sta     $A6
+        .byte   $01,$00
+        .byte   $85,$A6
         .byte   $87,$60
-        pla
-        rts
+        .byte   $68
+        .byte   $60
 
         .byte   $68,$68,$01,$10,$74,$94,$01,$00
         .byte   $85,$86,$92,$87,$93,$04,$0F,$CE
         .byte   $93,$06,$86,$06,$8A,$8D,$60,$71
         .byte   $6D,$6A,$6D,$6A,$66,$65,$06,$88
         .byte   $06,$8C,$8F
-        ror     $60
-        ror     $60
-        ror     $88
-        pla
+        .byte   $66,$60
+        .byte   $66,$60
+        .byte   $66,$88
+        .byte   $68
         .byte   $04,$02,$EE,$93,$06,$86,$06,$8A
         .byte   $8D,$60,$71,$6D,$6A,$6D,$6A,$66
         .byte   $65,$68,$68,$60,$6C,$6C,$60,$6F
@@ -2025,16 +2076,16 @@ snd_data_9468:  .byte   $65,$04,$02,$5D,$94,$A0,$A5,$A0
         .byte   $65,$A0,$A5,$04,$00,$48,$94,$00
         .byte   $00,$80,$00,$01,$62,$80,$00,$0F
         .byte   $92,$94,$64,$95,$1C,$96,$71
-        stx     $98,y
-        stx     $00,y
-        asl     zp_temp_02
-        brk
+        .byte   $96,$98
+        .byte   $96,$00
+        .byte   $06,$02
+        .byte   $00
         .byte   $03,$38
-snd_data_9498:  ora     $15
+snd_data_9498:  .byte   $05,$15
         .byte   $07
-        sty     $60
-        adc     $65
-        adc     ($65),y
+        .byte   $84,$60
+        .byte   $65,$65
+        .byte   $71,$65
         .byte   $6F,$70,$65,$71,$65,$6C,$65,$6B
         .byte   $65,$6A,$69,$68,$65,$65,$6F,$65
         .byte   $6D,$6E,$65,$6F,$65,$6A,$65,$69
@@ -2042,7 +2093,7 @@ snd_data_9498:  ora     $15
         .byte   $65,$65,$71,$65,$6F,$70,$65,$71
         .byte   $65,$6C,$65,$6B,$65,$6A,$69,$68
         .byte   $6F,$6F,$60
-        jmp     (data_ref_7171)
+        .byte   $6C,$71,$71
 
         .byte   $60,$6C,$6C,$6F,$6C,$71,$A0,$03
         .byte   $3A,$07,$02,$A0,$05,$21,$02,$40
@@ -2051,19 +2102,19 @@ snd_data_9498:  ora     $15
         .byte   $6C,$60,$6A,$67,$60,$88,$02,$80
         .byte   $65,$68,$6C,$71,$60,$6C,$60,$6A
         .byte   $6C,$60
-        ror     a
-        rts
+        .byte   $6A
+        .byte   $60
 
         .byte   $63,$65,$67,$71,$60,$71,$73,$74
         .byte   $78,$60,$71,$60,$6C,$6F,$71,$74
         .byte   $73,$71,$6F,$02,$40,$21,$AC,$AC
         .byte   $6C,$60,$6C,$60,$6C,$6A,$68,$21
         .byte   $AA,$AA
-        ror     a
-        ror     a
-        rts
+        .byte   $6A
+        .byte   $6A
+        .byte   $60
 
-        jmp     (data_ref_6A60)
+        .byte   $6C,$60,$6A
 
         .byte   $67,$60,$88,$02,$80,$65,$68,$6C
         .byte   $71,$60,$6C,$60,$6A,$6C,$60,$6A
@@ -2098,74 +2149,74 @@ snd_data_9498:  ora     $15
         .byte   $65,$71,$65,$6F,$70,$65,$71,$65
         .byte   $6C,$65,$6B,$65,$6A,$69,$68,$65
         .byte   $65,$6F,$65,$6D
-        ror     $6F65
-        adc     $6A
-        adc     $69
-        adc     $68
+        .byte   $6E,$65,$6F
+        .byte   $65,$6A
+        .byte   $65,$69
+        .byte   $65,$68
         .byte   $67,$66,$04,$02,$22,$96,$65,$65
         .byte   $71,$65,$6F,$70,$65,$71,$65,$6C
         .byte   $65,$6B,$65,$6A,$69,$68,$6F,$6F
         .byte   $60,$6C,$71
-        adc     ($60),y
-        jmp     (data_ref_6F6C)
+        .byte   $71,$60
+        .byte   $6C,$6C,$6F
 
         .byte   $6C,$71,$01,$10,$60,$7D,$7A,$01
         .byte   $00,$21
-        adc     $03
-        bmi     snd_data_9672
-        brk
+        .byte   $65,$03
+        .byte   $30,$04
+        .byte   $00
         .byte   $22,$96
-        brk
-snd_data_9672:  asl     $03
+        .byte   $00
+snd_data_9672:  .byte   $06,$03
         .byte   $3F,$07,$83,$A0,$62,$03,$3A,$07
         .byte   $82,$A0,$62,$62,$62,$04,$1B,$73
         .byte   $96,$07,$83
-        ldy     #$6A
-        txa
-        ror     a
-        ror     a
-        txa
-        ror     a
-        ror     a
-        ror     a
-        ror     a
-        txa
-        ror     a
-        txa
+        .byte   $A0,$6A
+        .byte   $8A
+        .byte   $6A
+        .byte   $6A
+        .byte   $8A
+        .byte   $6A
+        .byte   $6A
+        .byte   $6A
+        .byte   $6A
+        .byte   $8A
+        .byte   $6A
+        .byte   $8A
         .byte   $04,$00,$73,$96,$0F,$A3,$96,$CF
         .byte   $97,$F0,$98,$17,$9A,$3A,$9A,$00
         .byte   $05,$03,$3C,$02,$00,$05,$1D,$07
         .byte   $92,$10,$AC,$8F,$AE,$AD
-        ldy     snd_data_AEAF
-        lda     $2180
-        ldy     $0108
-        ldy     a:$08
-        sty     sound_cmd_jump_pattern
+        .byte   $AC,$AF,$AE
+        .byte   $AD,$80,$21
+        .byte   $AC,$08,$01
+        .byte   $AC,$08,$00
+        .byte   $8C,$8A,$88
         .byte   $A7,$88,$8A,$A3
-        sta     $87
-        sta     $A0
+        .byte   $85,$87
+        .byte   $85,$A0
         .byte   $8F,$AE,$AD,$AC,$AF,$AE,$AD,$80
         .byte   $21,$AC,$08,$01,$AC,$08,$00,$8C
         .byte   $8A,$88,$A7,$88,$8A,$A3,$85,$87
         .byte   $85,$02,$80,$07,$84,$10,$80,$85
         .byte   $87,$85
-snd_data_96EB:  dey
-        sta     $8A
-        sta     $07
-        bcc     snd_data_9702
+snd_data_96EB:  .byte   $88
+        .byte   $85,$8A
+        .byte   $85,$07
+        .byte   $90,$10
         .byte   $02,$C0,$05,$29,$87,$87,$87,$87
         .byte   $87,$87,$80,$05,$1D,$07,$92,$10
-snd_data_9702:  and     ($B1,x)
-        php
-        ora     ($B1,x)
-        php
-        brk
+snd_data_9702:  .byte   $21,$B1
+        .byte   $08
+        .byte   $01,$B1
+        .byte   $08
+        .byte   $00
         .byte   $8C,$8F,$91,$80,$91,$80,$B1,$8C
         .byte   $AF,$B0,$06,$B1,$AF,$06,$B1,$D8
         .byte   $91
-        bcs     snd_data_96EB
-        txa
-        sty     chr_ram_padding_loop
+        .byte   $B0,$CF
+        .byte   $8A
+        .byte   $8C,$8F,$80
         .byte   $8F,$80,$8F,$8D,$8F,$80,$93,$91
         .byte   $8F,$06,$AF,$AA,$06,$AC,$80,$8F
         .byte   $AF,$8F,$90,$80,$B1,$8F,$8C,$91
@@ -2185,8 +2236,8 @@ snd_data_9702:  and     ($B1,x)
         .byte   $00,$80,$BB,$B9,$B8,$96,$91,$80
         .byte   $91,$91,$8F,$B1,$A0,$91,$80,$91
         .byte   $8F,$91,$94,$80,$98,$80
-        and     ($B6,x)
-        stx     $96,y
+        .byte   $21,$B6
+        .byte   $96,$96
         .byte   $93,$80,$22,$B8,$08,$01,$B8,$98
         .byte   $08,$00,$03,$3E,$02,$00,$8C,$A8
         .byte   $8A,$04,$00,$A5,$96,$00,$05,$03
@@ -2196,25 +2247,25 @@ snd_data_9702:  and     ($B1,x)
         .byte   $05,$11,$AC,$8C,$8F,$8C,$05,$1D
         .byte   $A0,$8C,$AB,$AA,$A8,$AC,$AB,$AA
         .byte   $80,$C8,$88,$87,$85,$A3
-        sta     $87
-        ora     $11
-        ldy     snd_data_8F8C
-        sty     $1D05
+        .byte   $85,$87
+        .byte   $05,$11
+        .byte   $AC,$8C,$8F
+        .byte   $8C,$05,$1D
         .byte   $03,$38,$02,$80,$07,$84,$10,$60
         .byte   $80,$85,$87
-snd_data_9815:  sta     $88
-        sta     $8A
-        adc     $07
-        bcc     snd_data_982D
+snd_data_9815:  .byte   $85,$88
+        .byte   $85,$8A
+        .byte   $65,$07
+        .byte   $90,$10
         .byte   $02,$C0,$03,$3C,$05,$29,$83,$83
         .byte   $83,$83,$83,$84,$80,$05,$1D,$07
 snd_data_982D:  .byte   $92,$10,$03,$38,$80,$D1
-        sty     snd_data_918F
+        .byte   $8C,$8F,$91
         .byte   $80,$91,$80,$B1,$8C,$AF,$B0,$06
         .byte   $B1,$AF,$06,$B1,$D8,$91
-        bcs     snd_data_9815
-        txa
-        sty     chr_ram_padding_loop
+        .byte   $B0,$CF
+        .byte   $8A
+        .byte   $8C,$8F,$80
         .byte   $8F,$80,$8F,$8D,$8F,$80,$93,$91
         .byte   $8F,$06,$AF,$AA,$06,$AC,$80,$8F
         .byte   $8F,$93,$93,$80,$B4,$80,$8F,$8C
@@ -2225,21 +2276,21 @@ snd_data_982D:  .byte   $92,$10,$03,$38,$80,$D1
         .byte   $21,$6A,$AA,$6E,$21,$6F,$AF,$75
         .byte   $22,$76,$D6,$B3,$92,$91,$8F,$6D
         .byte   $6C,$6D,$6F
-        adc     ($6F),y
-        adc     ($73),y
+        .byte   $71,$6F
+        .byte   $71,$73
         .byte   $74,$73,$74,$76,$78,$76,$78,$79
         .byte   $01,$01,$DE,$01,$00,$05,$1D
-        sty     $93,x
+        .byte   $94,$93
         .byte   $07,$92,$10,$02,$80,$8D,$80,$8D
         .byte   $8D,$8C,$AD,$A0
-        sta     snd_data_8D80
-        sty     snd_data_8F8D
+        .byte   $8D,$80,$8D
+        .byte   $8C,$8D,$8F
         .byte   $80,$94,$80,$02,$00,$80,$93,$93
         .byte   $93,$B4,$80
 snd_data_98C7:  .byte   $02,$80,$06,$80,$BB,$B9,$06,$98
         .byte   $8D,$80,$8D,$8D,$8C,$AD,$A0,$8D
         .byte   $80
-        sta     snd_data_8D8C
+        .byte   $8D,$8C,$8D
         .byte   $8F,$80,$94,$80,$93,$93,$93,$80
         .byte   $96,$93,$80,$D8,$03,$3E,$87,$A5
         .byte   $87,$04,$00,$D1,$97,$00,$05,$03
@@ -2250,64 +2301,64 @@ snd_data_98FE:  .byte   $8F,$91,$01,$10,$9D,$01,$00,$91
         .byte   $83,$8F,$01,$10,$9D,$01,$00,$91
         .byte   $8D,$80,$01,$10,$9D,$01
 snd_data_991C:  .byte   $00,$8D
-        dey
-        sta     $1001
-        sta     a:$01,x
-        ldy     $018C
-        bpl     snd_data_98C7
-        ora     ($00,x)
+        .byte   $88
+        .byte   $8D,$01,$10
+        .byte   $9D,$01,$00
+        .byte   $AC,$8C,$01
+        .byte   $10,$9D
+        .byte   $01,$00
         .byte   $AF,$8F,$01,$10
-        sta     a:$01,x
-        and     ($91,x)
+        .byte   $9D,$01,$00
+        .byte   $21,$91
         .byte   $04
-        ora     ($F6,x)
-        tya
-        sta     ($80),y
-        ora     ($10,x)
-        clv
-        sta     ($81,x)
-        clv
-        ora     ($00,x)
-        sta     snd_data_8D8D
-        sta     snd_data_8F8D
+        .byte   $01,$F6
+        .byte   $98
+        .byte   $91,$80
+        .byte   $01,$10
+        .byte   $B8
+        .byte   $81,$81
+        .byte   $B8
+        .byte   $01,$00
+        .byte   $8D,$8D,$8D
+        .byte   $8D,$8D,$8F
         .byte   $80,$21,$91,$91,$80,$01,$10,$9D
         .byte   $01,$00,$8C,$8F,$91
-snd_data_9956:  ora     ($10,x)
-        sta     a:$01,x
-        sta     ($80),y
-        sta     ($01),y
-        bpl     snd_data_98FE
-        ora     ($00,x)
-        sty     snd_data_9083
-        ora     ($10,x)
-        sta     a:$01,x
-        bcc     snd_data_98FE
+snd_data_9956:  .byte   $01,$10
+        .byte   $9D,$01,$00
+        .byte   $91,$80
+        .byte   $91,$01
+        .byte   $10,$9D
+        .byte   $01,$00
+        .byte   $8C,$83,$90
+        .byte   $01,$10
+        .byte   $9D,$01,$00
+        .byte   $90,$91
         .byte   $80,$01,$10,$9D,$01,$00,$8C,$8F
         .byte   $91,$01,$10,$9D,$01,$00,$91,$80
         .byte   $91,$01,$10,$9D
-        ora     ($00,x)
-        sty     snd_data_9083
-        ora     ($10,x)
-        sta     a:$01,x
-        bcc     snd_data_991C
+        .byte   $01,$00
+        .byte   $8C,$83,$90
+        .byte   $01,$10
+        .byte   $9D,$01,$00
+        .byte   $90,$8F
         .byte   $80,$01,$10,$9D,$01,$00,$8A,$8D
         .byte   $8F
-snd_data_9996:  ora     ($10,x)
+snd_data_9996:  .byte   $01,$10
         .byte   $9D
-snd_data_9999:  ora     ($00,x)
+snd_data_9999:  .byte   $01,$00
         .byte   $8F,$80,$8F,$01,$10
-        sta     a:$01,x
-        txa
-        sta     ($8D,x)
-        ora     ($10,x)
-        sta     a:$01,x
-        stx     chr_ram_padding_loop
-        ora     ($10,x)
-        sta     a:$01,x
-        txa
-        sta     $018F
-        bpl     snd_data_9956
-        ora     ($00,x)
+        .byte   $9D,$01,$00
+        .byte   $8A
+        .byte   $81,$8D
+        .byte   $01,$10
+        .byte   $9D,$01,$00
+        .byte   $8E,$8F,$80
+        .byte   $01,$10
+        .byte   $9D,$01,$00
+        .byte   $8A
+        .byte   $8D,$8F,$01
+        .byte   $10,$9D
+        .byte   $01,$00
         .byte   $8F,$80,$8F,$01,$10,$9D,$01,$00
         .byte   $8A,$01,$10,$9D,$BD,$9D,$01,$00
         .byte   $04,$01,$4C,$99,$80,$8D,$01,$10
@@ -2329,8 +2380,8 @@ snd_data_9999:  ora     ($00,x)
         .byte   $40,$9E,$00,$06,$03,$3C,$02,$C0
         .byte   $07,$8A,$10,$05,$1D,$21,$A5,$08
         .byte   $01
-        cmp     $08,x
-        brk
+        .byte   $D5,$08
+        .byte   $00
         .byte   $65,$6C,$60,$6A,$60,$06,$88,$8A
         .byte   $68,$21,$65,$A5,$63,$63,$60,$22
         .byte   $65,$85,$08,$01,$A5,$08,$00,$67
@@ -2338,10 +2389,10 @@ snd_data_9999:  ora     ($00,x)
         .byte   $74,$60,$74,$60,$B6,$04,$01,$4F
         .byte   $9A,$71,$71,$6F,$60,$71,$60,$6F
         .byte   $60,$B1,$8C,$8F,$80,$21,$B1
-        php
-        ora     ($B1,x)
-        php
-        brk
+        .byte   $08
+        .byte   $01,$B1
+        .byte   $08
+        .byte   $00
         .byte   $80,$71,$06,$98,$B6,$80,$94,$93
         .byte   $60,$21,$74,$94,$93,$21,$B1,$08
         .byte   $01,$B1,$08,$00,$80,$8C,$8F,$90
@@ -2352,10 +2403,10 @@ snd_data_9999:  ora     ($00,x)
         .byte   $80,$74,$60,$93,$60,$74,$A0,$71
         .byte   $06,$98,$B6,$B4,$B3,$74,$06,$96
         .byte   $71,$60,$71,$60,$71
-        asl     $8F
-        lda     ($71),y
-        asl     $98
-        ldx     $B4,y
+        .byte   $06,$8F
+        .byte   $B1,$71
+        .byte   $06,$98
+        .byte   $B6,$B4
         .byte   $B3,$74,$76,$60,$78,$60,$98,$60
         .byte   $78,$76,$74,$76,$74,$73,$74,$73
         .byte   $71,$73,$71,$6F,$B6,$B4,$B3,$74
@@ -2370,14 +2421,14 @@ snd_data_9999:  ora     ($00,x)
         .byte   $65,$04,$02,$30,$9B,$03,$3C,$02
         .byte   $C0,$07,$8A,$10,$05,$1D,$A5,$A7
         .byte   $65,$60
-        adc     $60
+        .byte   $65,$60
         .byte   $A7,$05,$29,$03,$3A,$02,$00,$07
         .byte   $86,$10,$65,$68,$6C,$60,$65,$80
         .byte   $65,$67,$68,$67,$65,$60,$65,$63
         .byte   $21,$65,$04,$02,$5D,$9B,$03,$3C
         .byte   $02,$C0,$07,$8A,$10,$05,$1D,$A5
         .byte   $A7,$65,$60
-        adc     $60
+        .byte   $65,$60
         .byte   $A7,$05,$29,$03,$38,$02,$00,$07
         .byte   $86,$10,$65,$65,$65,$60,$65,$80
         .byte   $65,$67,$68,$67,$65,$60,$65,$63
@@ -2419,37 +2470,37 @@ snd_data_9999:  ora     ($00,x)
         .byte   $60,$76,$60,$B4,$96,$60,$76,$91
         .byte   $8F,$8D,$A0,$8D,$8F,$60,$6F,$8F
         .byte   $8F,$71,$60,$71,$60,$8F,$6F
-        adc     ($01),y
-        bpl     snd_data_9D34
+        .byte   $71,$01
+        .byte   $10,$60
         .byte   $7A,$7A,$7A,$78,$78,$76,$76,$01
         .byte   $00,$05,$29,$6A,$6A
-        pla
-        rts
+        .byte   $68
+        .byte   $60
 
         .byte   $6A,$60,$68,$6A,$60,$6A,$8A,$8A
         .byte   $68,$67,$68,$60,$68,$60,$68,$67
         .byte   $60,$67,$88,$60,$68,$8A,$8C,$6A
         .byte   $6A,$68,$60,$6A,$60
-        pla
-        ror     a
-        rts
+        .byte   $68
+        .byte   $6A
+        .byte   $60
 
         .byte   $6A,$8A,$8A,$68,$6C,$60,$8C,$6C
         .byte   $01,$10,$6B,$6B,$6B,$6B,$69,$69
         .byte   $69
-        adc     #$67
+        .byte   $69,$67
         .byte   $67,$67,$67,$01,$00,$6A,$6A,$68
         .byte   $60,$6A,$60,$68,$6A,$60,$6A,$8A
         .byte   $8A,$68,$67,$68,$60,$68,$60,$68
         .byte   $67,$60,$67,$88,$60,$68
-snd_data_9D34:  txa
-        sty     $6A6A
-        pla
-        rts
+snd_data_9D34:  .byte   $8A
+        .byte   $8C,$6A,$6A
+        .byte   $68
+        .byte   $60
 
         .byte   $6A,$60,$68
-        ror     a
-        rts
+        .byte   $6A
+        .byte   $60
 
         .byte   $6A,$8A,$8A,$68,$6C,$05,$1D,$60
         .byte   $70,$70,$60,$70,$60,$70,$60,$70
@@ -2460,9 +2511,9 @@ snd_data_9D34:  txa
         .byte   $07,$84,$50,$01,$FF,$8D,$01,$00
         .byte   $07,$82,$90,$63,$63,$04,$06,$5A
         .byte   $9D,$07,$84,$50,$01,$FF
-        sta     snd_data_8D80
+        .byte   $8D,$80,$8D
         .byte   $80,$6D,$60,$6D,$60
-snd_data_9D8D:  lda     a:$01
+snd_data_9D8D:  .byte   $AD,$01,$00
         .byte   $07,$82,$90,$83,$83,$07,$84,$50
         .byte   $01,$FF,$8D,$01,$00,$07,$82,$90
         .byte   $63,$63,$63,$63,$83,$07,$84,$50
@@ -2473,62 +2524,62 @@ snd_data_9D8D:  lda     a:$01
         .byte   $84,$50,$01,$FF,$6D,$01,$00,$07
         .byte   $82,$90,$63,$C0,$07,$82,$90,$83
         .byte   $83,$07,$84,$50,$01,$FF
-        sta     a:$01
+        .byte   $8D,$01,$00
         .byte   $07,$82,$90,$63,$63,$63,$63,$83
         .byte   $07,$84,$50,$01,$FF,$8D,$01,$00
         .byte   $07,$82,$90,$63,$63,$04,$02,$D4
         .byte   $9D,$07,$84,$50,$01,$FF,$60,$8D
         .byte   $60,$AD,$C0
-        ora     ($00,x)
+        .byte   $01,$00
         .byte   $07,$82,$90,$83,$83,$07,$84,$50
         .byte   $01,$FF,$8D,$01,$00,$07,$82,$90
         .byte   $63,$63,$63,$63,$83,$07,$84,$50
         .byte   $01,$FF,$8D,$01,$00,$07,$82,$90
         .byte   $63,$63,$04,$02,$06,$9E,$07,$84
         .byte   $50,$01,$FF,$60,$6D,$8D,$6D,$60
-        adc     snd_data_AD60
-        ldy     #$01
-        brk
+        .byte   $6D,$60,$AD
+        .byte   $A0,$01
+        .byte   $00
         .byte   $04,$00,$5A,$9D,$00,$00,$80,$00
         .byte   $01,$62,$80,$00,$0F,$53,$9E,$2B
         .byte   $9F,$1D,$A0,$14,$A1,$89,$A1,$00
         .byte   $06,$03,$3C,$02
-        cpy     #$07
-        txa
-        jsr     data_ref_1F05
-        sty     $6871
-        rts
+        .byte   $C0,$07
+        .byte   $8A
+        .byte   $20,$05,$1F
+        .byte   $8C,$71,$68
+        .byte   $60
 
         .byte   $71,$60,$65,$60,$71,$60,$6C,$88
         .byte   $91,$04,$01,$5E,$9E,$8A,$6F,$67
         .byte   $60,$6F,$60,$63,$60,$6F,$60,$6A
         .byte   $87,$8F,$04,$01,$6F,$9E,$8C,$71
         .byte   $68,$60,$71,$60,$65,$60,$71,$60
-        jmp     (snd_data_9188)
+        .byte   $6C,$88,$91
 
         .byte   $04,$01,$80,$9E,$8A,$6F,$67,$60
         .byte   $6F,$60,$63,$60,$6F,$60,$6A,$87
         .byte   $8F,$63,$65,$67,$6A,$60,$6F,$73
         .byte   $76,$A0,$07,$92,$10,$03,$3E,$83
         .byte   $84
-        and     ($C5,x)
-        php
-        ora     ($E5,x)
-        php
-        brk
+        .byte   $21,$C5
+        .byte   $08
+        .byte   $01,$E5
+        .byte   $08
+        .byte   $00
         .byte   $06,$87,$06,$88,$8A,$06,$87,$06
         .byte   $88,$87,$06,$A5,$85,$67
-        adc     $06
+        .byte   $65,$06
         .byte   $A3,$A3,$A4,$21,$C5,$08,$01,$E5
         .byte   $08,$00
-        asl     $87
-        asl     $88
-        txa
-        and     ($AC,x)
-        php
-        ora     ($AC,x)
-        php
-        brk
+        .byte   $06,$87
+        .byte   $06,$88
+        .byte   $8A
+        .byte   $21,$AC
+        .byte   $08
+        .byte   $01,$AC
+        .byte   $08
+        .byte   $00
         .byte   $78,$76,$74,$76,$74,$73,$74,$73
         .byte   $71,$73,$71,$6F,$71,$6F,$6D,$6F
         .byte   $6D,$6C,$6D,$6C,$6A,$6C,$6A,$68
@@ -2536,8 +2587,8 @@ snd_data_9D8D:  lda     a:$01
         .byte   $91,$CF,$AC,$AF,$D0,$06,$90,$06
         .byte   $93,$96,$D4,$94,$93,$91,$8F,$CD
         .byte   $8D,$8C,$AA,$CF,$8F,$8D,$AC
-        adc     ($76),y
-        adc     ($6D),y
+        .byte   $71,$76
+        .byte   $71,$6D
         .byte   $04,$03,$12,$9F,$07,$87,$70,$B1
         .byte   $91,$60,$71,$60,$71,$91,$91,$74
         .byte   $75,$04,$00,$55,$9E,$00,$06,$03
@@ -2553,8 +2604,8 @@ snd_data_9D8D:  lda     a:$01
         .byte   $87,$8F,$63,$65,$67,$6A,$60,$6F
         .byte   $73,$76,$A0,$80,$40,$03,$39,$07
         .byte   $92,$10,$02,$00,$8C
-        adc     ($68),y
-        rts
+        .byte   $71,$68
+        .byte   $60
 
         .byte   $71,$60,$65,$60,$71,$60,$6C,$88
         .byte   $91,$04,$01,$8A,$9F,$8A,$6F,$67
@@ -2568,30 +2619,30 @@ snd_data_9D8D:  lda     a:$01
         .byte   $6F,$6D,$6F,$6D,$6C,$6D,$6C,$6A
         .byte   $6C,$6A,$05,$1F,$07,$AF,$10,$03
         .byte   $3A,$C8,$06
-        dey
-        asl     $8A
-        sty     snd_data_A7C7
-        ldy     $06CC
-        sty     snd_data_9006
+        .byte   $88
+        .byte   $06,$8A
+        .byte   $8C,$C7,$A7
+        .byte   $AC,$CC,$06
+        .byte   $8C,$06,$90
         .byte   $93,$D1,$91,$60,$93,$91,$6F,$CA
         .byte   $8A,$88,$A6
-        cpy     weapon_data_unused_3
-        tay
-        adc     $6D71
-        ror     a
+        .byte   $CC,$8C,$8A
+        .byte   $A8
+        .byte   $6D,$71,$6D
+        .byte   $6A
         .byte   $04,$03,$04,$A0,$07,$87,$70
-        lda     $608D
-        adc     $6D60
-        sta     $6C8D
-        adc     a:$04
-        and     a:$9F
-        asl     $03
-        plp
-        ora     $1F
-        sta     ($8C),y
-        adc     ($60),y
-        adc     ($71),y
-        rts
+        .byte   $AD,$8D,$60
+        .byte   $6D,$60,$6D
+        .byte   $8D,$8D,$6C
+        .byte   $6D,$04,$00
+        .byte   $2D,$9F,$00
+        .byte   $06,$03
+        .byte   $28
+        .byte   $05,$1F
+        .byte   $91,$8C
+        .byte   $71,$60
+        .byte   $71,$71
+        .byte   $60
 
         .byte   $91,$6C,$8C,$8F,$04,$01,$23,$A0
         .byte   $8F,$8A,$6F,$60,$6F,$6F,$60,$8F
@@ -2601,107 +2652,107 @@ snd_data_9D8D:  lda     a:$01
         .byte   $6F,$60,$6F,$6F,$60,$8F,$6A,$8A
         .byte   $8F,$01,$12,$78,$78,$78,$78,$60
         .byte   $75,$75,$75,$60,$7D,$7D
-        adc     $7B7B,x
+        .byte   $7D,$7B,$7B
         .byte   $7C,$7C,$01,$00
-        sta     ($8C),y
-        adc     ($60),y
-        adc     ($71),y
-        rts
+        .byte   $91,$8C
+        .byte   $71,$60
+        .byte   $71,$71
+        .byte   $60
 
         .byte   $91,$6C,$8C,$8F,$04,$01,$6F,$A0
         .byte   $8F,$8A,$6F,$60,$6F,$6F,$60,$8F
-        ror     a
-        txa
+        .byte   $6A
+        .byte   $8A
         .byte   $8F,$04
-        ora     ($7E,x)
-        ldy     #$91
-        sty     $6071
-        adc     ($71),y
-        rts
+        .byte   $01,$7E
+        .byte   $A0,$91
+        .byte   $8C,$71,$60
+        .byte   $71,$71
+        .byte   $60
 
-        sta     ($6C),y
-        sty     $048F
-        ora     ($8D,x)
-        ldy     #$8F
-        txa
+        .byte   $91,$6C
+        .byte   $8C,$8F,$04
+        .byte   $01,$8D
+        .byte   $A0,$8F
+        .byte   $8A
         .byte   $6F,$60,$6F,$6F,$60,$8F,$6A,$8A
         .byte   $8F,$04
-        ora     ($9C,x)
-        ldy     #$8D
-        rts
+        .byte   $01,$9C
+        .byte   $A0,$8D
+        .byte   $60
 
-        adc     $7491
-        adc     ($60),y
-        adc     $7174
-        sta     $7174,y
+        .byte   $6D,$91,$74
+        .byte   $71,$60
+        .byte   $6D,$74,$71
+        .byte   $99,$74,$71
         .byte   $8F,$60,$6F,$93,$76,$73,$60,$6F
-        ror     $73,x
+        .byte   $76,$73
         .byte   $9B,$76,$73,$90,$60,$70,$93,$78
         .byte   $73,$60,$70,$78,$73,$9C,$78,$73
         .byte   $91,$60,$71,$94,$78,$74,$60,$71
         .byte   $78,$74,$9D,$78,$74,$86,$60,$66
         .byte   $8A
-        adc     $606A
-        adc     $666A
+        .byte   $6D,$6A,$60
+        .byte   $6D,$6A,$66
         .byte   $92,$6D,$6A
-        dey
-        rts
+        .byte   $88
+        .byte   $60
 
         .byte   $68
-        sty     $6C6F
-        rts
+        .byte   $8C,$6F,$6C
+        .byte   $60
 
         .byte   $6F
-        jmp     (snd_data_9468)
+        .byte   $6C,$68,$94
 
         .byte   $6F
-        jmp     (data_ref_608A)
+        .byte   $6C,$8A,$60
 
         .byte   $6A,$8D,$71,$6D,$60,$71,$6D,$6A
         .byte   $96,$71,$6D,$AA,$8A,$60,$6A,$60
         .byte   $6A,$8A,$8A,$6F,$70,$04,$00,$23
         .byte   $A0
-        brk
-        asl     $07
-        sty     $A0
+        .byte   $00
+        .byte   $06,$07
+        .byte   $84,$A0
         .byte   $03,$3F,$02,$80,$03,$3A,$64,$64
         .byte   $60,$64,$02,$00,$01,$33,$03,$3F
         .byte   $88,$01,$00,$02,$80,$03,$3A,$64
         .byte   $64,$60,$64,$64,$02,$00,$01,$33
         .byte   $03,$3F,$68,$88,$01,$00,$02,$80
         .byte   $03,$3A,$64,$64,$04
-        asl     $1D
-        lda     ($E0,x)
+        .byte   $06,$1D
+        .byte   $A1,$E0
         .byte   $03,$3A,$64,$64,$60,$64,$02,$00
         .byte   $01,$33,$03,$3F,$88,$01,$00,$02
         .byte   $80,$03,$3A,$64,$64,$60,$64,$64
         .byte   $02,$00,$01,$33,$03,$3F,$68,$88
         .byte   $01,$00,$02,$80,$03,$3A,$64,$64
         .byte   $04,$0E
-        lsr     a
-        lda     ($01,x)
+        .byte   $4A
+        .byte   $A1,$01
         .byte   $33,$68,$60,$80,$88,$60,$68,$60
         .byte   $68,$68,$60,$68,$60,$80,$04,$00
         .byte   $1D
-        lda     ($00,x)
-        brk
+        .byte   $A1,$00
+        .byte   $00
         .byte   $80,$00,$01,$62,$80,$00,$0F,$9C
         .byte   $A1,$BA,$A2,$A7,$A3,$53,$A4,$A0
         .byte   $A4,$00,$05,$02,$00,$05,$13,$03
         .byte   $3D,$07,$92,$10,$CC,$AD,$8F,$EC
         .byte   $80,$CA,$AA
-        sty     $0282
-        cpy     #$05
+        .byte   $8C,$82,$02
+        .byte   $C0,$05
         .byte   $1F,$98
-        tya
-        ora     ($25,x)
-        stx     $80,y
-        ora     ($00,x)
-        tya
-        tya
-        ora     ($25,x)
-        stx     $80,y
-        ora     ($00,x)
+        .byte   $98
+        .byte   $01,$25
+        .byte   $96,$80
+        .byte   $01,$00
+        .byte   $98
+        .byte   $98
+        .byte   $01,$25
+        .byte   $96,$80
+        .byte   $01,$00
         .byte   $04,$01,$9E,$A1,$02,$80,$05,$13
         .byte   $B1,$01,$10,$9D,$01,$00,$91,$80
         .byte   $8F,$01,$10,$9D,$01,$00,$91,$04
@@ -2713,13 +2764,13 @@ snd_data_9D8D:  lda     a:$01
         .byte   $A1,$B3,$01,$10,$9D,$01,$00,$93
         .byte   $80,$91,$01,$10,$9D,$01,$00,$93
         .byte   $B0,$01,$10
-        sta     a:$01,x
+        .byte   $9D,$01,$00
         .byte   $93,$80,$90,$01,$10
-        sta     a:$01,x
+        .byte   $9D,$01,$00
         .byte   $93,$02,$C0,$03,$3D,$07,$92,$10
         .byte   $05,$1F,$21,$B4,$08,$01
-        ldy     $08,x
-        brk
+        .byte   $B4,$08
+        .byte   $00
         .byte   $94,$96,$80,$98,$80,$96,$80,$94
         .byte   $80,$94,$B6,$93,$94,$80,$93,$80
         .byte   $91,$80,$21,$8F,$08,$01,$AF,$80
@@ -2734,12 +2785,12 @@ snd_data_9D8D:  lda     a:$01
         .byte   $88,$8A,$AC,$8A,$AF,$AD,$AC,$AA
         .byte   $A8,$A7,$80,$AC,$80,$8A,$21,$8A
         .byte   $08,$01,$AA,$08,$00,$88,$80
-        txa
-        and     ($8A,x)
-        php
-        ora     ($AA,x)
-        php
-        brk
+        .byte   $8A
+        .byte   $21,$8A
+        .byte   $08
+        .byte   $01,$AA
+        .byte   $08
+        .byte   $00
         .byte   $85,$88,$8A,$AC,$8A,$AF,$AD,$AC
         .byte   $B0,$B3,$B6,$98,$04,$00,$C8,$A1
         .byte   $00,$05,$03,$37,$02,$80,$05,$13
@@ -2749,8 +2800,8 @@ snd_data_9D8D:  lda     a:$01
         .byte   $96,$8F,$93,$6C,$02,$C0,$03,$3D
         .byte   $05,$1F,$93,$93,$A0,$93,$93,$A0
         .byte   $04,$01
-        ldy     $01A2,x
-        brk
+        .byte   $BC,$A2,$01
+        .byte   $00
         .byte   $03,$38,$02,$80,$05,$13,$60,$88
         .byte   $98,$94,$88,$98,$91,$94,$8D,$98
         .byte   $94,$88,$94,$98,$88,$94,$98,$87
@@ -2762,8 +2813,8 @@ snd_data_9D8D:  lda     a:$01
         .byte   $93,$87,$93,$96,$87,$93,$76,$02
         .byte   $C0,$03,$38,$07,$92,$10,$05,$1F
         .byte   $06,$80,$D4,$94
-        stx     $80,y
-        tya
+        .byte   $96,$80
+        .byte   $98
         .byte   $80,$96,$80,$94,$80,$94,$B6,$93
         .byte   $94,$80,$93,$80,$91,$80,$21,$8F
         .byte   $AF,$80,$06,$BB,$B9,$D8,$98,$96
@@ -2772,18 +2823,18 @@ snd_data_9D8D:  lda     a:$01
         .byte   $F3,$05,$1F,$A8,$80,$87,$06,$A7
         .byte   $85,$80,$87,$06,$A7,$81,$85,$87
         .byte   $79,$74,$71,$7D,$79,$74
-        adc     ($7D),y
-        adc     $7174,y
-        adc     $7479,x
-        adc     ($7D),y
-        sei
+        .byte   $71,$7D
+        .byte   $79,$74,$71
+        .byte   $7D,$79,$74
+        .byte   $71,$7D
+        .byte   $78
         .byte   $73,$70,$6C,$78,$73,$70,$6C,$78
         .byte   $73,$70,$6C,$78,$73,$70,$6C,$04
         .byte   $01,$70,$A3,$04
-        brk
-        inc     a:$A2
-        ora     $03
-        and     $05,x
+        .byte   $00
+        .byte   $EE,$A2,$00
+        .byte   $05,$03
+        .byte   $35,$05
         .byte   $1F,$88,$98,$94,$88,$98,$91,$94
         .byte   $8D,$98,$94,$88,$94,$98,$88,$94
         .byte   $98,$87,$96,$93,$87,$96,$8F,$93
@@ -2791,24 +2842,24 @@ snd_data_9D8D:  lda     a:$01
         .byte   $96,$88,$98,$94,$88,$98,$91,$94
         .byte   $8D,$98,$94,$88,$94,$98,$88,$94
         .byte   $98,$87,$96,$93,$87
-snd_data_A3E1:  stx     $8F,y
+snd_data_A3E1:  .byte   $96,$8F
         .byte   $93,$8C,$96,$93,$87,$93,$01,$10
         .byte   $7D,$7D,$7D,$7D,$7A,$7A,$77,$77
         .byte   $01,$00,$88
-        tya
-        sty     $88,x
-        tya
-        sta     ($94),y
-        sta     snd_data_9498
-        dey
-        sty     $98,x
-        dey
-        sty     $98,x
+        .byte   $98
+        .byte   $94,$88
+        .byte   $98
+        .byte   $91,$94
+        .byte   $8D,$98,$94
+        .byte   $88
+        .byte   $94,$98
+        .byte   $88
+        .byte   $94,$98
         .byte   $87,$96,$93,$87,$96,$8F,$93,$8C
         .byte   $96,$93,$87,$93,$96,$87,$93,$96
         .byte   $04,$03,$F5,$A3,$91,$94,$93,$91
         .byte   $AF,$80
-        sta     snd_data_8F80
+        .byte   $8D,$80,$8F
         .byte   $AF,$80,$8D,$91,$93,$8D,$04,$07
         .byte   $27,$A4,$90,$04,$07,$2C,$A4,$91
         .byte   $94,$93,$91,$AF,$80,$8D,$80,$8F
@@ -2817,14 +2868,14 @@ snd_data_A3E1:  stx     $8F,y
         .byte   $93,$8C,$90,$93,$98,$04,$00,$F5
         .byte   $A3,$00,$05,$07,$88,$10,$03,$38
         .byte   $07,$82
-        bvs     snd_data_A3E1
+        .byte   $70,$83
         .byte   $04,$17,$5A,$A4,$07,$84,$40,$01
         .byte   $FF,$8B,$8B,$A0,$8B,$8B,$A0,$01
         .byte   $00,$07,$82,$70,$83,$04,$17,$6F
         .byte   $A4,$07,$84,$40,$01,$FF,$8B,$8B
         .byte   $A0,$6B,$6B,$6B,$6B,$6B,$6B,$6A
-        ror     a
-        ora     ($00,x)
+        .byte   $6A
+        .byte   $01,$00
         .byte   $03,$3D,$07,$82,$70,$83,$83,$07
         .byte   $84,$40,$01,$FF,$8B,$01,$00,$07
         .byte   $82,$70,$83,$04,$00,$89,$A4,$00
@@ -2838,38 +2889,38 @@ snd_data_A3E1:  stx     $8F,y
         .byte   $85,$80,$8C,$80,$8A,$80,$88,$80
         .byte   $8A,$A0,$80,$6A,$6A,$8A,$6A,$6A
         .byte   $8A,$87,$80
-        sty     weapon_data_unused_1
+        .byte   $8C,$80,$8A
         .byte   $80,$88,$80,$87,$80,$85,$80,$85
         .byte   $8C,$8F,$06,$AE,$85,$80,$85,$8C
         .byte   $8F,$8E,$80,$93,$94,$80
-        pla
-        pla
-        dey
-        pla
-        pla
-        dey
-        sta     $80
-        adc     $65
-        dey
-        pla
-        pla
-        dey
-        sta     $80
-        sty     snd_data_8C8A
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $85,$80
+        .byte   $65,$65
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $85,$80
+        .byte   $8C,$8A,$8C
         .byte   $80,$68,$68,$88,$68,$68,$88,$85
         .byte   $80
-        sty     weapon_data_unused_1
+        .byte   $8C,$80,$8A
         .byte   $80,$88,$80,$8A,$A0,$80,$6A,$6A
         .byte   $8A,$6A,$6A,$8A,$87,$80,$8C,$80
         .byte   $8A,$80,$88,$80,$87,$80,$85,$80
         .byte   $85,$8C,$8F,$06
-        ldx     chr_ram_tile_copy_end
-        sta     $8C
+        .byte   $AE,$85,$80
+        .byte   $85,$8C
         .byte   $8F,$8E,$80,$8F,$07,$90,$10,$02
         .byte   $80,$22,$91,$B1,$D1,$8F,$B4,$B1
         .byte   $AF,$B1,$80,$CF,$8F,$06,$B1
-        sty     snd_data_8C8D
-        dey
+        .byte   $8C,$8D,$8C
+        .byte   $88
         .byte   $80,$88,$8C,$8F,$06,$D1,$8F,$B4
         .byte   $B1,$AF,$B1,$21,$8F,$CF,$8F,$8C
         .byte   $8F,$90,$80,$90,$90,$93,$D8,$07
@@ -2878,8 +2929,8 @@ snd_data_A3E1:  stx     $8F,y
         .byte   $AD,$22,$8C,$CC,$AC,$8A,$AF,$AD
         .byte   $AC,$AD,$21,$88,$C8,$88,$8A,$8C
         .byte   $E7
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $05,$20,$02,$80,$85,$80,$85,$8C
         .byte   $8F,$06,$AE,$85,$80,$85,$8C,$8F
         .byte   $8E,$80,$8F,$08,$01,$02,$C0,$21
@@ -2891,7 +2942,7 @@ snd_data_A3E1:  stx     $8F,y
         .byte   $8E,$80,$8F,$08,$00,$02,$80,$22
         .byte   $91,$B1,$D1,$8F,$B4,$B1,$AF,$B1
         .byte   $80,$CF,$8F,$06,$B1,$8C
-        sta     sound_cmd_jump_target
+        .byte   $8D,$8C,$88
         .byte   $80,$88,$8C,$8F,$06,$D1,$8F,$B4
         .byte   $B1,$AF,$B1,$21,$8F,$CF,$8F,$8C
         .byte   $8F,$90,$80,$90,$90,$93,$06,$B8
@@ -2928,20 +2979,20 @@ snd_data_A3E1:  stx     $8F,y
         .byte   $88,$80,$87,$02,$80,$A0,$85,$80
         .byte   $85,$8C,$8F,$06,$AE,$85,$80,$85
         .byte   $8C,$8F,$8E,$96,$98,$02,$00,$80
-        pla
-        pla
-        dey
-        pla
-        pla
-        dey
-        sta     $80
-        adc     $65
-        dey
-        pla
-        pla
-        dey
-        sta     $80
-        sty     snd_data_8C8A
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $85,$80
+        .byte   $65,$65
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $85,$80
+        .byte   $8C,$8A,$8C
         .byte   $80,$68,$68,$88,$68,$68,$88,$85
         .byte   $80,$8C,$80,$8A,$80,$88,$80,$8A
         .byte   $A0,$80,$6A,$6A,$8A,$6A,$6A,$8A
@@ -2970,23 +3021,23 @@ snd_data_A7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         .byte   $04,$07,$EC,$A7,$83,$63,$63,$04
         .byte   $07,$F3,$A7,$85,$65,$65,$04,$06
         .byte   $FA,$A7,$83,$21,$85,$86,$66
-        ror     $86
-        ror     $66
-        stx     $6D
-        adc     $6A6A
-        txa
+        .byte   $66,$86
+        .byte   $66,$66
+        .byte   $86,$6D
+        .byte   $6D,$6A,$6A
+        .byte   $8A
         .byte   $80,$66,$66,$8A,$66,$66,$91,$6A
         .byte   $6A,$8D,$66,$66,$85,$65,$65,$85
         .byte   $65,$65,$85,$6C,$6C,$68,$68,$8F
         .byte   $80,$65,$65,$88,$65,$65,$8F,$68
-        pla
-        sty     $6565
-        stx     $66
-        ror     $86
-        ror     $66
-        stx     $6D
-        adc     $6A6A
-        txa
+        .byte   $68
+        .byte   $8C,$65,$65
+        .byte   $86,$66
+        .byte   $66,$86
+        .byte   $66,$66
+        .byte   $86,$6D
+        .byte   $6D,$6A,$6A
+        .byte   $8A
         .byte   $80,$66,$66,$8A,$66,$66,$91,$6A
         .byte   $6A,$8D,$66,$66,$83,$63,$63,$04
         .byte   $02,$4C,$A8,$83,$84,$80,$84,$84
@@ -2995,23 +3046,23 @@ snd_data_A7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         .byte   $A8,$83,$63,$63,$04,$07,$69,$A8
         .byte   $85,$65,$65,$04,$06,$70,$A8,$83
         .byte   $21,$85,$85,$65,$65,$04,$07,$7A
-        tay
-        sta     ($61,x)
-        adc     ($04,x)
+        .byte   $A8
+        .byte   $81,$61
+        .byte   $61,$04
         .byte   $07,$81,$A8,$83,$63,$63,$04,$07
         .byte   $88,$A8,$85,$65,$65,$04,$06,$8F
         .byte   $A8,$83,$21,$85,$86,$66,$66,$86
         .byte   $66,$66,$86,$6D,$6D,$6A,$6A,$8A
         .byte   $80,$66,$66,$8A,$66
-        ror     $91
-        ror     a
-        ror     a
-        sta     $6666
-        sta     $65
-        adc     $85
-        adc     $65
-        sta     $6C
-        jmp     (data_ref_6868)
+        .byte   $66,$91
+        .byte   $6A
+        .byte   $6A
+        .byte   $8D,$66,$66
+        .byte   $85,$65
+        .byte   $65,$85
+        .byte   $65,$65
+        .byte   $85,$6C
+        .byte   $6C,$68,$68
 
         .byte   $8F,$80,$65,$65,$88,$65,$65,$8F
         .byte   $68,$68,$8C,$65,$65,$86,$66,$66
@@ -3022,19 +3073,19 @@ snd_data_A7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         .byte   $84,$84,$A4,$80,$A1,$61,$61,$81
         .byte   $61,$61,$81,$61,$61,$81,$A3,$63
         .byte   $63,$83,$63,$63,$83,$63,$63,$83
-        ora     $20
-        lda     $91
+        .byte   $05,$20
+        .byte   $A5,$91
         .byte   $87
         .byte   $93,$88
-        sty     $87,x
+        .byte   $94,$87
         .byte   $04
-        ora     ($04,x)
-        lda     #$05
-        bit     $61A1
-        adc     ($81,x)
-        adc     ($61,x)
-        sta     ($61,x)
-        adc     ($81,x)
+        .byte   $01,$04
+        .byte   $A9,$05
+        .byte   $2C,$A1,$61
+        .byte   $61,$81
+        .byte   $61,$61
+        .byte   $81,$61
+        .byte   $61,$81
         .byte   $A3,$63,$63,$83,$63,$63,$83,$63
         .byte   $63,$A4,$A5,$01,$10,$6D,$6D,$6C
         .byte   $6C,$6A,$6A,$68,$68,$01,$00,$83
@@ -3049,19 +3100,19 @@ snd_data_A7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         .byte   $10,$08,$01,$E5,$08,$00,$21,$CC
         .byte   $08,$01,$CC,$08,$00,$21,$C7,$08
         .byte   $01,$C7
-        php
-        brk
+        .byte   $08
+        .byte   $00
         .byte   $21,$C8
-        php
-        ora     ($C8,x)
-        php
-        brk
+        .byte   $08
+        .byte   $01,$C8
+        .byte   $08
+        .byte   $00
         .byte   $21,$C6,$08,$01,$C6,$08,$00,$21
         .byte   $CD,$08,$01,$CD,$08,$00,$21,$C8
         .byte   $08,$01,$C8,$08,$00,$21,$C9,$08
         .byte   $01
-        cmp     #$08
-        brk
+        .byte   $C9,$08
+        .byte   $00
         .byte   $21,$C7,$08,$01,$C7,$08,$00,$21
         .byte   $CE,$08,$01,$CE,$08,$00,$21,$C9
         .byte   $08,$01,$C9,$08,$00,$21,$CA,$08
@@ -3069,38 +3120,38 @@ snd_data_A7C7:  .byte   $65,$65,$04,$07,$C6,$A7,$81,$61
         .byte   $C8,$08,$00,$21,$CF,$08,$01,$CF
         .byte   $08,$00,$21,$CA,$08,$01,$CA,$08
         .byte   $00,$21,$CB,$08
-        ora     ($CB,x)
-        php
-        brk
-        and     ($C9,x)
-        php
-        ora     ($C9,x)
-        php
-        brk
+        .byte   $01,$CB
+        .byte   $08
+        .byte   $00
+        .byte   $21,$C9
+        .byte   $08
+        .byte   $01,$C9
+        .byte   $08
+        .byte   $00
         .byte   $21
-        bne     snd_data_A9F6
-        ora     ($D0,x)
-        php
-        brk
+        .byte   $D0,$08
+        .byte   $01,$D0
+        .byte   $08
+        .byte   $00
         .byte   $21,$CB
-        php
+        .byte   $08
         .byte   $01
 snd_data_A9F6:  .byte   $CB
-        php
-        brk
-        and     ($CC,x)
-        php
-        ora     ($CC,x)
-        ora     $27
-        php
-        brk
+        .byte   $08
+        .byte   $00
+        .byte   $21,$CC
+        .byte   $08
+        .byte   $01,$CC
+        .byte   $05,$27
+        .byte   $08
+        .byte   $00
         .byte   $04,$01,$76,$A9
-snd_data_AA06:  ora     $22
-        and     ($CF,x)
-        php
-        ora     ($CF,x)
-        php
-        brk
+snd_data_AA06:  .byte   $05,$22
+        .byte   $21,$CF
+        .byte   $08
+        .byte   $01,$CF
+        .byte   $08
+        .byte   $00
         .byte   $21,$D6,$08,$01,$D6,$08,$00,$21
         .byte   $D1,$08,$01,$D1,$08,$00,$21,$D2
         .byte   $08,$01
@@ -3118,28 +3169,28 @@ snd_data_AA21:  .byte   $D2,$08,$00,$21,$D0,$08,$01,$D0
         .byte   $C8,$08,$00,$E4,$EC,$E7,$21,$C9
         .byte   $08,$01,$C9,$08,$00,$E5,$ED,$E8
         .byte   $21,$CA,$08
-        ora     ($C9,x)
-        php
-        brk
+        .byte   $01,$C9
+        .byte   $08
+        .byte   $00
         .byte   $05,$27,$04,$01,$5E,$AA,$05,$22
         .byte   $EB,$F3,$EE,$D0,$08,$01,$01,$05
         .byte   $D0,$01,$00,$08,$00,$04,$00,$52
         .byte   $AA,$00,$06,$03,$35,$05,$22
-        adc     $65
-        rts
+        .byte   $65,$65
+        .byte   $60
 
         .byte   $65,$65,$63,$65,$65,$80,$85,$88
         .byte   $8C,$04,$03,$AF,$AA,$66,$66,$60
         .byte   $66,$66,$64,$66,$66,$80,$86,$89
-        sta     $0304
+        .byte   $8D,$04,$03
         .byte   $BF,$AA
 snd_data_AACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         .byte   $80,$87,$8A,$8E,$04,$03,$CF,$AA
         .byte   $68,$68,$60
-        pla
-        pla
-        ror     $68
-        pla
+        .byte   $68
+        .byte   $68
+        .byte   $66,$68
+        .byte   $68
         .byte   $80,$88,$8B,$8F,$04,$03,$DF,$AA
         .byte   $69,$69,$60,$69,$69,$67,$69,$69
         .byte   $80,$89,$8C,$90,$04,$03,$EF,$AA
@@ -3150,10 +3201,10 @@ snd_data_AACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         .byte   $6C,$6C,$60,$6C,$6C,$6A,$6C,$6C
         .byte   $80,$8C,$8F,$93,$04,$03,$1F,$AB
         .byte   $6D
-        adc     $6D60
-        adc     $6D6B
-        adc     snd_data_8D80
-        bcc     snd_data_AACF
+        .byte   $6D,$60,$6D
+        .byte   $6D,$6B,$6D
+        .byte   $6D,$80,$8D
+        .byte   $90,$94
         .byte   $04,$03,$2F,$AB,$6E,$6E,$60,$6E
         .byte   $6E,$6C,$6E,$6E,$80,$8E,$91,$95
         .byte   $04,$03,$3F,$AB,$6F,$6F,$60,$6F
@@ -3163,10 +3214,10 @@ snd_data_AACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         .byte   $04,$02,$5F,$AB,$70,$70,$60,$70
         .byte   $70,$6E,$70,$70,$01,$10,$60,$7D
         .byte   $7D,$7C,$7C,$7A,$7A,$7A
-        ora     ($00,x)
+        .byte   $01,$00
         .byte   $04,$00,$AF,$AA,$00,$06,$03,$3F
         .byte   $07,$83
-        ldy     #$62
+        .byte   $A0,$62
         .byte   $62,$07,$82,$20,$82,$04,$00,$8B
         .byte   $AB,$00,$00,$80,$00,$02,$62,$80
         .byte   $00,$0F,$AB,$AB,$ED,$AB,$20,$AC
@@ -3176,59 +3227,59 @@ snd_data_AACF:  .byte   $67,$67,$60,$67,$67,$65,$67,$67
         .byte   $6F,$6F,$6F,$60,$6F,$8D,$21,$6F
         .byte   $CF,$70,$70,$60,$70,$A0,$73,$73
         .byte   $60,$73
-        ldy     #$60
+        .byte   $A0,$60
         .byte   $74,$60,$21,$72,$72,$70,$72,$73
         .byte   $07,$82,$80,$54,$55,$54
-        eor     $54,x
-        eor     $21,x
+        .byte   $55,$54
+        .byte   $55,$21
         .byte   $54
-        php
-        ora     ($07,x)
+        .byte   $08
+        .byte   $01,$07
         .byte   $02,$A0,$B4,$09,$00,$06,$02,$40
         .byte   $03,$3A,$05,$17,$07,$02,$A0,$70
         .byte   $70,$70,$60,$70,$8F,$21,$70,$D0
         .byte   $72,$72,$72,$60,$72
-        bcc     snd_data_AC29
+        .byte   $90,$21
         .byte   $72,$D2,$74,$74,$60,$74,$A0,$76
         .byte   $76,$60,$76,$A0,$60,$78,$60,$75
         .byte   $75,$74,$75,$75,$08,$01,$DB,$09
         .byte   $00
-        asl     $03
-        sta     ($05,x)
+        .byte   $06,$03
+        .byte   $81,$05
         .byte   $23,$CD,$60,$6D
-snd_data_AC29:  adc     $6D6D
-        asl     $8C
+snd_data_AC29:  .byte   $6D,$6D,$6D
+        .byte   $06,$8C
         .byte   $CB,$60,$6B,$6B,$6B,$6B,$06,$8A
         .byte   $69,$69,$60,$69
-        ora     ($10,x)
-        rts
+        .byte   $01,$10
+        .byte   $60
 
         .byte   $7D,$9D,$01,$00,$6F,$6F,$60,$6F
         .byte   $01,$10,$60,$7D,$9D,$01,$00
-        php
-        ora     ($E8,x)
-        ora     #$00
-        brk
+        .byte   $08
+        .byte   $01,$E8
+        .byte   $09,$00
+        .byte   $00
         .byte   $80,$00,$01,$62,$80,$00,$0F,$63
         .byte   $AC,$FA,$AC,$81,$AD,$C7,$AD,$0C
         .byte   $AE,$00,$06,$03,$3C,$02,$C0,$05
         .byte   $13,$07,$E0,$10,$08,$01,$E8,$EB
         .byte   $EE,$D1
-        ror     $7471
-        adc     ($74),y
-        adc     ($74),y
+        .byte   $6E,$71,$74
+        .byte   $71,$74
+        .byte   $71,$74
         .byte   $77,$08,$00,$07,$86
-        jsr     data_ref_1F05
+        .byte   $20,$05,$1F
         .byte   $02,$C0,$71,$71,$60,$71,$60
-        adc     ($71),y
+        .byte   $71,$71
         .byte   $80
-        adc     ($71),y
-        rts
+        .byte   $71,$71
+        .byte   $60
 
         .byte   $71,$60,$71,$71,$07,$83,$20,$91
         .byte   $60,$71,$A0,$98,$60
-        sei
-        stx     $98,y
+        .byte   $78
+        .byte   $96,$98
         .byte   $07,$86,$20,$6F,$6F,$60,$6F,$60
         .byte   $6F,$6F,$80,$6F,$6F,$60,$6F,$60
         .byte   $6F,$6F,$07,$83,$20,$8F,$60,$6F
@@ -3243,9 +3294,9 @@ snd_data_AC29:  adc     $6D6D
         .byte   $7E,$AC,$00,$06,$03,$3B,$02,$00
         .byte   $07,$8A,$10,$05,$1F,$A5,$60,$6E
         .byte   $6B
-        pla
-        cmp     $A8
-        rts
+        .byte   $68
+        .byte   $C5,$A8
+        .byte   $60
 
         .byte   $71,$6E,$6B,$C8,$AB,$60,$74,$71
         .byte   $6E,$CB,$AE,$60,$77,$74,$6E,$D1
@@ -3265,20 +3316,20 @@ snd_data_AD74:  .byte   $67,$08,$01,$A7,$AC,$B0,$B3,$08
         .byte   $00,$04,$00,$1D,$AD,$00,$06,$03
         .byte   $30,$05,$1F,$71,$71,$71,$6F,$04
         .byte   $0D,$87,$AD,$03
-        jsr     data_ref_1501
-        jmp     (data_ref_6A6C)
+        .byte   $20,$01,$15
+        .byte   $6C,$6C,$6A
 
         .byte   $6A,$68,$68,$66,$66,$03,$50,$01
         .byte   $00,$03,$40,$71,$71,$60,$71,$94
         .byte   $76,$71,$60,$6F,$71,$70,$8A,$6B
-        jmp     (data_ref_0604)
+        .byte   $6C,$04,$06
 
         .byte   $9F,$AD,$6C,$6C,$78,$60,$76,$78
         .byte   $60,$6C,$60,$6C,$78,$60,$76,$78
         .byte   $74,$73,$04,$00,$9F,$AD,$00,$06
         .byte   $07,$88,$10,$03,$3F,$07,$82
-        beq     snd_data_AD74
-        ldx     #$A2
+        .byte   $F0,$A2
+        .byte   $A2,$A2
         .byte   $07,$84,$10,$A7,$04,$01,$CE,$AD
         .byte   $07,$82,$A0,$83,$83,$07,$84,$40
         .byte   $87,$07,$82,$A0,$83,$04,$02,$DC
@@ -3290,19 +3341,19 @@ snd_data_AD74:  .byte   $67,$08,$01,$A7,$AC,$B0,$B3,$08
         .byte   $0F,$1F,$AE,$68,$AE,$9C,$AE,$D7
         .byte   $AE,$F4,$AE,$00,$05,$03,$39,$05
         .byte   $11,$07,$83,$50,$02,$80,$05
-        ora     ($01),y
-        ora     $9D,x
-        txs
+        .byte   $11,$01
+        .byte   $15,$9D
+        .byte   $9A
         .byte   $80,$97,$80,$74,$74,$94,$91,$05
         .byte   $1D,$01,$00,$03,$3B,$07,$86,$10
         .byte   $02,$00,$85,$88,$8C,$85,$88,$8F
         .byte   $85,$88
-        stx     sound_cmd_detune_table_ref
-        sta     sound_cmd_detune_table_ref
+        .byte   $8E,$85,$88
+        .byte   $8D,$85,$88
         .byte   $8B,$8C,$02,$40,$85,$88,$8C,$85
         .byte   $88,$8F,$85,$88,$8E,$85
-        dey
-        sta     sound_cmd_detune_table_ref
+        .byte   $88
+        .byte   $8D,$85,$88
         .byte   $8B,$8C,$04,$00,$3B,$AE,$00,$05
         .byte   $05,$1D,$E0,$07,$86,$10,$03,$37
         .byte   $02,$00,$80,$85,$88,$8C,$85,$88
@@ -3313,24 +3364,24 @@ snd_data_AD74:  .byte   $67,$08,$01,$A7,$AC,$B0,$B3,$08
         .byte   $70,$AE,$00,$05,$03,$30,$05,$1D
         .byte   $01,$0F,$9D,$9A,$80,$97,$80,$74
         .byte   $74,$94
-        bcc     snd_data_AEB1
+        .byte   $90,$03
         .byte   $31
-snd_data_AEAF:  sta     $83
-snd_data_AEB1:  ora     ($10,x)
-        txs
-        ora     ($00,x)
-        sta     $80
-        dey
-        ora     ($10,x)
-        txs
-        ora     $11
-        ora     ($00,x)
-        sta     ($8C),y
-        tya
-        ora     $1D
-        ora     ($10,x)
-        txs
-        ora     ($00,x)
+snd_data_AEAF:  .byte   $85,$83
+snd_data_AEB1:  .byte   $01,$10
+        .byte   $9A
+        .byte   $01,$00
+        .byte   $85,$80
+        .byte   $88
+        .byte   $01,$10
+        .byte   $9A
+        .byte   $05,$11
+        .byte   $01,$00
+        .byte   $91,$8C
+        .byte   $98
+        .byte   $05,$1D
+        .byte   $01,$10
+        .byte   $9A
+        .byte   $01,$00
         .byte   $8B,$8A,$88,$01,$10,$9A,$01,$00
         .byte   $83,$04,$00,$AD,$AE,$00,$05,$07
         .byte   $83,$40,$03,$3F,$C0,$A0,$87,$87
@@ -3342,64 +3393,64 @@ snd_data_AEB1:  ora     ($10,x)
         .byte   $8D,$6D,$6D,$8D,$6D,$6D,$8D,$8F
         .byte   $80,$21,$CB,$08,$01,$CB,$08,$00
         .byte   $8B,$89
-        adc     #$69
+        .byte   $69,$69
         .byte   $89,$86,$80
-        stx     $80
-        iny
-        dey
+        .byte   $86,$80
+        .byte   $C8
+        .byte   $88
         .byte   $89,$8B,$A0
-        sta     $6D6D
-        sta     $6D6D
-        sta     chr_ram_padding_loop
-        and     ($CB,x)
-        php
-        ora     ($CB,x)
-        php
-        brk
+        .byte   $8D,$6D,$6D
+        .byte   $8D,$6D,$6D
+        .byte   $8D,$8F,$80
+        .byte   $21,$CB
+        .byte   $08
+        .byte   $01,$CB
+        .byte   $08
+        .byte   $00
         .byte   $8B,$A9,$89,$8B,$80,$8B,$80
-        and     ($8D,x)
-        php
-        ora     ($CD,x)
-        php
-        brk
+        .byte   $21,$8D
+        .byte   $08
+        .byte   $01,$CD
+        .byte   $08
+        .byte   $00
 snd_data_AF46:  .byte   $02,$80,$07,$83,$70,$05,$2F,$74
         .byte   $72,$70,$72
-        bvs     snd_data_AFC2
-        ror     $046D
-        ora     ($01,x)
+        .byte   $70,$6F
+        .byte   $6E,$6D,$04
+        .byte   $01,$01
         .byte   $AF,$07,$84,$10,$05,$23,$02,$C0
-        sta     sound_cmd_set_portamento
-        sta     $91
-        sta     snd_data_B488
+        .byte   $8D,$8D,$88
+        .byte   $85,$91
+        .byte   $8D,$88,$B4
         .byte   $92,$91,$8F,$91,$AD,$80,$8B,$8B
         .byte   $8A,$86,$AF,$8B,$88,$6B,$6B,$66
         .byte   $6F,$6B,$72,$6F,$77,$92,$AB,$80
         .byte   $8A,$6A,$6D,$6A,$65,$81,$04,$01
         .byte   $81,$AF
-        ror     a
-        adc     $7675
-        adc     $76,x
-        adc     $76,x
-        adc     ($6D),y
+        .byte   $6A
+        .byte   $6D,$75,$76
+        .byte   $75,$76
+        .byte   $75,$76
+        .byte   $71,$6D
         .byte   $80
         .byte   $02
-        cpy     #$AA
+        .byte   $C0,$AA
         .byte   $80,$30,$81,$30,$84,$30,$89,$30
         .byte   $84,$30,$89,$30,$8D,$30,$89,$30
         .byte   $8D,$30,$90,$30
-        sta     snd_data_9030
-        bmi     snd_data_AF46
+        .byte   $8D,$30,$90
+        .byte   $30,$95
         .byte   $89,$89,$89,$89,$80,$AB,$80,$07
         .byte   $9A,$10,$02,$00,$8D
-        adc     snd_data_8D6D
+        .byte   $6D,$6D,$8D
         .byte   $6D
-snd_data_AFC2:  adc     snd_data_8F8D
+snd_data_AFC2:  .byte   $6D,$8D,$8F
         .byte   $80
-        and     ($CB,x)
-        php
-        ora     ($CB,x)
-        php
-        brk
+        .byte   $21,$CB
+        .byte   $08
+        .byte   $01,$CB
+        .byte   $08
+        .byte   $00
         .byte   $8B,$89,$69,$69,$89,$86,$80,$86
         .byte   $80,$C8,$88,$89,$8B,$A0,$8D,$6D
         .byte   $6D,$8D,$6D,$6D,$8D,$8F,$80,$21
@@ -3408,34 +3459,34 @@ snd_data_AFC2:  adc     snd_data_8F8D
         .byte   $94,$96,$99,$09,$00,$05,$03,$3C
         .byte   $02,$00,$05,$23,$07,$9A,$10,$88
         .byte   $68
-        pla
-        dey
-        pla
-        pla
-        dey
-        dey
+        .byte   $68
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $88
         .byte   $80,$E6,$88,$84,$64,$64,$84,$83
         .byte   $80,$83,$80,$C5,$85,$84
-        stx     $A0
-        dey
-        pla
-        pla
-        dey
-        pla
-        pla
-        dey
-        dey
+        .byte   $86,$A0
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $88
         .byte   $80
-snd_data_B025:  inc     $88
-        ldy     $84
-        stx     $80
-snd_data_B02B:  stx     $80
-        and     ($88,x)
-snd_data_B02F:  iny
+snd_data_B025:  .byte   $E6,$88
+        .byte   $A4,$84
+        .byte   $86,$80
+snd_data_B02B:  .byte   $86,$80
+        .byte   $21,$88
+snd_data_B02F:  .byte   $C8
 snd_data_B030:  .byte   $02,$80,$03,$36
-snd_data_B034:  ora     $2F
+snd_data_B034:  .byte   $05,$2F
         .byte   $07,$83
-snd_data_B038:  bvs     snd_data_B09A
+snd_data_B038:  .byte   $70,$60
         .byte   $74
 snd_data_B03B:  .byte   $72,$70,$72,$70
 snd_data_B03F:  .byte   $6F,$6E,$04,$01,$FB,$AF
@@ -3451,27 +3502,27 @@ snd_data_B045:  .byte   $07,$84,$10,$05,$23,$03,$3C,$02
 snd_data_B087:  .byte   $75,$76,$75,$76,$71,$6D,$60,$03
         .byte   $3C,$02,$C0,$A5,$80,$30,$84,$30
         .byte   $89,$30,$8D
-snd_data_B09A:  bmi     snd_data_B025
-        bmi     snd_data_B02B
-        bmi     snd_data_B030
-        bmi     snd_data_B02F
-        bmi     snd_data_B034
-        bmi     snd_data_B03B
-        bmi     snd_data_B038
-        bmi     snd_data_B03F
-        bmi     snd_data_B045
-        sty     $84
-        sty     $84
+snd_data_B09A:  .byte   $30,$89
+        .byte   $30,$8D
+        .byte   $30,$90
+        .byte   $30,$8D
+        .byte   $30,$90
+        .byte   $30,$95
+        .byte   $30,$90
+        .byte   $30,$95
+        .byte   $30,$99
+        .byte   $84,$84
+        .byte   $84,$84
         .byte   $80
-        ldx     $80
+        .byte   $A6,$80
         .byte   $07,$9A,$10,$02,$00,$88
-        pla
-        pla
-        dey
-        pla
-        pla
-        dey
-        dey
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $68
+        .byte   $68
+        .byte   $88
+        .byte   $88
         .byte   $80,$E6,$88,$84,$64,$64,$84,$83
         .byte   $80,$83,$80,$C5,$85,$84,$86,$A0
         .byte   $88,$68,$68,$88,$68,$68,$88,$88
@@ -3479,27 +3530,27 @@ snd_data_B09A:  bmi     snd_data_B025
         .byte   $85,$86,$88,$80,$85,$86,$88,$80
         .byte   $91,$92,$94,$09,$00,$05,$03,$30
         .byte   $05,$23,$8D,$6D
-        adc     $1D04
+        .byte   $6D,$04,$1D
         .byte   $F2
-        bcs     snd_data_B087
-        dey
-        txa
-        sta     $6D8D
-        adc     $1D04
-        sbc     snd_data_8DB0,x
-        dey
-        txa
-        sta     $3003
-        lda     $01
+        .byte   $B0,$8D
+        .byte   $88
+        .byte   $8A
+        .byte   $8D,$8D,$6D
+        .byte   $6D,$04,$1D
+        .byte   $FD,$B0,$8D
+        .byte   $88
+        .byte   $8A
+        .byte   $8D,$03,$30
+        .byte   $A5,$01
         .byte   $14
-        sta     snd_data_8D80,x
-        sta     weapon_select_dec_count
-        sta     snd_data_9D8D
-        sta     $0180
-        brk
-        sta     $01
+        .byte   $9D,$80,$8D
+        .byte   $8D,$9D,$80
+        .byte   $8D,$8D,$9D
+        .byte   $8D,$80,$01
+        .byte   $00
+        .byte   $85,$01
         .byte   $14,$9D
-        sta     a:$01,x
+        .byte   $9D,$01,$00
         .byte   $A3,$01,$14,$9D,$80,$8D,$8D,$9D
         .byte   $80,$8D,$8D,$9D,$8D,$80,$01,$00
         .byte   $83,$01,$14,$9D,$9D,$01,$00,$81
@@ -3510,18 +3561,18 @@ snd_data_B09A:  bmi     snd_data_B025
         .byte   $7D,$7D,$9D,$7B,$7B,$9B,$79,$79
         .byte   $99,$7D,$7D,$7B,$78,$01,$00,$8D
         .byte   $6D,$6D,$04,$17,$68,$B1,$8D
-        sta     snd_data_918F
+        .byte   $8D,$8F,$91
         .byte   $80,$8D,$8F,$91,$80,$8D,$8F,$91
         .byte   $80,$8D,$8F,$91,$09,$00,$05,$07
         .byte   $82,$A0,$03,$3F,$82,$62,$62,$07
         .byte   $84,$80,$01,$FE
-        sta     a:$01
+        .byte   $8D,$01,$00
         .byte   $07,$82,$A0,$62,$62,$04,$3B,$87
         .byte   $B1,$83,$83,$83,$83,$80,$83,$83
         .byte   $83,$80,$83,$83,$83,$80,$83,$83
         .byte   $83
-        ora     #$00
-        brk
+        .byte   $09,$00
+        .byte   $00
         .byte   $80,$00,$02,$62,$80,$00,$0F
 snd_data_B1B5:  .byte   $BF,$B1,$3D,$B2,$B9,$B2,$1D,$B3
         .byte   $53,$B3,$00,$08,$05,$20,$02,$80
@@ -3531,20 +3582,20 @@ snd_data_B1B5:  .byte   $BF,$B1,$3D,$B2,$B9,$B2,$1D,$B3
         .byte   $96,$A0,$80,$96,$95,$93,$91,$93
         .byte   $80,$8E,$8C,$8A,$80,$8A,$89,$8A
         .byte   $21,$B1,$06,$D1,$06,$B3,$06
-snd_data_B1F4:  lda     ($AF),y
-        asl     $B5
-        asl     $B3
-        lda     ($06),y
+snd_data_B1F4:  .byte   $B1,$AF
+        .byte   $06,$B5
+        .byte   $06,$B3
+        .byte   $B1,$06
         .byte   $B5
-snd_data_B1FD:  asl     $B3
+snd_data_B1FD:  .byte   $06,$B3
         .byte   $B2,$06,$B6,$06,$B5,$B3,$00,$07
         .byte   $D6,$02,$C0,$80,$8D,$8F,$91,$21
         .byte   $B2,$B2,$92,$B1,$92,$22,$AF,$8F
         .byte   $AF,$8F,$8C,$8F,$B4,$B2,$B1,$AF
         .byte   $00
-        asl     $B0
+        .byte   $06,$B0
         .byte   $80
-        bcc     snd_data_B1B5
+        .byte   $90,$90
         .byte   $AF,$90,$AD,$80,$8D,$8D,$AF,$90
         .byte   $F2,$05,$38,$01,$01,$02,$00,$03
         .byte   $3F,$07,$AF,$10,$21,$F9,$F9,$09
@@ -3552,11 +3603,11 @@ snd_data_B1FD:  asl     $B3
         .byte   $30,$05,$20,$80,$91,$96,$98,$DA
         .byte   $80,$92,$96,$98,$DB,$04,$01,$48
         .byte   $B2,$96,$91,$96,$9A,$95
-        sta     ($95),y
-        tya
+        .byte   $91,$95
+        .byte   $98
         .byte   $93,$8E,$93,$96,$91,$8C,$91,$96
-        bcc     snd_data_B1F4
-        bcc     snd_data_B1FD
+        .byte   $90,$8C
+        .byte   $90,$93
         .byte   $04,$01,$66,$B2,$D1,$91,$06,$B0
         .byte   $8F,$8A,$8F,$91,$D3,$91,$8C,$91
         .byte   $93,$D5,$92,$8E,$92,$93,$D5,$93
@@ -3565,29 +3616,29 @@ snd_data_B1FD:  asl     $B3
         .byte   $03,$8D,$B2,$88,$8C,$8F,$94,$04
         .byte   $03,$95,$B2,$00,$06,$89,$8D,$90
         .byte   $95,$04,$03,$9F,$B2
-        cpx     #$05
-        sec
+        .byte   $E0,$05
+        .byte   $38
         .byte   $02,$00,$03,$3F,$01,$01,$07,$AF
         .byte   $10
-        and     (zp_F4,x)
+        .byte   $21,$F4
         .byte   $F4,$01,$00,$09,$00,$08,$03,$81
         .byte   $05,$20,$06,$AA,$8A,$AA,$A0,$04
         .byte   $03,$BB,$B2,$CA,$C9,$C7,$C5,$C4
         .byte   $C7,$06,$A5,$85,$A5
-        ldy     #$06
+        .byte   $A0,$06
         .byte   $C3
-        ldy     $E5
-        asl     $C2
-        ldx     $E7
+        .byte   $A4,$E5
+        .byte   $06,$C2
+        .byte   $A6,$E7
         .byte   $03,$50,$00,$07,$86,$86,$80,$86
         .byte   $86,$81,$86,$8A,$04,$01,$DF,$B2
         .byte   $88,$88,$80,$88,$88,$83,$88,$8C
         .byte   $04,$01,$EB,$B2,$00,$06,$89,$89
         .byte   $80,$89,$89,$84,$89
-snd_data_B300:  sta     $0104
-        sbc     $01B2,y
-        ora     $30,x
-        sta     $0204,x
+snd_data_B300:  .byte   $8D,$04,$01
+        .byte   $F9,$B2,$01
+        .byte   $15,$30
+        .byte   $9D,$04,$02
         .byte   $07,$B3,$30,$98,$04,$08,$0D,$B3
         .byte   $03,$8F,$05,$38,$01,$01,$21,$F5
         .byte   $F5,$09,$00,$08,$03,$3C,$07,$81
@@ -3603,80 +3654,80 @@ snd_data_B300:  sta     $0104
         .byte   $AF,$10,$6C,$6C,$60,$6C,$60,$6C
         .byte   $60,$6C,$A0,$6D,$6F,$60,$22,$71
         .byte   $B1,$08,$00,$D1,$09
-        brk
-        asl     zp_temp_02
-        rti
+        .byte   $00
+        .byte   $06,$02
+        .byte   $40
 
         .byte   $05,$27,$03,$3F,$07,$AF,$10,$69
-snd_data_B38C:  adc     #$60
-snd_data_B38E:  adc     #$60
-snd_data_B390:  adc     #$60
-        adc     #$A0
-snd_data_B394:  ror     a
-        jmp     (data_ref_2260)
+snd_data_B38C:  .byte   $69,$60
+snd_data_B38E:  .byte   $69,$60
+snd_data_B390:  .byte   $69,$60
+        .byte   $69,$A0
+snd_data_B394:  .byte   $6A
+        .byte   $6C,$60,$22
 
-        ror     $08AE
-        brk
+        .byte   $6E,$AE,$08
+        .byte   $00
         .byte   $CE,$09
-        brk
-snd_data_B39F:  asl     $03
-        bmi     snd_data_B3A8
+        .byte   $00
+snd_data_B39F:  .byte   $06,$03
+        .byte   $30,$05
         .byte   $27,$65,$65,$60
         .byte   $65
-snd_data_B3A8:  rts
+snd_data_B3A8:  .byte   $60
 
-        adc     $60
-        sta     $01
+        .byte   $65,$60
+        .byte   $85,$01
         .byte   $10
-snd_data_B3AE:  adc     $0198,x
-        brk
-snd_data_B3B2:  ror     $88
+snd_data_B3AE:  .byte   $7D,$98,$01
+        .byte   $00
+snd_data_B3B2:  .byte   $66,$88
         .byte   $03,$7F,$21,$6A
-snd_data_B3B8:  and     ($8A,x)
-        tax
+snd_data_B3B8:  .byte   $21,$8A
+        .byte   $AA
         .byte   $03,$30
-snd_data_B3BD:  ora     ($10,x)
-        adc     snd_data_B77B,x
-        ora     #$00
-        asl     $07
+snd_data_B3BD:  .byte   $01,$10
+        .byte   $7D,$7B,$B7
+        .byte   $09,$00
+        .byte   $06,$07
         .byte   $83,$F0,$03,$3F,$80,$60,$82,$82
         .byte   $82,$E0,$09
-        ora     ($62,x)
+        .byte   $01,$62
         .byte   $80,$00,$0F,$E0,$B3,$23,$B4,$4F
         .byte   $B4,$81,$B4,$9E
-        ldy     $00,x
-        asl     $03
-        rol     $C002,x
-        ora     $27
+        .byte   $B4,$00
+        .byte   $06,$03
+        .byte   $3E,$02,$C0
+        .byte   $05,$27
         .byte   $07,$01,$70,$B1,$B1,$30,$AF,$AF
         .byte   $30,$8F,$30,$AF,$30,$8F,$30,$A0
         .byte   $08,$01,$AD,$08,$00
-        bmi     snd_data_B38C
-        bmi     snd_data_B38E
-        bmi     snd_data_B390
-        bmi     snd_data_B394
-        lda     ($B1),y
-        bmi     snd_data_B3B8
+        .byte   $30,$8D
+        .byte   $30,$8D
+        .byte   $30,$8D
+        .byte   $30,$8F
+        .byte   $B1,$B1
+        .byte   $30,$AF
         .byte   $AF,$30,$8F
-snd_data_B40C:  bmi     snd_data_B3BD
-snd_data_B40E:  bmi     snd_data_B39F
-snd_data_B410:  bmi     snd_data_B3B2
-        php
-        ora     ($AE,x)
-        php
-        brk
+snd_data_B40C:  .byte   $30,$AF
+snd_data_B40E:  .byte   $30,$8F
+snd_data_B410:  .byte   $30,$A0
+        .byte   $08
+        .byte   $01,$AE
+        .byte   $08
+        .byte   $00
         .byte   $30,$8E,$30
-snd_data_B41A:  stx     snd_data_8E30
-        bmi     snd_data_B3AE
+snd_data_B41A:  .byte   $8E,$30,$8E
+        .byte   $30,$8F
         .byte   $04,$00,$E2,$B3,$00,$06,$02,$40
         .byte   $05,$27,$07,$01,$80
 snd_data_B42C:  .byte   $03,$3A,$07,$01,$80,$AA,$AA,$30
         .byte   $A9,$A9,$30,$89,$30,$A8,$30,$88
         .byte   $30
-        ldy     #$08
-        ora     ($A5,x)
-        php
-        brk
+        .byte   $A0,$08
+        .byte   $01,$A5
+        .byte   $08
+        .byte   $00
         .byte   $30,$85,$30,$85,$30,$85,$30,$8C
         .byte   $04,$00,$25,$B4,$00,$06,$03,$55
         .byte   $05,$27,$30,$A6,$30,$86,$30,$86
@@ -3685,26 +3736,26 @@ snd_data_B42C:  .byte   $03,$3A,$07,$01,$80,$AA,$AA,$30
         .byte   $30,$85,$30,$8A,$30,$96,$30,$8A
         .byte   $30,$8A,$01,$10,$30,$9D,$30,$9A
         .byte   $01,$00,$04,$00,$55
-        ldy     $00,x
-        asl     $03
+        .byte   $B4,$00
+        .byte   $06,$03
         .byte   $3F,$07,$82,$80
-snd_data_B488:  bmi     snd_data_B40C
-        bmi     snd_data_B40E
-        bmi     snd_data_B410
+snd_data_B488:  .byte   $30,$82
+        .byte   $30,$82
+        .byte   $30,$82
         .byte   $07
-        sta     $40
-        bmi     snd_data_B41A
+        .byte   $85,$40
+        .byte   $30,$87
         .byte   $07,$82,$80,$30,$82,$30,$82,$04
         .byte   $00,$88,$B4,$00,$00,$80,$00,$01
         .byte   $62,$80,$00,$0F,$B1
-        ldy     $E0,x
-        ldy     $08,x
-        lda     $2A,x
-        lda     $4B,x
-        lda     $00,x
-        asl     $03
-        rol     $C002,x
-        ora     $27
+        .byte   $B4,$E0
+        .byte   $B4,$08
+        .byte   $B5,$2A
+        .byte   $B5,$4B
+        .byte   $B5,$00
+        .byte   $06,$03
+        .byte   $3E,$02,$C0
+        .byte   $05,$27
         .byte   $07,$A2,$20,$80,$A0,$85,$8B,$8A
         .byte   $88,$85,$80,$88,$83,$80,$84,$80
         .byte   $85,$80,$88,$87,$86,$85,$8B,$8A
@@ -3715,15 +3766,15 @@ snd_data_B488:  bmi     snd_data_B40C
         .byte   $B0,$AD,$AF,$AC,$AE,$AB,$B1,$AE
         .byte   $B0,$AD,$AF,$01,$00,$08,$00,$02
         .byte   $40,$A5,$80,$93,$80
-        sty     $09,x
-        brk
+        .byte   $94,$09
+        .byte   $00
         .byte   $06,$03,$50,$05,$27,$01,$10,$65
         .byte   $65
-        lda     a:$01,x
-        sta     $83
-        sta     $83
-        sta     $80
-        sta     $82
+        .byte   $BD,$01,$00
+        .byte   $85,$83
+        .byte   $85,$83
+        .byte   $85,$80
+        .byte   $85,$82
         .byte   $80,$82,$82,$82,$80,$83,$80,$85
         .byte   $04,$01,$15,$B5,$09,$00,$06,$03
         .byte   $36,$80,$A7,$03,$3A,$07,$82,$80
@@ -3734,28 +3785,28 @@ snd_data_B488:  bmi     snd_data_B40C
         .byte   $B5,$72,$B5,$00,$00,$00,$00,$86
         .byte   $B5,$00,$08,$03,$3F,$02,$40,$07
         .byte   $FF,$10,$01,$FF
-        ora     $2F
-        php
-        ora     ($95,x)
+        .byte   $05,$2F
+        .byte   $08
+        .byte   $01,$95
         .byte   $04,$00,$60,$B5,$00,$08,$03,$3A
         .byte   $02,$40,$07,$FF,$10,$01,$FF
-        ora     $2F
-        php
-        ora     ($96,x)
+        .byte   $05,$2F
+        .byte   $08
+        .byte   $01,$96
         .byte   $04,$00,$74,$B5,$00,$00,$80,$00
         .byte   $00,$22,$80,$00,$0F,$99,$B5,$36
         .byte   $B6,$48,$B6,$C4,$B6,$D8,$B6,$00
         .byte   $08,$05,$20,$02,$C0,$03,$3A,$07
         .byte   $DF,$40,$08,$00,$21,$CC,$8C,$85
-        dey
-        sty     snd_data_8DAF
-        ldy     snd_data_AA06
+        .byte   $88
+        .byte   $8C,$AF,$8D
+        .byte   $AC,$06,$AA
         .byte   $04,$03,$A6,$B5,$02,$40
-        cmp     snd_data_8D06
-        asl     $8F
-        sta     ($06),y
-        ldy     snd_data_8D8C
-        asl     $AF
+        .byte   $CD,$06,$8D
+        .byte   $06,$8F
+        .byte   $91,$06
+        .byte   $AC,$8C,$8D
+        .byte   $06,$AF
         .byte   $D4,$94,$92,$91,$8F,$06,$AE,$8E
         .byte   $8F,$06,$B1,$8D,$8C,$8D,$8F,$A0
         .byte   $99,$98,$99,$9B,$A0,$06,$86,$06
@@ -3765,15 +3816,15 @@ snd_data_B488:  bmi     snd_data_B40C
         .byte   $8D,$91,$21,$96,$D6,$91,$71,$6F
         .byte   $8D,$AF,$91,$06,$AA,$8A,$8C,$06
         .byte   $AD,$05,$14
-        stx     $92,y
-        sta     snd_data_9996
-        sty     $B8,x
-        ldx     snd_data_BB9D,y
+        .byte   $96,$92
+        .byte   $8D,$96,$99
+        .byte   $94,$B8
+        .byte   $BE,$9D,$BB
         .byte   $07,$01,$40,$05,$20,$22,$ED,$CD
         .byte   $8D,$90,$8F,$21
-        sta     $0104
-        ora     $B6,x
-        brk
+        .byte   $8D,$04,$01
+        .byte   $15,$B6
+        .byte   $00
         .byte   $09,$ED,$00,$0A,$06,$A9,$89,$00
         .byte   $0B,$89,$06,$AB,$22,$E8,$07,$9F
         .byte   $10,$E8,$E8,$09,$00,$08,$02,$C0
@@ -3789,21 +3840,21 @@ snd_data_B488:  bmi     snd_data_B40C
 snd_data_B67F:  .byte   $A3,$83,$C3,$06,$A8,$88,$88,$06
         .byte   $A9,$06,$AA,$8A,$CA,$06,$A9,$89
         .byte   $C9,$06,$A8,$88,$C8
-        asl     $A7
+        .byte   $06,$A7
         .byte   $87,$C7,$06,$A6,$86,$C6,$06,$A8
         .byte   $88,$C8,$06,$AB,$8B,$CB,$04,$01
         .byte   $A0,$B6,$06,$AA,$8A,$CA,$04,$01
         .byte   $A8,$B6,$00,$09,$06,$A9,$89,$C9
         .byte   $00,$0A
-        asl     $A6
-        stx     $00
+        .byte   $06,$A6
+        .byte   $86,$00
         .byte   $0B,$86,$06,$A8,$21,$E1,$A1,$09
         .byte   $00,$08,$03,$3C,$07,$81,$10,$06
         .byte   $D0,$A8,$04,$19,$CB
-        ldx     $00,y
-        ora     #$06
-        bne     snd_data_B67F
-        ora     #$02
+        .byte   $B6,$00
+        .byte   $09,$06
+        .byte   $D0,$A8
+        .byte   $09,$02
         .byte   $22,$80,$00,$0F,$E7,$B6,$E5,$B7
         .byte   $DE,$B8,$B6,$B9,$E2,$B9,$00,$05
         .byte   $03,$3C,$05,$23,$07,$9A,$10,$E0
@@ -3816,11 +3867,11 @@ snd_data_B67F:  .byte   $A3,$83,$C3,$06,$A8,$88,$88,$06
         .byte   $80,$86,$87,$88,$8B,$6D,$6D,$80
         .byte   $6B,$6B,$8D,$80,$8B,$6D,$6D,$80
         .byte   $68,$68,$8B,$6D
-        adc     $6F90
+        .byte   $6D,$90,$6F
         .byte   $6F,$8D,$6B,$6B,$8B,$6D,$6D,$80
         .byte   $6B,$6B,$8D,$80,$8B,$6D,$6D,$80
         .byte   $66,$66,$80,$66
-        ror     $86
+        .byte   $66,$86
         .byte   $67,$67,$88,$6B,$6B,$04,$01,$25
         .byte   $B7,$05,$23,$02,$C0,$C9,$89,$8D
         .byte   $80,$8D,$70,$6D,$69,$6D,$70,$6D
@@ -3838,29 +3889,29 @@ snd_data_B77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $85,$86,$88,$80,$85,$86,$88,$80
         .byte   $03,$3F,$85,$86,$21,$88,$E8,$94
         .byte   $94,$03,$3C,$06,$80,$94,$94,$03
-        sec
-        asl     $80
-        sty     $94,x
+        .byte   $38
+        .byte   $06,$80
+        .byte   $94,$94
         .byte   $03,$35,$06,$80,$94
-        sty     $03,x
+        .byte   $94,$03
         .byte   $33,$06,$80,$94,$94,$09,$00
-        ora     $03
+        .byte   $05,$03
         .byte   $3C,$05,$23,$07,$9A,$10,$E0,$66
         .byte   $6B,$6F,$66,$6B,$6F,$72,$6B,$6F
         .byte   $72,$77,$6F,$72,$77,$7B
-        ror     $E0A5,x
-        cpy     #$91
-        sta     ($E0),y
-        cpy     #$85
-        asl     $A4
+        .byte   $7E,$A5,$E0
+        .byte   $C0,$91
+        .byte   $91,$E0
+        .byte   $C0,$85
+        .byte   $06,$A4
         .byte   $A3
-        cpx     #$A0
+        .byte   $E0,$A0
         .byte   $80,$8D,$8D,$8F,$E0,$C0,$A3,$A4
         .byte   $04
-        ora     ($FF,x)
+        .byte   $01,$FF
         .byte   $B7,$A5,$A0,$E0,$E0,$E0,$80,$86
         .byte   $87,$88,$8B
-        adc     chr_ram_data_transfer
+        .byte   $6D,$6D,$80
         .byte   $6B,$6B,$8D,$80,$8B,$6D,$6D,$80
         .byte   $68,$68,$8B,$6D,$6D,$90,$6F,$6F
         .byte   $8D,$6B,$6B,$8B,$6D,$6D,$80,$6B
@@ -3876,21 +3927,21 @@ snd_data_B77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $78,$7C,$02,$00,$07,$9A,$10,$88
         .byte   $68,$68,$88,$68,$68,$88,$88,$80
         .byte   $E6,$88,$84,$64,$64
-        sty     $83
+        .byte   $84,$83
         .byte   $80,$83,$80,$C5,$85,$84,$86,$A0
         .byte   $88,$68,$68,$88,$68,$68,$88,$88
         .byte   $80,$E6,$88,$88,$88
-        txa
-        sta     sound_cmd_set_detune
-        txa
-        sta     sound_cmd_set_detune
-        txa
-        sta     $0380
+        .byte   $8A
+        .byte   $8D,$80,$88
+        .byte   $8A
+        .byte   $8D,$80,$88
+        .byte   $8A
+        .byte   $8D,$80,$03
         .byte   $3F
-        dey
-        txa
-        and     ($8D,x)
-        sbc     snd_data_9999
+        .byte   $88
+        .byte   $8A
+        .byte   $21,$8D
+        .byte   $ED,$99,$99
         .byte   $03,$3C,$06,$80,$99,$99,$03,$38
         .byte   $06,$80,$99,$99,$03,$35,$06,$80
         .byte   $99,$99,$03,$32,$06,$80,$99,$99
@@ -3898,12 +3949,12 @@ snd_data_B77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $10,$A0,$9D,$9A,$80,$9A,$B8,$7D
         .byte   $7D,$7D,$60,$7A,$7A,$7A,$60,$77
         .byte   $77,$77,$60
-        adc     $787A,x
-        adc     $01,x
-        brk
+        .byte   $7D,$7A,$78
+        .byte   $75,$01
+        .byte   $00
         .byte   $8B,$8D,$80,$8D
-        ldy     #$8B
-        sta     snd_data_8D80
+        .byte   $A0,$8B
+        .byte   $8D,$80,$8D
         .byte   $80,$8B,$8D,$90,$01,$10,$9D,$9D
         .byte   $01,$00,$8B,$8D,$80,$8D,$A0,$8B
         .byte   $8D,$80,$8D,$80,$8B,$8D,$90,$01
@@ -3914,7 +3965,7 @@ snd_data_B77B:  .byte   $70,$6D,$70,$75,$D0,$CB,$06,$8B
         .byte   $8B,$80,$86,$01,$10,$BD,$BD,$04
         .byte   $01,$FC,$B8,$8D,$80,$9D,$8D,$80
         .byte   $8D
-        sta     snd_data_8D80,x
+        .byte   $9D,$80,$8D
         .byte   $80,$9D,$8D,$6D,$6D,$6D,$6D,$9D
         .byte   $8D,$04,$05,$4A,$B9,$01,$00,$89
         .byte   $69,$69,$04,$07,$62,$B9,$8B,$6B
@@ -3938,83 +3989,83 @@ snd_data_B9DF:  .byte   $83,$83,$09,$00,$00,$80,$00,$01
         .byte   $27,$BA,$00,$00,$4E,$BA,$00,$06
         .byte   $03
 snd_data_B9F8:  .byte   $3F,$05,$27,$07,$89
-        bpl     snd_data_B9DF
-        ror     a
-        ror     a
+        .byte   $10,$E0
+        .byte   $6A
+        .byte   $6A
         .byte   $80,$6C
-snd_data_BA03:  jmp     (data_ref_6D80)
+snd_data_BA03:  .byte   $6C,$80,$6D
 
         .byte   $6D
 snd_data_BA07:  .byte   $80,$6F,$6D,$6F,$06,$F1
-snd_data_BA0D:  ora     #$00
-        asl     $03
+snd_data_BA0D:  .byte   $09,$00
+        .byte   $06,$03
 snd_data_BA11:  .byte   $3F,$05,$27,$07,$89
-        bpl     snd_data_B9F8
-        ror     $66
+        .byte   $10,$E0
+        .byte   $66,$66
         .byte   $80
-        pla
-        pla
+        .byte   $68
+        .byte   $68
         .byte   $80,$6A,$6A,$80,$6C,$6A
-        jmp     (data_ref_ED06)
+        .byte   $6C,$06,$ED
 
         .byte   $09,$00,$06,$03,$30,$05,$27,$01
         .byte   $10,$9D,$9D
-        adc     $607A,x
-        tya
-        tya
-        sei
-        ror     $60,x
+        .byte   $7D,$7A,$60
+        .byte   $98
+        .byte   $98
+        .byte   $78
+        .byte   $76,$60
         .byte   $73,$60
-        ora     ($00,x)
+        .byte   $01,$00
         .byte   $03,$81,$63,$63,$80,$65,$65,$80
-        ror     $66
+        .byte   $66,$66
         .byte   $80
-        pla
-        ror     $68
-        asl     $E8
-        ora     #$00
-        brk
+        .byte   $68
+        .byte   $66,$68
+        .byte   $06,$E8
+        .byte   $09,$00
+        .byte   $00
         .byte   $80,$00,$0F,$5D,$BA,$90,$BA,$C3
         .byte   $BA,$DA,$BA,$E9,$BA,$00,$06,$03
         .byte   $3F,$02,$00,$05,$23,$07,$AF,$10
         .byte   $06,$CD,$30,$8D,$30,$8C,$30
-        sta     $CF06
-        bmi     snd_data_BA03
-        bmi     snd_data_BA03
-        bmi     snd_data_BA07
-        asl     $D1
-        bmi     snd_data_BA0D
-        bmi     snd_data_BA0D
-        bmi     snd_data_BA11
+        .byte   $8D,$06,$CF
+        .byte   $30,$8F
+        .byte   $30,$8D
+        .byte   $30,$8F
+        .byte   $06,$D1
+        .byte   $30,$91
+        .byte   $30,$8F
+        .byte   $30,$91
         .byte   $D2,$30,$92,$30,$91,$30,$92,$30
         .byte   $8F,$30,$92,$30,$96,$06,$F4,$09
         .byte   $00,$06,$02,$40,$05,$23,$03,$3F
         .byte   $07,$AF,$10,$06,$C8,$30,$88,$30
         .byte   $88,$30
-        sta     ($06),y
+        .byte   $91,$06
         .byte   $D4,$30,$94,$30,$92,$30,$91,$06
         .byte   $CD,$30,$8D,$30,$8C,$30,$8D,$CF
         .byte   $30,$8F,$30,$8D,$30,$8F,$30,$8A
         .byte   $30,$8F,$30,$92,$06,$F1,$09,$00
         .byte   $06,$03,$50,$05,$2F,$81,$81,$81
         .byte   $61
-        adc     ($60,x)
-        sta     ($61,x)
-        sta     ($81,x)
+        .byte   $61,$60
+        .byte   $81,$61
+        .byte   $81,$81
         .byte   $04,$03,$C9,$BA,$06,$E1,$09,$00
         .byte   $06,$07,$83,$F0,$03,$3F,$63,$63
         .byte   $83,$04,$0F,$DC,$BA,$09,$01,$62
         .byte   $80,$00,$0F,$00,$00,$00,$00,$F8
         .byte   $BA,$13,$BB,$22,$BB,$00,$05,$03
         .byte   $30,$05,$23,$01,$10,$8D,$80
-        lda     data_ref_6D80,x
-        adc     snd_data_8DBD
+        .byte   $BD,$80,$6D
+        .byte   $6D,$BD,$8D
         .byte   $80,$BD,$6D,$6D,$6D,$6D,$BD,$04
         .byte   $00,$FE,$BA,$00,$05,$03,$3F,$07
         .byte   $82,$30,$01,$FF
-        ldy     #$AB
+        .byte   $A0,$AB
         .byte   $04,$00,$1C,$BB
-        bvc     snd_data_BB2E
+        .byte   $50,$0A
         .byte   $02,$00,$03,$3F,$83,$8A,$00,$06
         .byte   $03,$3F
 snd_data_BB2E:  .byte   $80,$0A,$80,$35,$00,$09,$02,$80
@@ -4023,7 +4074,7 @@ snd_data_BB2E:  .byte   $80,$0A,$80,$35,$00,$09,$02,$80
         .byte   $01,$00,$8F,$FF,$00,$09,$03,$36
         .byte   $80,$04,$03,$37,$8F,$FF,$00,$09
         .byte   $03,$33,$80,$03,$06
-        ldy     #$0F
+        .byte   $A0,$0F
         .byte   $02,$80,$01,$20,$03,$3F,$80,$86
         .byte   $02,$00,$01,$20,$03,$3F,$81,$0D
         .byte   $03,$7F,$01,$20,$81,$AB,$00,$0A
@@ -4031,7 +4082,7 @@ snd_data_BB2E:  .byte   $80,$0A,$80,$35,$00,$09,$02,$80
         .byte   $80,$64,$01,$15,$80,$C9,$01,$15
         .byte   $82,$FA,$00,$3A,$02,$00,$80,$08
         .byte   $06
-        bmi     snd_data_BB9A
+        .byte   $30,$0A
         .byte   $02,$00,$03,$3F,$81,$AB,$00,$03
         .byte   $02,$80
 snd_data_BB9A:  .byte   $03,$3F,$80
@@ -4039,17 +4090,17 @@ snd_data_BB9D:  .byte   $0A,$04,$01,$90,$BB,$03,$38,$02
         .byte   $C0,$01,$FF,$80,$3F,$00,$10,$02
         .byte   $80,$05,$00,$00,$84,$01,$80,$07
         .byte   $06
-        bmi     snd_data_BBBA
-        brk
+        .byte   $30,$02
+        .byte   $00
         .byte   $10
 snd_data_BBBA:  .byte   $02,$40,$03,$3F,$05,$02,$44,$80
         .byte   $00,$01,$E0,$81,$0D,$06
-        bvc     snd_data_BBCC
-        brk
+        .byte   $50,$02
+        .byte   $00
         .byte   $08
 snd_data_BBCC:  .byte   $02,$40,$03,$3F,$01,$0F,$80,$64
         .byte   $06
-        bne     snd_data_BBE1
+        .byte   $D0,$0A
         .byte   $02,$C0,$03,$3F,$05,$02,$A3,$80
         .byte   $07,$01
 snd_data_BBE1:  .byte   $5F,$80,$71,$00,$05,$05,$01,$43
@@ -4057,25 +4108,25 @@ snd_data_BBE1:  .byte   $5F,$80,$71,$00,$05,$05,$01,$43
         .byte   $03,$38,$80,$64,$00,$0D,$05,$01
         .byte   $43,$80,$07,$01,$F1,$02,$80,$80
         .byte   $05,$06
-        cpx     #$0A
-        ora     ($35,x)
+        .byte   $E0,$0A
+        .byte   $01,$35
         .byte   $02,$00,$03,$3F,$80,$A9,$00,$06
         .byte   $03,$37,$80,$03,$01,$FC,$05,$01
         .byte   $42,$80,$00,$8F,$FF,$00,$20,$03
         .byte   $3A,$80,$04,$01,$F9,$8F,$FF,$00
         .byte   $20,$03,$3A,$80,$04,$06
-        cpy     #$03
-        ora     $01
-        eor     ($80,x)
-        brk
+        .byte   $C0,$03
+        .byte   $05,$01
+        .byte   $41,$80
+        .byte   $00
         .byte   $03,$3F,$02,$40,$80,$6A,$00,$04
         .byte   $02,$40,$05,$01,$41,$80,$00,$03
         .byte   $3F,$80,$54,$04,$02,$2F,$BC,$06
-        jsr     zp_temp_02
+        .byte   $20,$02,$00
         .byte   $04,$02,$40,$01,$8B,$03,$3F,$05
         .byte   $01,$46,$82,$01,$80,$3F,$04,$01
         .byte   $4E,$BC,$06
-snd_data_BC62:  beq     snd_data_BC6F
+snd_data_BC62:  .byte   $F0,$0B
         .byte   $03,$3F,$81,$AB,$02,$C0,$01,$F2
         .byte   $03,$3F,$87
 snd_data_BC6F:  .byte   $F2,$00,$1F,$03,$3F,$02,$80,$80
@@ -4087,7 +4138,7 @@ snd_data_BC6F:  .byte   $F2,$00,$1F,$03,$3F,$02,$80,$80
         .byte   $03,$3F,$05,$00,$05,$86,$07,$01
         .byte   $40,$80,$0E,$00,$15,$02,$80,$01
         .byte   $4F,$03,$3F,$80,$0F,$06
-        cpy     #$0A
+        .byte   $C0,$0A
         .byte   $02,$C0,$01,$05,$03,$3F,$83,$F9
         .byte   $00,$02,$03,$3F,$80,$0E,$04,$01
         .byte   $B7,$BC,$02,$00,$05,$01,$43,$80
@@ -4098,57 +4149,57 @@ snd_data_BC6F:  .byte   $F2,$00,$1F,$03,$3F,$02,$80,$80
         .byte   $09,$06,$80,$06,$03,$3F,$01,$81
         .byte   $80,$1E,$00,$04,$03,$3F,$80,$0F
         .byte   $06
-        bvs     snd_data_BD0C
+        .byte   $70,$0A
         .byte   $02,$80,$03,$3F,$01,$EF,$80,$38
         .byte   $00,$04
 snd_data_BD0C:  .byte   $02,$80,$03,$3F,$01,$FF,$80,$08
         .byte   $01,$F9,$80,$25,$00,$04,$80,$05
         .byte   $01,$EF,$80,$38,$00,$04,$80,$0A
         .byte   $06
-        cpx     #$02
-        brk
+        .byte   $E0,$02
+        .byte   $00
         .byte   $05,$03,$3F,$02,$C0,$80,$86,$00
         .byte   $08,$03,$3F,$05,$00,$E0,$80,$00
         .byte   $02,$40,$80,$C9,$06
-        cpx     #$0A
+        .byte   $E0,$0A
         .byte   $02,$C0,$01,$25,$05,$01,$62,$82
         .byte   $04,$03,$3F,$80,$4D,$00,$04,$03
         .byte   $35,$80,$05,$01,$F0,$80,$4D,$00
-        ora     $03
+        .byte   $05,$03
         .byte   $33,$80,$05,$06
-        bmi     snd_data_BD69
+        .byte   $30,$0A
         .byte   $02,$00,$03,$37,$01,$FF,$80,$8E
         .byte   $00,$02
 snd_data_BD69:  .byte   $03,$3C,$80,$03,$03,$38,$80,$47
         .byte   $00,$06,$03,$3F,$80,$04,$06
-        cpx     #$02
-        brk
+        .byte   $E0,$02
+        .byte   $00
         .byte   $05,$03,$3F,$02,$80,$80,$FE,$00
         .byte   $05,$81,$53,$00,$05,$81,$93,$00
         .byte   $05,$80,$7F,$06
-        cpx     #$08
-        brk
+        .byte   $E0,$08
+        .byte   $00
         .byte   $07,$03,$3F,$80,$0F,$06,$80,$0A
         .byte   $02,$80,$03,$3F,$05,$03,$85,$81
         .byte   $02,$01,$B1,$80,$B3,$00,$06,$02
         .byte   $80,$05,$03,$85,$81,$02,$80,$09
         .byte   $04,$1E,$9A,$BD,$06
-        bmi     snd_data_BDC3
+        .byte   $30,$0A
         .byte   $02,$40,$03,$3F,$01,$F6,$80,$6A
         .byte   $00,$03
 snd_data_BDC3:  .byte   $03,$34,$80,$08,$04,$02,$B9,$BD
         .byte   $06
-        bmi     snd_data_BDD8
+        .byte   $30,$0A
         .byte   $02,$40,$03,$3F,$01,$F6,$80,$64
         .byte   $00,$03
 snd_data_BDD8:  .byte   $03,$38,$80,$0A,$04,$02,$CE,$BD
         .byte   $06
-        bmi     snd_data_BDED
+        .byte   $30,$0A
         .byte   $02,$40,$03,$3F,$01,$F1,$80,$5F
         .byte   $00,$03
 snd_data_BDED:  .byte   $03,$38,$80,$0E,$04,$03,$E3,$BD
         .byte   $06
-        bmi     snd_data_BE02
+        .byte   $30,$0A
         .byte   $02,$C0,$03,$3F,$86,$4E,$00,$03
         .byte   $02,$80
 snd_data_BE02:  .byte   $03,$3F,$80,$0B,$01,$02,$86,$4E
@@ -4158,8 +4209,8 @@ snd_data_BE02:  .byte   $03,$3F,$80,$0B,$01,$02,$86,$4E
         .byte   $81,$FC,$01,$81,$03,$81,$81,$AB
         .byte   $00,$04,$02,$80,$80,$0D,$04,$01
         .byte   $17,$BE,$06
-        beq     snd_data_BE3A
-        ora     ($C1,x)
+        .byte   $F0,$03
+        .byte   $01,$C1
         .byte   $03
 snd_data_BE3A:  .byte   $3F,$80,$1A,$00,$03,$01,$C1,$03
         .byte   $3F,$80,$1E,$04,$01,$37,$BE,$02
@@ -4172,19 +4223,19 @@ snd_data_BE3A:  .byte   $3F,$80,$1A,$00,$03,$01,$C1,$03
         .byte   $34,$80,$F0,$03,$32,$81,$AB,$00
         .byte   $08,$03,$33,$80,$F0,$06
 snd_data_BE88:  .byte   $80,$0A,$01,$60,$05,$01
-        and     ($82,x)
-        ora     $03
-        and     $FC81,y
-        brk
+        .byte   $21,$82
+        .byte   $05,$03
+        .byte   $39,$81,$FC
+        .byte   $00
         .byte   $06,$03,$3F,$80,$07,$01,$30,$80
         .byte   $38,$00,$17,$80,$03,$06,$60,$0A
         .byte   $02,$80,$03,$3F,$01,$FE,$81,$FC
         .byte   $00,$30,$03,$3F,$05,$04,$43,$80
         .byte   $00,$01
-        inc     $0A80,x
-        asl     $D0
+        .byte   $FE,$80,$0A
+        .byte   $06,$D0
         .byte   $02
-        brk
+        .byte   $00
         .byte   $03,$02,$80,$01,$C1,$03,$3F,$80
         .byte   $1F,$04,$01,$BE,$BE,$00,$08,$01
         .byte   $F8,$03,$3F,$80,$3F,$00,$08,$03
@@ -4192,8 +4243,8 @@ snd_data_BE88:  .byte   $80,$0A,$01,$60,$05,$01
         .byte   $3F,$00,$08,$03,$36,$80,$3F,$00
         .byte   $08,$03,$34,$80,$3F,$00,$08,$03
         .byte   $33,$80,$3C,$06
-        bne     snd_data_BEF6
-        brk
+        .byte   $D0,$01
+        .byte   $00
 snd_data_BEF6:  .byte   $03,$02,$80,$01,$C1,$03,$3F,$80
         .byte   $1F,$04,$01,$F5,$BE,$00,$08,$01
         .byte   $F8,$03,$3F,$80,$3F,$00,$08,$03
@@ -4204,11 +4255,11 @@ snd_data_BEF6:  .byte   $03,$02,$80,$01,$C1,$03,$3F,$80
 snd_data_BF2A:  .byte   $40,$0A,$02,$00,$01,$F1,$03,$3E
         .byte   $81,$7D,$00,$1D,$03,$3A,$80,$06
         .byte   $06
-        cpx     #$08
-        brk
+        .byte   $E0,$08
+        .byte   $00
         .byte   $04,$03,$36,$80,$04,$04,$02,$3D
         .byte   $BF,$06
-        beq     snd_data_BF4D
+        .byte   $F0,$03
         .byte   $02,$80,$01
 snd_data_BF4D:  .byte   $2F,$03,$3F,$80,$35,$00,$10,$02
         .byte   $00,$01,$2F,$03,$3F,$80,$3C,$03
@@ -4219,9 +4270,9 @@ snd_data_BF4D:  .byte   $2F,$03,$3F,$80,$35,$00,$10,$02
         .byte   $35,$00,$10,$03,$34,$80,$3C,$03
         .byte   $32,$80,$35,$00,$10,$03,$32,$80
         .byte   $3C
-        asl     $F0
+        .byte   $06,$F0
         .byte   $02
-        brk
+        .byte   $00
         .byte   $03,$02,$C0,$03,$3F,$80,$64,$00
         .byte   $03,$80,$59,$00,$03,$80,$50,$00
         .byte   $03,$80,$4B,$00,$03,$80,$43,$00
