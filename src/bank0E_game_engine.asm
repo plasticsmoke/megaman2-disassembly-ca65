@@ -2536,25 +2536,30 @@ met_delay_table:  .byte   $19,$4A,$BD,$E0,$04,$D0,$26,$A0 ; Met hide/shoot delay
         .byte   $00
 
 ; =============================================================================
-; telly_scan_targets -- Enemy AI: Telly — hover enemy, scan and shoot ($9532)
+; anko_spawner_scan -- Enemy AI: Anko spawner (type $02) — creates Shrink-AI entities ($9532)
+; Mislabeled by annotation scripts as "Telly". Actually type $02 (Anko sub-part).
 ; =============================================================================
-telly_scan_targets:  jsr     find_entity_scan
-        bcs     telly_spawn_shot
+anko_spawner_scan:  jsr     find_entity_scan
+        bcs     anko_spawner_create
         dec     $01
-        beq     telly_set_timer
+        beq     anko_spawner_set_timer
         dey
-        bne     telly_scan_targets
-        bne     telly_set_timer
-telly_spawn_shot:  lda     #$01
+        bne     anko_spawner_scan
+        bne     anko_spawner_set_timer
+anko_spawner_create:  lda     #$01
         jsr     spawn_entity_from_parent
         lda     #$31
-        bne     telly_store_timer
-telly_set_timer:  lda     #$62
-telly_store_timer:  sta     $04E0,x
+        bne     anko_spawner_store_timer
+anko_spawner_set_timer:  lda     #$62
+anko_spawner_store_timer:  sta     $04E0,x
         dec     $04E0,x
         jsr     apply_simple_physics
         rts
 
+; =============================================================================
+; anko_seg_ai -- Enemy AI: Anko segment (type $03) — spawns M-445 jellyfish ($9555)
+; Mislabeled by annotation scripts as "Pipi". Actually type $03 (Anko sub-part).
+; =============================================================================
         .byte   $BD,$20,$06,$D0,$08,$A9,$03,$20
         .byte   $B5,$95,$90,$01,$60
         lda     $0460
@@ -2562,36 +2567,36 @@ telly_store_timer:  sta     $04E0,x
         lda     $0440
         sta     $0440,x
         lda     $04E0,x
-        bne     pipi_dec_timer
+        bne     anko_seg_dec_timer
         lda     #$03
         sta     $01
         lda     #$04
         jsr     find_entity_count_check
-        bcs     pipi_set_timer
+        bcs     anko_seg_set_timer
         lda     #$04
         jsr     spawn_entity_from_parent
-        bcs     pipi_set_timer
+        bcs     anko_seg_set_timer
         lda     $0110,x
         and     #$01
         tax
         clc
         lda     $0470,y
-        adc     pipi_x_offset_table,x
+        adc     anko_seg_x_offset_table,x
         sta     $0470,y
         lda     $0450,y
-        adc     pipi_x_page_table,x
+        adc     anko_seg_x_page_table,x
         sta     $0450,y
         ldx     $2B
         inc     $0110,x
-pipi_set_timer:  lda     #$4B
+anko_seg_set_timer:  lda     #$4B
         sta     $04E0,x
-pipi_dec_timer:  dec     $04E0,x
+anko_seg_dec_timer:  dec     $04E0,x
         ldy     #$17
         jsr     boss_set_palette
         rts
 
-pipi_x_offset_table:  .byte   $50,$C8
-pipi_x_page_table:  .byte   $00,$FF
+anko_seg_x_offset_table:  .byte   $50,$C8
+anko_seg_x_page_table:  .byte   $00,$FF
 
 ; =============================================================================
 ; check_entity_collision_scan -- Entity Collision Scan — check overlap between entity pairs ($95B5)
@@ -2678,6 +2683,10 @@ enemy_deactivate_self:  lda     #$00
         sta     a:$F0,x
         rts
 
+; =============================================================================
+; claw_spawner_ai -- Enemy AI: Claw spawner (type $07) — creates Claw variants ($9675)
+; Mislabeled by annotation scripts as "Sniper". Actually type $07 (Claw).
+; =============================================================================
         .byte   $20,$B3,$EF,$60,$BD,$20,$06,$D0
         .byte   $08,$A9,$07,$20,$B5,$95,$90,$01
         .byte   $60
@@ -2686,33 +2695,33 @@ enemy_deactivate_self:  lda     #$00
         lda     $0440
         sta     $0440,x
         lda     $04E0,x
-        bne     sniper_dec_timer
+        bne     claw_spawner_dec_timer
         lda     #$02
         sta     $01
         lda     #$08
         jsr     find_entity_count_check
-        bcs     sniper_set_timer
+        bcs     claw_spawner_set_timer
         lda     #$08
         jsr     spawn_entity_from_parent
-        bcs     sniper_set_timer
+        bcs     claw_spawner_set_timer
         lda     $0110,x
         and     #$01
         tax
         lda     $0470,y
-        adc     sniper_x_offset_table,x
+        adc     claw_spawner_x_offset_tbl,x
         sta     $0470,y
         lda     $0450,y
-        adc     sniper_x_page_table,x
+        adc     claw_spawner_x_page_tbl,x
         sta     $0450,y
         ldx     $2B
         inc     $0110,x
-sniper_set_timer:  lda     #$5D
+claw_spawner_set_timer:  lda     #$5D
         sta     $04E0,x
-sniper_dec_timer:  dec     $04E0,x
+claw_spawner_dec_timer:  dec     $04E0,x
         rts
 
-sniper_x_offset_table:  .byte   $30,$E0 ; sniper shot X offset per direction
-sniper_x_page_table:  .byte   $00,$FF   ; sniper shot X page per direction
+claw_spawner_x_offset_tbl:  .byte   $30,$E0 ; Claw spawn X offset per direction
+claw_spawner_x_page_tbl:  .byte   $00,$FF   ; Claw spawn X page per direction
 
 ; =============================================================================
 ; find_entity_count_check -- Find Entity Count — scan for entity type, check population limit ($96CF)
@@ -2777,14 +2786,18 @@ blocky_check_land:  lda     #$0C
 blocky_apply_physics:  jsr     apply_entity_physics
         rts
 
+; =============================================================================
+; tanishi_ai -- Enemy AI: Tanishi (type $0A) — snail, spawns bare form on hit ($9776)
+; Mislabeled by annotation scripts as "Shotman". Actually type $0A (Tanishi).
+; =============================================================================
         .byte   $A9,$07,$85,$00,$4C,$52,$96,$BD
         .byte   $E0,$04,$D0,$48,$A9,$0C,$85,$02
         .byte   $BD,$A0,$06,$C9,$02,$90,$05,$A9
         .byte   $00,$9D,$A0,$06
         lda     $06C0,x
         cmp     #$14
-        beq     shotman_check_facing
-        lda     #$0B
+        beq     tanishi_check_facing
+        lda     #$0B                    ; entity type $0B = Tanishi (bare/shell-less)
         jsr     spawn_entity_from_parent
         lda     $0430,y
         ora     #$04
@@ -2803,32 +2816,32 @@ blocky_apply_physics:  jsr     apply_entity_physics
         lda     #$03
         sta     $06A0,x
         inc     $04E0,x
-        bne     shotman_check_facing
+        bne     tanishi_check_facing
         lda     #$04
         sta     $02
         lda     $06A0,x
         cmp     #$05
-        bcc     shotman_check_facing
+        bcc     tanishi_check_facing
         lda     #$03
         sta     $06A0,x
-shotman_check_facing:  lda     $0420,x
+tanishi_check_facing:  lda     $0420,x
         and     #$40
-        beq     shotman_facing_left
+        beq     tanishi_facing_left
         clc
         lda     $0460,x
         adc     #$0C
         sta     jump_ptr
         lda     $0440,x
         adc     #$00
-        jmp     shotman_store_position
+        jmp     tanishi_store_position
 
-shotman_facing_left:  sec
+tanishi_facing_left:  sec
         lda     $0460,x
         sbc     #$0C
         sta     jump_ptr
         lda     $0440,x
         sbc     #$00
-shotman_store_position:  sta     $09
+tanishi_store_position:  sta     $09
         lda     $04A0,x
         sta     $0A
         lda     #$00
@@ -2837,7 +2850,7 @@ shotman_store_position:  sta     $09
         ldx     $2B
         lda     $00
         and     #$01
-        bne     shotman_flip_facing
+        bne     tanishi_flip_facing
         clc
         lda     $0A
         adc     $02
@@ -2846,50 +2859,54 @@ shotman_store_position:  sta     $09
         ldx     $2B
         lda     $00
         and     #$01
-        bne     shotman_apply_physics
-shotman_flip_facing:  lda     $0420,x
+        bne     tanishi_apply_physics
+tanishi_flip_facing:  lda     $0420,x
         eor     #$40
         sta     $0420,x
-shotman_apply_physics:  jsr     apply_entity_physics
+tanishi_apply_physics:  jsr     apply_entity_physics
         rts
 
         .byte   $20,$BA,$EE,$60,$BD,$A0,$06,$C9
+; =============================================================================
+; kerog_ai -- Enemy AI: Kerog (type $0C) — frog, spawns Petit Kerogs ($982F)
+; Mislabeled by annotation scripts as "Springer". Actually type $0C (Kerog).
+; =============================================================================
         .byte   $09,$B0,$18,$A9,$01,$85,$01,$A9
         .byte   $0D,$20,$CF,$96
-        bcs     springer_check_anim
+        bcs     kerog_check_anim
         lda     #$09
         sta     $06A0,x
         lda     #$00
         sta     $0680,x
-        jsr     springer_apply_physics
+        jsr     kerog_apply_physics
         cmp     #$0A
-        bne     springer_apply_physics
+        bne     kerog_apply_physics
         lda     $0680,x
-        bne     springer_apply_physics
+        bne     kerog_apply_physics
         lda     #$02
         sta     $01
-springer_spawn_shot_loop:  lda     #$0D
+kerog_spawn_child_loop:  lda     #$0D    ; entity type $0D = Petit Kerog
         jsr     spawn_entity_from_parent
-        bcs     springer_check_anim
+        bcs     kerog_check_anim
         ldx     $01
-        lda     springer_shot_vel_x_sub,x
+        lda     kerog_child_vel_x_sub,x
         sta     $0630,y
-        lda     springer_shot_vel_x_hi,x
+        lda     kerog_child_vel_x_hi,x
         sta     $0610,y
         ldx     $2B
         dec     $01
-        bpl     springer_spawn_shot_loop
-springer_check_anim:  lda     $06A0,x
+        bpl     kerog_spawn_child_loop
+kerog_check_anim:  lda     $06A0,x
         cmp     #$08
-        bne     springer_apply_physics
+        bne     kerog_apply_physics
         lda     #$00
         sta     $06A0,x
-springer_apply_physics:  jsr     entity_face_player
+kerog_apply_physics:  jsr     entity_face_player
         jsr     apply_entity_physics_alt
         rts
 
-springer_shot_vel_x_sub:  .byte   $15,$8D,$A2 ; Springer shot X velocity table
-springer_shot_vel_x_hi:  .byte   $04,$02,$01,$A9,$00,$9D,$80,$06
+kerog_child_vel_x_sub:  .byte   $15,$8D,$A2 ; Petit Kerog X velocity table
+kerog_child_vel_x_hi:  .byte   $04,$02,$01,$A9,$00,$9D,$80,$06
         .byte   $A9,$03,$85
         ora     ($A9,x)
         .byte   $04
@@ -2898,7 +2915,7 @@ springer_shot_vel_x_hi:  .byte   $04,$02,$01,$A9,$00,$9D,$80,$06
         lda     $0110,x
         bne     kerog_dec_timer
         lda     $00
-        beq     kerog_apply_physics
+        beq     petit_kerog_apply_physics
         lda     #$3E
         sta     $04E0,x
         inc     $06A0,x
@@ -2906,9 +2923,9 @@ springer_shot_vel_x_hi:  .byte   $04,$02,$01,$A9,$00,$9D,$80,$06
         sta     $0620,x
         sta     $0600,x
         inc     $0110,x
-        bne     kerog_apply_physics
+        bne     petit_kerog_apply_physics
 kerog_dec_timer:  dec     $04E0,x
-        bne     kerog_apply_physics
+        bne     petit_kerog_apply_physics
         dec     $06A0,x
         dec     $0110,x
         jsr     entity_face_player
@@ -2920,7 +2937,7 @@ kerog_dec_timer:  dec     $04E0,x
         sta     $0620,x
         lda     #$04
         sta     $0640,x
-kerog_apply_physics:  jsr     apply_entity_physics
+petit_kerog_apply_physics:  jsr     apply_entity_physics
         rts
 
         .byte   $BD,$20,$06,$D0,$68,$BD,$E0,$04
@@ -3260,7 +3277,8 @@ crashman_wily_path_mid:  pha
         jmp     metalman_physics
 
 ; =============================================================================
-; metalman_set_throw_flag -- Boss AI: Metalman — blade throw with pattern tables ($9C74)
+; metalman_set_throw_flag -- Boss AI: Metal Man — blade throw with pattern tables ($9C74)
+; Spawns entity $15 (Metal Blade projectile).
 ; =============================================================================
 metalman_set_throw_flag:  lda     $0420,x
         ora     #$04
@@ -3280,7 +3298,7 @@ metalman_hitbox_rts:  sec
         sta     $02
         lda     metalman_blade_src_table,y
         sta     $01
-metalman_spawn_blade:  lda     #$15
+metalman_spawn_blade:  lda     #$15    ; entity type $15 = Metal Blade projectile
         jsr     spawn_entity_from_parent
         ldx     $01
         lda     metalman_blade_flags,x
@@ -3531,12 +3549,13 @@ bubbleman_fall_physics:  jsr     apply_entity_physics
         bne     quickman_dec_timer
 
 ; =============================================================================
-; quickman_check_timer -- Boss AI: Quickman — timer-based movement, boomerang throw ($9F79)
+; quickman_check_timer -- Boss AI: Quick Man — timer-based movement, boomerang throw ($9F79)
+; Spawns entity $18 (Quick Boomerang projectile).
 ; =============================================================================
 quickman_check_timer:  lda     $04E0,x
         bne     quickman_dec_timer
         jsr     entity_face_player
-        lda     #$18
+        lda     #$18                    ; entity type $18 = Quick Boomerang projectile
         jsr     spawn_entity_from_parent
         bcs     quickman_set_timer
         lda     $2B
@@ -3594,7 +3613,7 @@ quickman_palette_loop:  lda     heatman_palette_data,y
         sta     $0680,x
         lda     $04E0,x
         bne     heatman_dec_timer
-        lda     #$1B
+        lda     #$1B                    ; entity type $1B = Atomic Fire projectile
         jsr     spawn_entity_from_parent
         bcs     heatman_spawn_fire
         clc
@@ -3603,7 +3622,8 @@ quickman_palette_loop:  lda     heatman_palette_data,y
         sta     $04B0,y
 
 ; =============================================================================
-; heatman_spawn_fire -- Boss AI: Heatman — flame pattern, charge attack ($A019)
+; heatman_spawn_fire -- Boss AI: Heat Man — flame pattern, charge attack ($A019)
+; Spawns entity $1B (Atomic Fire projectile).
 ; =============================================================================
 heatman_spawn_fire:  lda     #$02
         sta     $04E0,x
@@ -3632,7 +3652,7 @@ heatman_apply_physics:  jsr     apply_entity_physics_alt
         bcc     heatman_rts
         lda     #$80
         sta     $0420,x
-        lda     #$19
+        lda     #$19                    ; convert self to type $19 (fire/tornado projectile)
         sta     $0400,x
         lda     #$00
         sta     $04E0,x
@@ -3735,7 +3755,8 @@ heatman_flame_y_data_2:  sed
         sta     $0680,x
 
 ; =============================================================================
-; airman_dec_timer -- Boss AI: Airman — tornado spawn, tile pattern update ($A14D)
+; airman_dec_timer -- Boss AI: Air Man — tornado spawn, tile pattern update ($A14D)
+; Spawns entities $19/$1A (Air Shooter tornados, primary/secondary).
 ; =============================================================================
 airman_dec_timer:  dec     $04E0,x
         jsr     apply_entity_physics_alt
@@ -3816,7 +3837,7 @@ airman_copy_tiles:  lda     airman_tile_data,x
         bne     airman_rts
         lda     $04E0,x
         bne     airman_rts
-        lda     #$19
+        lda     #$19                    ; entity type $19 = Air Shooter tornado (primary)
         jsr     spawn_entity_from_parent
         lda     #$08
         sta     $04F0,y
@@ -3838,7 +3859,7 @@ airman_copy_tiles:  lda     airman_tile_data,x
         lda     $0610,y
         adc     #$03
         sta     $0610,y
-airman_spawn_tornado_2:  lda     #$1A
+airman_spawn_tornado_2:  lda     #$1A    ; entity type $1A = Air Shooter tornado (secondary)
         jsr     spawn_entity_from_parent
         clc
         lda     $0470,y
@@ -4442,6 +4463,7 @@ mecha_dragon_physics_2:  jsr     apply_entity_physics
 
 ; =============================================================================
 ; mecha_dragon_fire -- Boss AI: Mecha Dragon — fire breath, walk, debris spawn ($A877)
+; Spawns entity $33 (fireball, reused for debris).
 ; =============================================================================
 mecha_dragon_fire:  lda     #$07
         sta     $01
@@ -4459,7 +4481,7 @@ mecha_dragon_check_timer:  lda     $04E0,x
         bne     mecha_dragon_check_state
         lda     #$02
         sta     $01
-mecha_dragon_spawn_fire:  lda     #$33
+mecha_dragon_spawn_fire:  lda     #$33    ; entity type $33 = Mecha Dragon fireball
         jsr     spawn_entity_from_parent
         bcs     mecha_dragon_fire_done
         lda     #$E0
@@ -4552,7 +4574,7 @@ mecha_dragon_check_hit:  jsr     apply_entity_physics
         jsr     entity_face_player
         lda     #$02
         sta     $01
-mecha_dragon_spawn_debris:  lda     #$33
+mecha_dragon_spawn_debris:  lda     #$33    ; entity type $33 = Mecha Dragon fireball (reused as debris)
         jsr     spawn_entity_from_parent
         bcs     mecha_dragon_debris_done
         ldx     $01
@@ -4623,6 +4645,7 @@ guts_tank_track_parent:  lda     $0460,y
 
 ; =============================================================================
 ; picopico_stop_movement -- Boss AI: Picopico-kun — bouncing block enemy, shot spawn ($AA0C)
+; Spawns entity $35 (projectile, shared type with Neo Metall bullet).
 ; =============================================================================
 picopico_stop_movement:  lda     #$00
         sta     $0620,x
@@ -4695,7 +4718,7 @@ picopico_state_1:  cmp     #$02
         jsr     bank_switch_enqueue
         lda     #$02
         sta     $01
-picopico_spawn_shot:  lda     #$35
+picopico_spawn_shot:  lda     #$35    ; entity type $35 = projectile (shared with Neo Metall)
         jsr     spawn_entity_from_parent ; spawn projectile
         bcs     picopico_advance_state
         ldx     $01
@@ -4782,12 +4805,17 @@ buebeam_check_anim:  lda     $06A0,x
 buebeam_physics:  jsr     apply_entity_physics
         rts
 
+; =============================================================================
+; matasaburo_wind_push -- Enemy AI: Matasaburo (Fan Fiend) — wind push effect ($AB89)
+; Entity type $36. Air Man stage only. Pushes player backward with wind.
+; =============================================================================
         .byte   $38,$A5,$2D,$E5,$2E,$B0,$10,$A9
         .byte   $01,$85,$40,$A9,$00,$85,$AF,$A9
         .byte   $A3,$85,$4F,$A9,$00,$85,$50
         jsr     apply_entity_physics_alt
         rts
 
+; Entity AI subroutine — collision check, entity $37 parameter ($ABA4)
         .byte   $BD,$20,$06,$D0,$08,$A9,$37
         jsr     check_entity_collision_scan
         bcc     boobeam_init
@@ -4905,15 +4933,15 @@ capsule_missile_rts:  rts
 ; =============================================================================
 ; boss_explode_start -- Boss Explosion — spawn debris ring on boss death ($ACB6)
 ; =============================================================================
-boss_explode_start:  lda     #$3B
+boss_explode_start:  lda     #$3B    ; entity type $3B = explosion flash effect
         jsr     spawn_entity_from_parent
-        lda     #$3B
+        lda     #$3B                    ; spawn second flash
         jsr     spawn_entity_from_parent
         lda     #$C4
         sta     $0430,y
         lda     #$07
         sta     $01
-boss_explode_spawn_loop:  lda     #$3C
+boss_explode_spawn_loop:  lda     #$3C    ; entity type $3C = explosion debris
         jsr     spawn_entity_from_parent ; spawn debris piece
         bcs     boss_explode_deactivate
         ldx     $01
@@ -5041,6 +5069,7 @@ circular_flags_table:  .byte   $80,$80,$80,$80,$C0,$C0,$C0,$C0 ; circular shot d
 
 ; =============================================================================
 ; alien_jump_physics -- Boss AI: Alien Wily — final boss hover, shot pattern ($AE9B)
+; Spawns entities $44 (shot) and $45 (orb).
 ; =============================================================================
 alien_jump_physics:  jmp     alien_inc_timer
 
@@ -5055,7 +5084,7 @@ alien_check_fire:  lda     $00
         lda     #$45
         jsr     find_entity_count_check
         bcs     alien_check_descent
-        lda     #$45
+        lda     #$45                    ; entity type $45 = Alien Wily orb
         jsr     spawn_entity_from_parent
         bcs     alien_check_descent
         lda     $0600,x
@@ -5083,7 +5112,7 @@ alien_check_descent:  lda     $0660,x
         bne     alien_hover_dec
         lda     #$01
         sta     $01
-alien_spawn_shot_loop:  lda     #$44
+alien_spawn_shot_loop:  lda     #$44    ; entity type $44 = Alien Wily shot
         jsr     spawn_entity_from_parent
         bcs     alien_set_hover_timer
         lda     $04B0,y
@@ -5320,6 +5349,7 @@ scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
 
 ; =============================================================================
 ; sniper_joe_spawn_shot -- Enemy AI: Sniper Joe — shielded soldier, shoot and walk ($B137)
+; Spawns entities $49/$48 (Sniper Joe bullets) from sniper_joe_type_table.
 ; =============================================================================
 sniper_joe_spawn_shot:  ldy     $01
         lda     sniper_joe_type_table,y
@@ -5352,8 +5382,8 @@ sniper_joe_done:  ldx     $2B
         dec     $04E0,x
         rts
 
-sniper_joe_type_table:  eor     #$48
-        eor     #$48
+sniper_joe_type_table:  eor     #$48    ; data: entity types $49/$48 = Sniper Joe bullets
+        eor     #$48                    ;   (bytes: $49,$48,$49,$48,$49,$48)
         eor     #$48
 sniper_joe_x_offset_table:  clc
         cli

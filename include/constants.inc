@@ -74,6 +74,62 @@ WEAPON_ITEM_1       = $09       ; Magnet Beam platform
 WEAPON_ITEM_2       = $0A       ; Jet sled
 WEAPON_ITEM_3       = $0B       ; Climbing platform
 
+; ─── Entity type IDs (confirmed from Mesen + code tracing) ─────────────────
+; Enemy entities
+ENTITY_SHRINK       = $00       ; Bubble Man — shrimp, spawned by Anko
+ENTITY_KEROG        = $0C       ; Bubble Man — large frog
+ENTITY_PETIT_KEROG  = $0D       ; spawned by Kerog
+ENTITY_TANISHI      = $0A       ; Bubble Man/Wood Man — snail
+ENTITY_TANISHI_BARE = $0B       ; Tanishi without shell (Difficult mode)
+ENTITY_M445         = $04       ; Bubble Man — jellyfish
+ENTITY_CLAW         = $07       ; Bubble Man — crab/snapper
+ENTITY_BATTON       = $16       ; Wood Man — bat
+ENTITY_ROBBIT       = $17       ; Wood Man — rabbit
+ENTITY_MONKING      = $1D       ; Wood Man — monkey
+ENTITY_KUKKU        = $1E       ; Wood Man — chicken
+ENTITY_FRIENDER     = $1C       ; Wood Man — fire dog
+ENTITY_MATASABURO   = $36       ; Air Man — fan fiend, wind push
+ENTITY_FLY_BOY      = $2C       ; Crash Man/Heat Man — propeller enemy
+ENTITY_NEO_METALL   = $34       ; Crash Man — advanced Met
+ENTITY_NEO_METALL_FLIP = $56    ; Neo Metall flipped variant
+ENTITY_SCWORM       = $50       ; Flash/Air/Quick Man — worm
+ENTITY_SPRINGER     = $46       ; Heat/Quick/Metal Man — bouncing robot
+ENTITY_SNIPER_ARMOR = $4E       ; Flash/Heat/Quick Man — mech suit
+ENTITY_CRAZY_CANNON = $4B       ; Flash/Air/Crash Man — cannon enemy
+ENTITY_BLOCKY       = $31       ; Metal/Crash/Flash Man — block enemy
+ENTITY_PIPI_SPAWN   = $37       ; Crash/Air/Wood Man — bird spawn point
+ENTITY_PIPI         = $38       ; flying bird
+ENTITY_PIPI_EGG     = $3A       ; falling egg
+ENTITY_EGG_HATCH    = $3B       ; Pipi egg hatch / boss explosion flash (shared type)
+ENTITY_COPIPI       = $3C       ; Copipi from egg / boss explosion debris (shared type)
+ENTITY_TELLY_SPAWN  = $21       ; Telly spawn point
+ENTITY_TELLY        = $22       ; Telly body
+; Boss projectiles
+ENTITY_METAL_BLADE  = $15       ; Metal Man blade projectile
+ENTITY_QUICK_BOOM   = $18       ; Quick Man boomerang projectile
+ENTITY_AIR_TORNADO1 = $19       ; Air Man tornado / Heat Man fire (shared type)
+ENTITY_AIR_TORNADO2 = $1A       ; Air Man tornado (secondary)
+ENTITY_ATOMIC_FIRE  = $1B       ; Heat Man fire projectile
+ENTITY_MECHA_FIRE   = $33       ; Mecha Dragon fireball
+ENTITY_ALIEN_ORB    = $45       ; Alien Wily orb
+ENTITY_ALIEN_SHOT   = $44       ; Alien Wily shot
+ENTITY_JOE_BULLET_A = $49       ; Sniper Joe bullet (type A)
+ENTITY_JOE_BULLET_B = $48       ; Sniper Joe bullet (type B)
+; Pickups
+ENTITY_LARGE_HEALTH = $76       ; Large health pickup
+ENTITY_SMALL_HEALTH = $77       ; Small health pickup
+ENTITY_LARGE_WEAPON = $78       ; Large weapon energy
+ENTITY_SMALL_WEAPON = $79       ; Small weapon energy
+ENTITY_ETANK        = $7A       ; E-Tank
+ENTITY_EXTRA_LIFE   = $7B       ; Extra life (1-UP)
+; Mechanics
+ENTITY_BOSS_DOOR    = $2F       ; Boss room door
+ENTITY_BOSS_DEATH   = $0F       ; Boss death effect (entity converted on death)
+ENTITY_STAGE_TRANS  = $09       ; Horizontal stage transition
+ENTITY_RAIL_PLAT    = $12       ; Moving platform on rail
+ENTITY_CRUMBLE      = $13       ; Crumble block (falls when stepped on)
+ENTITY_CRASH_WALL   = $57       ; Destructible wall (Crash Bomber)
+
 ; ─── Fixed bank entry points ─────────────────────────────────────────────────
 ; These are called by all banks via the fixed bank
 BANK_SWITCH         = $C000     ; PRG bank switch (A = bank number)
