@@ -3889,13 +3889,33 @@ airman_dec_timer:  dec     $04E0,x
         jsr     apply_entity_physics_alt
         rts
 
-        .byte   $18,$BD,$60,$06,$69,$40,$9D,$60
-        .byte   $06,$BD,$40,$06,$69,$00,$9D,$40
-        .byte   $06,$20,$BA,$EE,$60,$38,$BD,$40
-        .byte   $04,$E9,$06,$A8,$B9,$69,$A2,$DD
-        .byte   $A0,$04,$F0,$14,$BD,$20,$04,$29
-        .byte   $DF,$9D,$20,$04,$A9,$00,$9D,$A0
-        .byte   $06,$9D,$80,$06,$20,$BA,$EE,$60
+airman_gravity_accel:
+        clc
+        lda     $0660,x
+        adc     #$40
+        sta     $0660,x
+        lda     $0640,x
+        adc     #$00
+        sta     $0640,x
+        jsr     apply_entity_physics
+        rts
+airman_landing_check:
+        sec
+        lda     $0440,x
+        sbc     #$06
+        tay
+        lda     airman_height_threshold,y
+        cmp     $04A0,x
+        beq     airman_landing_reached
+        lda     $0420,x
+        and     #$DF
+        sta     $0420,x
+        lda     #$00
+        sta     $06A0,x
+        sta     $0680,x
+        jsr     apply_entity_physics
+        rts
+airman_landing_reached:
         lda     #$00
         sta     $0640,x
         jsr     apply_entity_physics_alt
@@ -4001,6 +4021,7 @@ airman_spawn_tornado_2:  lda     #$1A    ; entity type $1A = Air Shooter tornado
         sta     $0420,x
 airman_rts:  rts
 
+airman_height_threshold:
         .byte   $88,$68,$48
 airman_y_offset_table:
         .byte   $F0,$00,$F0,$00       ; Y pixel offsets: -16, 0, -16, 0
@@ -4134,8 +4155,14 @@ flashman_state_land:  lda     $00
 flashman_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$20,$06,$D0,$08,$A9,$1E,$20
-        .byte   $B5,$95,$90,$01,$60
+flashman_ai_entry:
+        lda     $0620,x
+        bne     flashman_copy_pos
+        lda     #$1E
+        jsr     check_entity_collision_scan
+        bcc     flashman_copy_pos
+        rts
+flashman_copy_pos:
         lda     $0460
         sta     $0460,x
         lda     $0440
@@ -4169,13 +4196,27 @@ item_2_set_timer:  lda     #$1F
 item_2_dec_timer:  dec     $04E0,x
         rts
 
-        .byte   $A9,$08,$85,$01,$A9,$14,$85,$02
-        .byte   $20,$2C,$F0,$A5,$00,$F0,$1B,$BD
-        .byte   $E0,$04,$C9,$13,$D0,$0F,$A9,$04
-        .byte   $9D,$40,$06,$A9,$78,$9D,$60,$06
-        .byte   $A9,$00,$9D,$E0,$04
+boss_vert_collision_check:
+        lda     #$08
+        sta     $01
+        lda     #$14
+        sta     $02
+        jsr     check_vert_tile_collision
+        lda     $00
+        beq     boss_set_anim_state
+        lda     $04E0,x
+        cmp     #$13
+        bne     boss_inc_timer
+        lda     #$04
+        sta     $0640,x
+        lda     #$78
+        sta     $0660,x
+        lda     #$00
+        sta     $04E0,x
+boss_inc_timer:
         inc     $04E0,x
         bne     boss_extra_physics
+boss_set_anim_state:
         lda     #$02
         sta     $06A0,x
         lda     #$03
@@ -4187,12 +4228,24 @@ item_2_dec_timer:  dec     $04E0,x
 boss_extra_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $A9,$1E,$85,$00,$4C,$52,$96,$BD
-        .byte   $E0,$04,$D0,$15,$A9,$03,$85,$01
-        .byte   $A9,$22,$20,$CF,$96,$B0,$05,$A9
-        .byte   $22,$20,$59,$F1
+boss_hp_init:
+        lda     #$1E
+        sta     $00
+        jmp     enemy_destroy_scan
+boss_telly_spawner:
+        lda     $04E0,x
+        bne     boss_telly_dec_timer
+        lda     #$03
+        sta     $01
+        lda     #$22
+        jsr     find_entity_count_check
+        bcs     boss_telly_store_timer
+        lda     #$22
+        jsr     spawn_entity_from_parent
+boss_telly_store_timer:
         lda     #$DA
         sta     $04E0,x
+boss_telly_dec_timer:
         dec     $04E0,x
         jsr     apply_entity_physics_alt
         rts
@@ -4210,12 +4263,25 @@ boss_spawn_dec_timer:  dec     $04E0,x
         jsr     apply_entity_physics
         rts
 
-        .byte   $BD,$20,$06,$D0,$25,$A9,$6E,$9D
-        .byte   $E0,$04,$FE,$20,$06,$A9,$00,$9D
-        .byte   $20,$04,$A9,$01,$85,$01,$A9,$23
-        .byte   $20,$CF,$96,$A9,$83,$9D,$20,$04
-        .byte   $B0,$5D,$A9,$26,$20,$59,$F1,$4C
-        .byte   $41,$A5
+boss_shot_spawn_init:
+        lda     $0620,x
+        bne     boss_shot_check_timer
+        lda     #$6E
+        sta     $04E0,x
+        inc     $0620,x
+        lda     #$00
+        sta     $0420,x
+        lda     #$01
+        sta     $01
+        lda     #$23
+        jsr     find_entity_count_check
+        lda     #$83
+        sta     $0420,x
+        bcs     boss_dec_timer
+        lda     #$26
+        jsr     spawn_entity_from_parent
+        jmp     boss_dec_timer
+boss_shot_check_timer:
         lda     $04E0,x
         beq     boss_check_anim_state
         lda     $06A0,x
