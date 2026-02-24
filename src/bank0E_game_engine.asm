@@ -20,11 +20,11 @@ zp_0F15           := $0F15
 zp_0F20           := $0F20
 addr_1D06           := $1D06
 addr_2020           := $2020
-addr_4802           := $4802
 addr_5060           := $5060
 bank_switch_enqueue           := $C051
 banked_entry           := $C05D
 boss_beaten_check           := $C071
+boss_beaten_mask_lo         := $C279
 wait_for_vblank           := $C07F
 wait_one_rendering_frame           := $C0D7
 boss_death_sequence           := $C10B
@@ -69,7 +69,7 @@ check_horiz_tile_collision           := $F0CF
 spawn_entity_from_parent           := $F159
 spawn_entity_init           := $F160
 calc_entity_velocity           := $F197
-        .byte   $78
+        sei
         ldx     #$FF
         txs
         ldx     #$01
@@ -290,15 +290,21 @@ stage_intro_oam_data:  .byte   $60,$96,$01,$6C,$60,$97,$01,$74
         .byte   $60,$98,$01,$7C,$60,$99,$01,$84
         .byte   $60,$9A,$01
         .byte   $8C
-stage_bank_table:  .byte   $03          ; bank index per stage (0-14)
-        .byte   $04
-        ora     ($07,x)
-        asl     $00
-        ora     $02
-        php
-        php
-        ora     #$09
-        ora     #$FF
+stage_bank_table:                        ; PRG bank per stage index ($2A)
+        .byte   $03                      ; $00 Heat Man   → bank $03
+        .byte   $04                      ; $01 Air Man    → bank $04
+        .byte   $01                      ; $02 Wood Man   → bank $01
+        .byte   $07                      ; $03 Bubble Man → bank $07
+        .byte   $06                      ; $04 Quick Man  → bank $06
+        .byte   $00                      ; $05 Flash Man  → bank $00
+        .byte   $05                      ; $06 Metal Man  → bank $05
+        .byte   $02                      ; $07 Crash Man  → bank $02
+        .byte   $08                      ; $08 Wily 1     → bank $08
+        .byte   $08                      ; $09 Wily 2     → bank $08
+        .byte   $09                      ; $0A Wily 3     → bank $09
+        .byte   $09                      ; $0B Wily 4     → bank $09
+        .byte   $09                      ; $0C Wily 5     → bank $09
+        .byte   $FF                      ; terminator
 
 ; =============================================================================
 ; wily_spawn_gate_entities -- Wily Fortress Gate — spawn gate entities from bitmask ($81DE)
@@ -368,10 +374,8 @@ wily_loop_wait_frame:  jsr     wait_for_vblank ; wait for NMI
         jmp     wily_loop_main
 
 wily_gate_anim_table:  .byte   $3B,$7B,$BB,$BB,$BB,$3B,$7B,$BB ; animation frame per gate position
-wily_gate_y_pos_table:  jsr     addr_2020
-        bvs     wily_spawn_check_done
-        cpx     #$E0
-        .byte   $E0
+wily_gate_y_pos_table:                   ; Y pixel position per gate
+        .byte   $20,$20,$20,$70,$90,$E0,$E0,$E0
 
 ; =============================================================================
 ; check_screen_transition -- Screen Transition Check — test scroll boundaries for room changes ($8278)
@@ -578,17 +582,34 @@ wait_screen_fade:  jsr     scroll_column_render
         bne     wait_screen_fade
         rts
 
-        .byte   $20,$DF,$83,$A6,$B3,$A5,$BC,$1D
-        .byte   $79,$C2,$85,$BC,$C9,$FF,$D0,$1D
-        .byte   $A9,$00,$85,$FD,$A9,$14,$85,$FE
-        .byte   $20,$16,$84,$A9,$28,$20,$7D,$90
-        .byte   $A9,$28,$85,$20,$8D,$40,$04,$85
-        .byte   $14,$85,$15,$D0,$0B
+wily_gate_mark_beaten:
+        jsr     wily_teleport_sequence
+        ldx     $B3
+        lda     $BC               ; boss beaten bitmask
+        ora     boss_beaten_mask_lo,x
+        sta     $BC
+        cmp     #$FF              ; all bosses beaten?
+        bne     wily_fade_reverse
+        lda     #$00
+        sta     $FD
+        lda     #$14
+        sta     $FE
+        jsr     wait_screen_fade
+        lda     #$28
+        jsr     render_full_nametable
+        lda     #$28
+        sta     $20
+        sta     $0440
+        sta     $14
+        sta     $15
+        bne     wily_set_palette
+wily_fade_reverse:
         dec     $20
         dec     $0440
         dec     $38
         dec     $14
         dec     $15
+wily_set_palette:
         ldx     #$08
         jsr     set_palette_colors
         lda     #$00
@@ -618,10 +639,8 @@ set_palette_loop:  lda     palette_color_data,x
         bpl     set_palette_loop
         rts
 
-palette_color_data:  and     ($11,x)
-        ora     ($19,x)
-        ora     #$0A
-        ora     $2109,y
+palette_color_data:                      ; NES palette indices (PPU $3F00 values)
+        .byte   $21,$11,$01,$19,$09,$0A,$19,$09,$21
         jsr     wily_teleport_sequence
         lda     #$29
         jsr     render_full_nametable
@@ -647,8 +666,8 @@ palette_color_data:  and     ($11,x)
         jsr     boss_trigger_entrance
         rts
 
-item_handler_ptr_lo:  cpx     $27F0
-        .byte   $2B,$6F,$7D,$8B,$23,$A3
+item_handler_ptr_lo:                     ; item pickup handler address low bytes
+        .byte   $EC,$F0,$27,$2B,$6F,$7D,$8B,$23,$A3
 item_handler_ptr_hi:  .byte   $82,$82,$83,$83,$83,$83,$83,$84 ; item handler pointer table (high)
         .byte   $84
 
@@ -697,10 +716,19 @@ entity_dispatch_setup:  lda     #$00
         sta     $FB
 player_state_rts:  rts
 
-        .byte   $60,$AD,$20,$04,$29,$40,$49,$40
-        .byte   $85,$42,$20,$22,$89,$20,$83,$8B
-        .byte   $AD,$A0,$06,$F0,$04,$20,$A8,$D3
-        .byte   $60
+        rts
+player_state_gun_update:
+        lda     $0420             ; player entity flags
+        and     #$40              ; check flip bit
+        eor     #$40              ; toggle
+        sta     $42
+        jsr     player_horiz_movement
+        jsr     player_vertical_physics
+        lda     $06A0
+        beq     player_select_ground_state
+        jsr     weapon_set_base_type
+        rts
+player_select_ground_state:
         ldy     #$06
         lda     $00
         beq     player_set_state
@@ -708,9 +736,14 @@ player_state_rts:  rts
 player_set_state:  sty     $2C
         rts
 
-        .byte   $20,$9B,$87,$A5,$23,$29,$C0,$F0
-        .byte   $07,$A9,$04,$85,$2C
+        jsr     player_check_fire_weapon
+        lda     $23               ; controller input
+        and     #$C0              ; check A+B buttons
+        beq     player_state_skip_facing
+        lda     #$04
+        sta     $2C
         jsr     player_update_facing
+player_state_skip_facing:
         jsr     player_set_max_speed
         jsr     player_horiz_movement
         jsr     player_vertical_physics
@@ -733,8 +766,10 @@ player_state_common_exit:  lda     $27
 player_state_set_weapon:  jsr     weapon_set_base_type
         rts
 
-        .byte   $20,$9B,$87,$20,$F2,$87,$20,$0D
-        .byte   $88,$20,$22,$89
+        jsr     player_check_fire_weapon
+        jsr     player_update_facing
+        jsr     player_set_max_speed
+        jsr     player_horiz_movement
         jsr     player_vertical_physics
         lda     $00
         beq     player_state_to_idle
@@ -751,14 +786,19 @@ player_state_check_land:  lda     $06A0
         sta     $2C
 player_state_jump_exit:  jmp     player_state_common_exit
 
-        .byte   $20,$9B,$87,$20,$F2,$87,$20,$0D
-        .byte   $88,$20,$22,$89,$20,$83,$8B,$A5
-        .byte   $00,$D0,$08
+        jsr     player_check_fire_weapon
+        jsr     player_update_facing
+        jsr     player_set_max_speed
+        jsr     player_horiz_movement
+        jsr     player_vertical_physics
+        lda     $00
+        bne     player_state_walk_check
 player_state_to_idle:  lda     #$06
         sta     $2C
         jsr     weapon_set_base_type
         rts
 
+player_state_walk_check:
         lda     $23
         and     #$C0
         bne     player_state_check_dir
@@ -767,11 +807,10 @@ player_state_to_idle:  lda     #$06
 player_state_check_dir:  jmp     player_state_common_exit
 
         jsr     player_check_fire_weapon
-        .byte   $A9,$00,$8D
-        jsr     platform_scan_start
-        brk
-        asl     $A5
-        .byte   $23
+        lda     #$00
+        sta     $0620             ; clear X velocity (sub-pixel)
+        sta     $0600             ; clear X velocity (high byte)
+        lda     $23               ; controller input
         and     #$C0
         bne     player_state_update_face
         lda     $3E
@@ -837,9 +876,15 @@ player_state_climb_dir:  stx     $2C
 player_state_climb_set_weapon:  jsr     weapon_set_base_type
         rts
 
-        .byte   $20,$9B,$87,$20,$F2,$87,$20,$0D
-        .byte   $88,$20,$22,$89,$20,$83,$8B,$A5
-        .byte   $00,$D0,$03,$4C,$E6,$85
+        jsr     player_check_fire_weapon
+        jsr     player_update_facing
+        jsr     player_set_max_speed
+        jsr     player_horiz_movement
+        jsr     player_vertical_physics
+        lda     $00
+        bne     player_ladder_check_buttons
+        jmp     player_state_to_idle
+player_ladder_check_buttons:
         lda     $23
         and     #$C0
         bne     player_ladder_state_jump
@@ -951,11 +996,8 @@ player_ladder_fire_done:  jmp     player_ladder_clear_vel
 ; =============================================================================
 ; player_state_ptr_lo -- Player State Dispatch Table — 12 states (idle, walk, jump, etc.) ($8783)
 ; =============================================================================
-player_state_ptr_lo:  php
-        eor     $46
-        adc     #$A6
-        .byte   $D3
-        .byte   $FB,$8C,$8C,$BC,$BC,$76
+player_state_ptr_lo:                     ; player state handler address low bytes (12 states)
+        .byte   $08,$45,$46,$69,$A6,$D3,$FB,$8C,$8C,$BC,$BC,$76
 player_state_ptr_hi:  .byte   $85,$85,$85,$85,$85,$85,$85,$86 ; player state pointer table (high)
         .byte   $86,$86,$86,$87
 
@@ -3066,48 +3108,21 @@ boss_debris_done:  ldx     $2B
         jsr     bank_switch_enqueue
         rts
 
-boss_palette_data:  jsr     zp_0F15
-        jsr     zp_0F20
-boss_debris_type:  .byte   $10
-boss_debris_anim_table:  .byte   $02    ; boss debris animation frames
-        .byte   $17,$14
-        ora     ($0E),y
-        and     ($14),y
-        .byte   $0F,$21,$13,$01,$11
+boss_palette_data:                       ; boss intro palette (2 x 3-byte entries)
+        .byte   $20,$15,$0F,$20,$20,$0F
+boss_debris_type:  .byte   $10          ; entity type for debris pieces
+boss_debris_anim_table:                  ; boss debris animation frame indices
+        .byte   $02,$17,$14,$11,$0E,$31,$14,$0F
+        .byte   $21,$13,$01,$11
 boss_debris_x_table:  .byte   $11,$01,$11,$11,$11,$68,$78,$88
         .byte   $88,$A8,$68,$78,$98,$98,$B8,$68
         .byte   $78,$98,$98,$A8,$58,$68,$88,$A8
         .byte   $B8
-boss_debris_y_table:  pla
-        sei
-        sei
-        dey
-        tay
-        clv
-        tay
-        dey
-        clv
-        clv
-        tay
-        clv
-        tya
-        clv
-        tay
-        tya
-        clv
-        tya
-        clv
-        tay
-        clv
-        dey
-        tya
-        dey
-        clv
-        clv
-        dey
-        tay
-        tay
-        tya
+boss_debris_y_table:                     ; Y pixel position per debris piece (30 entries)
+        .byte   $68,$78,$78,$88,$A8,$B8,$A8,$88
+        .byte   $B8,$B8,$A8,$B8,$98,$B8,$A8,$98
+        .byte   $B8,$98,$B8,$A8,$B8,$88,$98,$88
+        .byte   $B8,$B8,$88,$A8,$A8,$98
         lda     $04E0,x
         bne     atomic_fire_check_state
         lda     #$01
@@ -3206,61 +3221,43 @@ crashman_vel_y_table:  .byte   $FF,$00,$00,$00
 crashman_vel_x_sub_table:  .byte   $00,$E5,$00,$E5
 crashman_flags_table:  .byte   $80,$80,$C0,$C0
 crashman_path_len_table:  .byte   $08,$1C,$54,$44,$18,$30,$14
-crashman_path_data:  .byte   $A0        ; Crashman movement path data
-crashman_path_entry:  brk
-        plp
-        ora     ($40,x)
-        .byte   $02,$D8,$03,$A0,$00,$68,$01,$80
-        .byte   $02,$98,$03,$60,$02,$B8,$03,$40
-        .byte   $02,$88,$01,$60,$00,$28,$01,$40
-        .byte   $02,$68,$03,$20,$02,$D8,$03,$A0
-        .byte   $00,$28,$01,$90,$02,$C8,$03,$30
-        .byte   $02,$A8,$01,$40,$00,$B8,$03,$50
-        .byte   $00
-        tay
-        ora     ($60,x)
-        brk
-        .byte   $B8,$03,$70,$00
-        tay
-        ora     ($80,x)
-        brk
-        .byte   $88,$01,$70,$02,$98,$03,$60,$02
-        .byte   $88,$01,$50,$02,$98,$03,$40,$02
-        .byte   $88,$01,$30,$02
-        sei
-        ora     ($80,x)
-        brk
-        .byte   $38,$01,$70,$02,$68,$03,$60,$02
-        .byte   $38,$01,$50,$02,$68,$03,$40,$02
-        .byte   $28,$01,$70,$00,$18,$01,$30,$02
-        .byte   $68,$03,$20,$02,$D8,$03
-crashman_wily_path_data:  .byte   $A0   ; Crashman Wily stage path data
-crashman_wily_path_entry:  .byte   $00,$B8,$01,$50,$02,$E8,$03,$40
+crashman_path_data:                      ; Crashman movement path coordinate data
+        .byte   $A0                       ; path header
+crashman_path_entry:
+        .byte   $00,$28,$01,$40,$02,$D8,$03,$A0
+        .byte   $00,$68,$01,$80,$02,$98,$03,$60
+        .byte   $02,$B8,$03,$40,$02,$88,$01,$60
+        .byte   $00,$28,$01,$40,$02,$68,$03,$20
+        .byte   $02,$D8,$03,$A0,$00,$28,$01,$90
+        .byte   $02,$C8,$03,$30,$02,$A8,$01,$40
+        .byte   $00,$B8,$03,$50,$00,$A8,$01,$60
+        .byte   $00,$B8,$03,$70,$00,$A8,$01,$80
+        .byte   $00,$88,$01,$70,$02,$98,$03,$60
+        .byte   $02,$88,$01,$50,$02,$98,$03,$40
+        .byte   $02,$88,$01,$30,$02,$78,$01,$80
+        .byte   $00,$38,$01,$70,$02,$68,$03,$60
+        .byte   $02,$38,$01,$50,$02,$68,$03,$40
+        .byte   $02,$28,$01,$70,$00,$18,$01,$30
+        .byte   $02,$68,$03,$20,$02,$D8,$03
+crashman_wily_path_data:                 ; Crashman Wily stage path data
+        .byte   $A0                       ; path header
+crashman_wily_path_entry:
+        .byte   $00,$B8,$01,$50,$02,$E8,$03,$40
         .byte   $02,$C8,$01,$20,$02,$88,$01,$30
         .byte   $00,$A8,$03,$60,$00,$88,$01,$70
-        .byte   $00,$A8,$03,$B0,$00
-        sei
-        ora     ($50,x)
+        .byte   $00,$A8,$03,$B0,$00,$78,$01,$50
         .byte   $02,$98,$03,$40,$02,$58,$01,$30
         .byte   $02,$78,$03,$20,$02,$38,$01,$60
-        .byte   $00,$48,$03,$50,$02,$68,$03
-        bvs     crashman_wily_path_mid
-crashman_wily_path_mid:  pha
-        ora     ($C0,x)
-        brk
-        .byte   $C8,$03,$80,$02,$D8,$03,$C0,$00
-        .byte   $18,$01,$90,$02,$38,$03,$B0,$00
-        .byte   $58,$03,$C0,$00,$C8,$03,$70,$02
-        .byte   $88,$01
-        jsr     addr_4802
-        ora     ($90,x)
-        brk
-        .byte   $18,$01,$60,$02,$28,$03,$B0,$00
-        .byte   $B8,$03,$C0,$00,$E8,$03,$40,$02
-        .byte   $C8,$01,$30,$02,$98,$01,$40,$00
-        .byte   $B8,$03,$50,$00,$D8,$03,$B0,$00
-        iny
-        ora     ($60,x)
+        .byte   $00,$48,$03,$50,$02,$68,$03,$70
+        .byte   $00,$48,$01,$C0,$00,$C8,$03,$80
+        .byte   $02,$D8,$03,$C0,$00,$18,$01,$90
+        .byte   $02,$38,$03,$B0,$00,$58,$03,$C0
+        .byte   $00,$C8,$03,$70,$02,$88,$01,$20
+        .byte   $02,$48,$01,$90,$00,$18,$01,$60
+        .byte   $02,$28,$03,$B0,$00,$B8,$03,$C0
+        .byte   $00,$E8,$03,$40,$02,$C8,$01,$30
+        .byte   $02,$98,$01,$40,$00,$B8,$03,$50
+        .byte   $00,$D8,$03,$B0,$00,$C8,$01,$60
         .byte   $02,$58,$01,$30,$02,$28,$01,$40
         .byte   $00,$38,$03,$80,$00,$38,$01,$60
         .byte   $02,$48,$03,$A0,$00,$88,$03,$C0
@@ -3328,32 +3325,14 @@ metalman_blade_set_x:  sta     $0470,y
         .byte   $00,$0C,$0A,$05,$05,$02,$05,$04
 metalman_blade_src_table:  .byte   $00,$02,$05,$09,$09,$09,$09,$09 ; Metalman blade source position table
         .byte   $09,$09,$15,$1F,$24,$29,$2B,$30
-metalman_blade_flags:  .byte   $E1,$A1
-        sbc     ($A1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($E1,x)
-        lda     ($A1,x)
-        lda     ($A1,x)
-        sbc     ($E1,x)
-        lda     ($A1,x)
-        lda     ($A1,x)
-        lda     ($A1,x)
-        lda     ($E1,x)
-        lda     ($A1,x)
-        sbc     ($A1,x)
+metalman_blade_flags:                    ; entity flags per blade direction (52 entries)
+        .byte   $E1,$A1,$E1,$A1,$A1,$E1,$A1,$E1
+        .byte   $A1,$E1,$A1,$E1,$A1,$E1,$A1,$E1
+        .byte   $A1,$E1,$A1,$E1,$A1,$E1,$A1,$E1
+        .byte   $A1,$E1,$A1,$E1,$A1,$E1,$A1,$E1
+        .byte   $A1,$E1,$A1,$A1,$A1,$A1,$E1,$E1
+        .byte   $A1,$A1,$A1,$A1,$A1,$A1,$A1,$E1
+        .byte   $A1,$A1,$E1,$A1
 metalman_blade_y_table:  .byte   $47
         .byte   $77,$57,$87,$C7,$47,$67,$87,$C7
         .byte   $17,$17,$37,$37,$57,$57,$77,$77
@@ -3362,24 +3341,24 @@ metalman_blade_y_table:  .byte   $47
         .byte   $27,$27,$A7,$17,$37,$67,$87,$A7
         .byte   $67,$B7,$27,$47,$67,$77,$A7,$17
         .byte   $27,$67,$A7
-metalman_blade_range:  .byte   $FF,$00,$FF,$00,$00,$FF,$A0,$60
+metalman_blade_range:                    ; distance range per throw direction (52 entries)
+        .byte   $FF,$00,$FF,$00,$00,$FF,$A0,$60
         .byte   $60,$80,$80,$80,$80,$80,$80,$80
         .byte   $80,$80,$80,$80,$80,$80,$80,$80
-        .byte   $80,$60
-        ldy     #$80
-        .byte   $80,$80,$80,$80,$80,$80,$80,$00
-        .byte   $00,$00,$FF,$FF,$00,$00,$00,$00
-        .byte   $00,$80,$00,$70,$00,$00,$FF,$20
-metalman_blade_timer_table:  .byte   $01,$1F ; Metalman blade throw timing
-        ora     ($1F,x)
-        rol     $1F01,x
-        rol     $015D,x
-        ora     ($1F,x)
-        .byte   $1F,$3E,$3E,$5D,$5D,$7C,$7C,$9D
-        .byte   $9D,$01,$01,$1F,$1F,$3E,$3E,$5D
-        .byte   $5D,$7C,$7C,$01,$01,$1F,$1F,$3E
-        .byte   $01,$1F,$3E,$5D,$7C,$01,$1F,$01
-        .byte   $1F,$3E,$5D,$7C,$01,$1F,$3E,$5D
+        .byte   $80,$60,$A0,$80,$80,$80,$80,$80
+        .byte   $80,$80,$80,$00,$00,$00,$FF,$FF
+        .byte   $00,$00,$00,$00,$00,$80,$00,$70
+        .byte   $00,$00,$FF,$20
+metalman_blade_timer_table:              ; frame timing per throw pattern (52 entries)
+        .byte   $01,$1F,$01,$1F,$3E,$01,$1F,$3E
+        .byte   $5D,$01,$01,$1F,$1F,$3E,$3E,$5D
+        .byte   $5D,$7C,$7C,$9D,$9D,$01,$01,$1F
+        .byte   $1F,$3E,$3E,$5D,$5D,$7C,$7C,$01
+        .byte   $01,$1F,$1F,$3E,$01,$1F,$3E,$5D
+        .byte   $7C,$01,$1F,$01,$1F,$3E,$5D,$7C
+        .byte   $01,$1F,$3E,$5D
+        ; code: LDA $04E0,X / BEQ +$13 / DEC $04E0,X / BEQ +$01 / RTS
+        ; (timer check preamble, branches forward into Woodman AI)
         .byte   $BD,$E0,$04,$F0,$13,$DE,$E0,$04
         .byte   $F0,$01,$60
         lda     $0420,x
@@ -3690,9 +3669,8 @@ heatman_flame_loop:  lda     #$06
         lda     $04B0,y
         adc     heatman_flame_y_offset,y
         sta     $04B0,y
-        .byte   $E6
-heatman_flame_inc:  ora     ($C6,x)
-        .byte   $02
+        .byte   $E6                      ; code: INC $01 (advance flame slot)
+heatman_flame_inc:  .byte   $01,$C6,$02  ; dual-use: data table AND code (DEC $02)
         bne     heatman_flame_loop
 heatman_flame_done:  ldx     $2B
         inc     $04E0,x
@@ -3730,26 +3708,26 @@ heatman_set_cooldown:  lda     #$08
 heatman_dec_cooldown:  dec     $0620,x
         rts
 
-heatman_palette_data:  php
-        bit     $0812
-        .byte   $20
-        .byte   $20
+heatman_palette_data:                    ; Heat Man intro palette (6 bytes)
+        .byte   $08,$2C,$12,$08,$20,$20
 heatman_flame_x_offset:  .byte   $FC    ; Heatman flame X offset per slot
         .byte   $FC,$14,$1C,$2C,$F4,$04,$0C,$14
         .byte   $24,$F4,$04,$14,$2C,$2C,$04,$0C
 heatman_flame_data_end:  .byte   $14,$24,$24
-heatman_flame_y_offset:  .byte   $F8    ; Heatman flame Y offset per slot
-        bpl     heatman_flame_y_data_2
-        beq     heatman_flame_data_end
-        brk
-        .byte   $E8,$10,$F8,$08,$08
-heatman_flame_y_data_2:  sed
-        brk
-        .byte   $E8,$08,$00,$E8,$F8,$F0,$08,$BD
-        .byte   $E0,$04,$D0,$0A,$A9,$6E,$9D
-        cpx     #$04
+heatman_flame_y_offset:                  ; Heat Man flame Y pixel offsets (11 entries)
+        .byte   $F8,$10,$08,$F0,$F8,$00,$E8,$10
+        .byte   $F8,$08,$08
+heatman_flame_y_data_2:                  ; Heat Man flame Y offsets continued (9 entries)
+        .byte   $F8,$00,$E8,$08,$00,$E8,$F8,$F0
+        .byte   $08
+        ; code: Friender fire init (check timer, set animation state)
+        lda     $04E0,x
+        bne     airman_check_state
+        lda     #$6E
+        sta     $04E0,x
         lda     #$01
         sta     $06A0,x
+airman_check_state:
         lda     $06A0,x
         bne     airman_dec_timer
         sta     $0680,x
@@ -3875,49 +3853,27 @@ airman_spawn_tornado_2:  lda     #$1A    ; entity type $1A = Air Shooter tornado
 airman_rts:  rts
 
         .byte   $88,$68,$48
-airman_y_offset_table:  .byte   $F0,$00
-        beq     airman_x_offset_table
-airman_x_offset_table:  brk
-        .byte   $00,$20,$20
-airman_tile_data:  dey
-        txa
-        sty     $86
-        .byte   $89,$8B,$85,$87,$84,$86,$8C,$8E
-        .byte   $85,$87,$8D,$8F,$84,$86,$74,$76
-        .byte   $85,$87,$75,$77,$90,$92,$94,$96
-        .byte   $91,$93,$95,$97,$84,$86,$84,$86
-        .byte   $85,$87,$85,$87,$6C,$6E,$70,$72
-        .byte   $6D,$6F,$71,$73,$78,$7A,$7C,$7E
-        adc     $7D7B,y
-        .byte   $7F,$98,$9A,$9C,$9E,$99,$9B,$9D
-        .byte   $9F,$88,$8A,$84,$86,$89,$8B,$85
-        .byte   $87,$84,$86,$84,$86
-        sta     $87
-        sta     $87
-        sty     $86
-        sty     $86
-        sta     $87
-        sta     $87
-        sty     $86
-        sty     $86
-        sta     $87
-        sta     $87
-        sty     $86
-        sty     $86
-        sta     $87
-        sta     $87
-        sty     $86
-        sty     $86
-        sta     $87
-        sta     $87
-        sty     $86
-        sty     $86
-        sta     $87
-        sta     $87
-        sty     $86
-        sty     $86
-        sta     $87
-        sta     $87
+airman_y_offset_table:
+        .byte   $F0,$00,$F0,$00       ; Y pixel offsets: -16, 0, -16, 0
+airman_x_offset_table:
+        .byte   $00,$00,$20,$20       ; X pixel offsets: 0, 0, 32, 32
+airman_tile_data:                         ; 128 bytes — CHR tile indices for Air Man sprite
+        .byte   $88,$8A,$84,$86,$89,$8B,$85,$87  ; frame 1
+        .byte   $84,$86,$8C,$8E,$85,$87,$8D,$8F
+        .byte   $84,$86,$74,$76,$85,$87,$75,$77
+        .byte   $90,$92,$94,$96,$91,$93,$95,$97
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
+        .byte   $6C,$6E,$70,$72,$6D,$6F,$71,$73
+        .byte   $78,$7A,$7C,$7E,$79,$7B,$7D,$7F
+        .byte   $98,$9A,$9C,$9E,$99,$9B,$9D,$9F
+        .byte   $88,$8A,$84,$86,$89,$8B,$85,$87  ; frame 2
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
+        .byte   $84,$86,$84,$86,$85,$87,$85,$87
         jsr     entity_face_player
         lda     $0420,x
         and     #$20
@@ -4601,15 +4557,10 @@ mecha_dragon_debris_done:  ldx     $2B
 mecha_dragon_rts:  rts
 
 mecha_dragon_debris_y_off:  .byte   $F0,$10,$20 ; Mecha Dragon debris Y offset
-mecha_dragon_debris_vel_hi:  .byte   $03,$02
-        .byte   $01
-mecha_dragon_debris_vel_lo:  brk
-        rti
-
-        .byte   $00
-mecha_dragon_fire_timer:  ora     ($06,x)
-        .byte   $0B,$BC
-        cpx     #$04
+mecha_dragon_debris_vel_hi:  .byte   $03,$02,$01 ; debris X velocity (high byte)
+mecha_dragon_debris_vel_lo:  .byte   $00,$40,$00 ; debris X velocity (low byte)
+mecha_dragon_fire_timer:  .byte   $01,$06,$0B ; fire attack cooldown timers
+        ldy     $04E0,x           ; Guts Tank AI entry
         lda     $0420,y
         bpl     guts_tank_deactivate
         and     #$08
@@ -4676,8 +4627,11 @@ picopico_check_player:  lda     $04A0,x
 picopico_physics:  jsr     apply_entity_physics
         rts
 
-        .byte   $A5,$2A,$C9,$0A,$D0,$03,$4C,$44
-        .byte   $AB
+        lda     $2A                   ; check if Wily stage 3 (Guts-Dozer)
+        cmp     #$0A
+        bne     picopico_begin_hitbox
+        jmp     picopico_wily3_entry  ; alternate AI for Wily 3
+picopico_begin_hitbox:
         ldy     #$08
         lda     $06A0,x
         cmp     #$03
@@ -4775,6 +4729,7 @@ picopico_shot_vel_y_sub:  .byte   $25,$00,$DB ; Picopico shot Y velocity (sub-pi
 picopico_shot_vel_y_hi:  .byte   $01,$00,$FE
 picopico_shot_vel_x_sub:  .byte   $A3,$00,$A3 ; Picopico shot X velocity (sub-pixel)
 picopico_shot_vel_x_hi:  .byte   $01,$02,$01
+picopico_wily3_entry:
         lda     $04E0,x
         bne     buebeam_collision
         lda     $04A0,x
