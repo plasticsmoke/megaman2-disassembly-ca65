@@ -1707,14 +1707,14 @@ check_platform_collision:  sec
         adc     #$0C
         sta     $09
         lda     $A9
-        .byte   $C9
-platform_scan_start:  ora     #$90
-        asl     a
+        cmp     #$09                    ; weapon >= Item 1?
+        bcc     platform_skip_secondary ; no — skip secondary platform scan
         ldx     #$02
 platform_scan_secondary:  lda     $05A0,x
         bne     platform_check_secondary
 platform_scan_next:  dex
         bpl     platform_scan_secondary
+platform_skip_secondary:
         ldx     #$0F
 platform_scan_primary:  lda     $0160,x
         bne     platform_check_y
@@ -2477,39 +2477,24 @@ entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; entity AI routine p
         .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B
         .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE
         .byte   $2B,$FE,$32,$EF,$2B,$25,$2B,$2B
-        .byte   $98
-        lda     $3030
-        adc     mecha_dragon_debris_loop_end,y
-        lda     ($A9),y
-        lda     ($A9),y
-        lda     #$08
-        php
-        php
-        .byte   $24
-entity_ai_ptr_hi:  sty     $94,x
-        sta     $95,x
-        sta     $96,x
-        stx     $96,y
-        stx     $97,y
-        .byte   $97,$98,$98,$98,$98,$98,$9A,$9A
-        .byte   $9A,$9C,$9C,$9D,$9E,$9F,$98,$9F
-        .byte   $A1,$A1,$A1,$A2,$A3,$A4,$A4
-        ldy     $A4
-        ldy     $98
-        lda     $A5
-        lda     $A5
-        ldx     $A6
-        .byte   $A7,$A7,$A7,$A7,$A7,$A7,$A8,$A9
-        .byte   $A9,$AA,$98,$AB,$AB,$AC,$AC,$AC
-        .byte   $98,$AD,$AD,$AD,$98,$AE,$AE,$AF
-        .byte   $AF,$AF,$AF,$B0,$B0,$B1,$B1,$B2
-        .byte   $B2,$B2,$98,$B2,$B4,$B4,$B4,$B5
-        .byte   $B5,$B5,$B5,$B5,$A7,$B6,$B6,$98
-        .byte   $B7,$98,$B7,$B7,$98,$98,$98,$B8
-        .byte   $B8,$B8,$B9,$B9,$B9,$98,$B9,$BA
-        .byte   $BA,$98,$BB,$98,$98,$BB,$BB,$BC
-        .byte   $BC,$BC,$BC,$BC,$BC,$BC,$BC,$BC
-        .byte   $BC,$BD,$BD,$BD,$BD
+        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1
+        .byte   $A9,$B1,$A9,$A9,$08,$08,$08,$24
+entity_ai_ptr_hi:  .byte   $94,$94,$95,$95,$95,$96,$96,$96 ; entity AI routine pointer (high bytes)
+        .byte   $96,$97,$97,$98,$98,$98,$98,$98
+        .byte   $9A,$9A,$9A,$9C,$9C,$9D,$9E,$9F
+        .byte   $98,$9F,$A1,$A1,$A1,$A2,$A3,$A4
+        .byte   $A4,$A4,$A4,$A4,$98,$A5,$A5,$A5
+        .byte   $A5,$A6,$A6,$A7,$A7,$A7,$A7,$A7
+        .byte   $A7,$A8,$A9,$A9,$AA,$98,$AB,$AB
+        .byte   $AC,$AC,$AC,$98,$AD,$AD,$AD,$98
+        .byte   $AE,$AE,$AF,$AF,$AF,$AF,$B0,$B0
+        .byte   $B1,$B1,$B2,$B2,$B2,$98,$B2,$B4
+        .byte   $B4,$B4,$B5,$B5,$B5,$B5,$B5,$A7
+        .byte   $B6,$B6,$98,$B7,$98,$B7,$B7,$98
+        .byte   $98,$98,$B8,$B8,$B8,$B9,$B9,$B9
+        .byte   $98,$B9,$BA,$BA,$98,$BB,$98,$98
+        .byte   $BB,$BB,$BC,$BC,$BC,$BC,$BC,$BC
+        .byte   $BC,$BC,$BC,$BC,$BD,$BD,$BD,$BD
 entity_ai_bank_table:  .byte   $01,$02,$01,$00,$01,$00,$01,$00 ; bank for each AI routine (0=local)
         .byte   $01,$00,$01,$01,$01,$01,$00,$02
         .byte   $02,$02,$03,$04,$01,$01,$01,$01
@@ -5503,21 +5488,38 @@ alien_palette_data:  .byte   $0F,$21,$21,$21,$0F,$31,$35,$21 ; Alien Wily palett
 alien_palette_index_table:  .byte   $08,$0C ; palette subgroup index per boss type
 alien_shot_flags_table:  .byte   $C3,$83 ; Alien Wily shot direction flags
 alien_shot_x_offset_lo:  .byte   $1D,$E3
-alien_shot_x_offset_hi:  .byte   $00,$FF,$5E,$20,$04,$A9,$FF,$9D
-        .byte   $20,$01,$BC,$10,$01,$A9,$00,$99
-        .byte   $40,$01,$38,$BD,$00,$04,$E9,$42
-        .byte   $A8,$BE
-        adc     heatman_flame_inc,y
-        brk
-        .byte   $20,$4C,$AF,$60,$BD,$E0,$04,$D0
-        .byte   $33,$BD,$10,$01,$C9,$01,$B0,$12
-        .byte   $A9,$3E
+alien_shot_x_offset_hi:  .byte   $00,$FF
+; --- alien_shot_deactivate -- Alien Wily: deactivate shot + set palette ($AF81) ---
+alien_shot_deactivate:
+        lsr     $0420,x
+        lda     #$FF
+        sta     $0120,x
+        ldy     $0110,x
+        lda     #$00
+        sta     $0140,y
+        sec
+        lda     $0400,x
+        sbc     #$42
+        tay
+        ldx     alien_palette_index_table,y
+        ldy     #$00
+        jsr     alien_set_palette
+        rts
+; --- alien_shot_phase_check -- Alien Wily: shot phase/timer check ($AFA1) ---
+alien_shot_phase_check:
+        lda     $04E0,x
+        bne     turret_dec_timer
+        lda     $0110,x
+        cmp     #$01
+        bcs     alien_shot_check_deactivate
+        lda     #$3E
         sta     $04E0,x
         lda     #$00
         sta     $0640,x
         sta     $0660,x
         inc     $0110,x
         bne     turret_dec_timer
+alien_shot_check_deactivate:
         bne     turret_deactivate
         lda     #$C0
         sta     $0660,x
@@ -5704,11 +5706,8 @@ sniper_joe_spawn_shot:  ldy     $01
         lda     $0450,y
         adc     #$00
         sta     $0450,y
-        .byte   $BD
-sniper_joe_store_y:  sty     $B1
-sniper_joe_store_val:  .byte   $99
-        .byte   $B0
-sniper_joe_data:  .byte   $04
+        lda     sniper_joe_y_table,x
+        sta     $04B0,y
         ldx     $2B
         inc     $01
         dec     $02
@@ -5723,18 +5722,10 @@ sniper_joe_done:  ldx     $2B
         dec     $04E0,x
         rts
 
-sniper_joe_type_table:  eor     #$48    ; data: entity types $49/$48 = Sniper Joe bullets
-        eor     #$48                    ;   (bytes: $49,$48,$49,$48,$49,$48)
-        eor     #$48
-sniper_joe_x_offset_table:  clc
-        cli
-        bvc     sniper_joe_shift
-        plp
-        rts
+sniper_joe_type_table:  .byte   $49,$48,$49,$48,$49,$48 ; entity types: Sniper Joe bullets (alternating $49/$48)
+sniper_joe_x_offset_table:  .byte   $18,$58,$50,$20,$28,$60 ; X position offsets for shot spawn
 
-sniper_joe_check_above:  bpl     sniper_joe_store_y
-        bpl     sniper_joe_store_val
-        bpl     sniper_joe_data
+sniper_joe_y_table:  .byte   $10,$D0,$10,$D0,$10,$D0 ; Sniper Joe Y-position lookup table
         lda     #$00
         sta     $01
         sec
@@ -5747,8 +5738,7 @@ sniper_joe_check_above:  bpl     sniper_joe_store_y
         clc
         lda     $04A0,x
         adc     #$0C
-sniper_joe_store_a:  .byte   $85
-sniper_joe_shift:  asl     a
+sniper_joe_store_a:  sta     $0A
         lda     #$00
         sta     $0B
         lda     $0460,x
@@ -6845,17 +6835,26 @@ wily_teleport_rts:  rts
 
 wily_teleport_timer_table:  .byte   $3E,$1F,$1F,$1F ; Wily teleport timing table
 wily_teleport_target_lo:  .byte   $00,$68,$00,$80
-wily_teleport_target_hi:  .byte   $01,$01,$02,$02,$A5,$B1,$C9,$04
-        .byte   $B0,$15,$18,$BD,$60,$06,$69,$40
-        .byte   $9D,$60,$06,$BD,$40,$06,$69,$00
-        .byte   $9D,$40,$06
-
+wily_teleport_target_hi:  .byte   $01,$01,$02,$02
+; --- wily_teleport_gravity -- Wily teleport: gravity apply or vert check ($BAEF) ---
+wily_teleport_gravity:
+        lda     $B1
+        cmp     #$04
+        bcs     wily_final_vert_check
+        clc
+        lda     $0660,x
+        adc     #$40
+        sta     $0660,x
+        lda     $0640,x
+        adc     #$00
+        sta     $0640,x
 ; =============================================================================
 ; wily_final_physics -- Wily Final Boss — gravity, movement, and multi-phase AI ($BB06)
 ; =============================================================================
 wily_final_physics:  jsr     apply_entity_physics
         rts
 
+wily_final_vert_check:
         lda     #$07
         sta     $01
         lda     #$08
@@ -6933,8 +6932,14 @@ beam_boss_rts:  rts
         sta     $0460,x
         rts
 
-wily_final_x_adjust_table:  .byte   $03,$02,$20,$EE,$EF,$BD,$E0,$04
-        .byte   $D0,$22,$A5,$00,$C9,$38
+wily_final_x_adjust_table:  .byte   $03,$02
+; --- wily_final_ai_main -- Wily Final: face player + phase dispatch ($BBAD) ---
+wily_final_ai_main:
+        jsr     entity_face_player
+        lda     $04E0,x
+        bne     wily_final_phase_active
+        lda     $00
+        cmp     #$38
         bcs     wily_final_apply_physics
         lda     $4A
         sta     $01
@@ -6949,6 +6954,7 @@ wily_final_x_adjust_table:  .byte   $03,$02,$20,$EE,$EF,$BD,$E0,$04
 wily_final_apply_physics:  jsr     apply_entity_physics_alt
         rts
 
+wily_final_phase_active:
         cmp     #$02
         bcs     wily_final_gravity
         lda     $00
@@ -6986,15 +6992,34 @@ wily_final_rise_check:  lda     $04A0,x
 wily_final_physics_2:  jsr     apply_entity_physics
         rts
 
-wily_final_timer_table:  .byte   $1F,$2E,$7D,$BD,$E0,$04,$C9,$3E ; Wily final boss timer table
-wily_final_bank_table:  .byte   $D0,$2F,$BD,$A0,$06,$C9,$05,$D0 ; Wily final boss bank switch table
-        .byte   $37,$BD,$80,$06,$D0,$32,$A9,$74
-        .byte   $20,$59,$F1,$B0,$17,$BD,$00,$04
-        .byte   $99,$F0,$04,$18,$B9,$B0,$04,$69
-        .byte   $04,$99,$B0,$04,$A9,$FF,$99,$50
-        .byte   $06,$99,$70,$06
+wily_final_timer_table:  .byte   $1F,$2E,$7D ; Wily final boss timer table (3 entries: RNG/3)
+; --- wily_final_timer_expired -- Wily Final: timer check + projectile spawn ($BC30) ---
+wily_final_timer_expired:
+        lda     $04E0,x
+        cmp     #$3E
+wily_final_bank_table:                  ; also read as data by walker_ai_check (LDA $BC35,y)
+        bne     wily_final_inc_timer
+        lda     $06A0,x
+        cmp     #$05
+        bne     wily_final_check_anim
+        lda     $0680,x
+        bne     wily_final_check_anim
+        lda     #$74
+        jsr     spawn_entity_from_parent
+        bcs     wily_final_clear_timer
+        lda     $0400,x
+        sta     $04F0,y
+        clc
+        lda     $04B0,y
+        adc     #$04
+        sta     $04B0,y
+        lda     #$FF
+        sta     $0650,y
+        sta     $0670,y
+wily_final_clear_timer:
         lda     #$00
         sta     $04E0,x
+wily_final_inc_timer:
         inc     $04E0,x
         lda     $06A0,x
         cmp     #$02
