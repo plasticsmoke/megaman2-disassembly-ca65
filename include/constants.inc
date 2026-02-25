@@ -193,10 +193,12 @@ ENTITY_APPEAR_BLK_B = $54       ; Heat Man — Appear Block / Yoku Block (timer 
 ENTITY_APPEAR_BLK_C = $55       ; Heat Man — Appear Block / Yoku Block (timer $FA = 250 frames)
 ; Wily boss entities (code-identified, not yet Mesen-verified)
 ENTITY_WILY_BOSS    = $58       ; Wily boss — multi-phase, spawns copies with velocity pattern
+ENTITY_BOSS_DEBRIS  = $60       ; Boss death explosion parts (fortress_spawn_entity_loop)
 ENTITY_WILY4_SHIELD = $63       ; Wily 4 — Boobeam turret shield body (spawned by $64)
-; $64: Wily 4 controller
+ENTITY_BOOBEAM_CTRL = $64       ; Wily 4 — Boobeam Trap controller (spawns shield turrets)
 ENTITY_WILY_PROJ    = $6E       ; Wily Machine projectile (spawned by $6D cannon)
-; $70: Wily boss X position adjuster, $71: Wily final multi-phase AI
+ENTITY_ALIEN_BODY   = $70       ; Alien hologram body segments (13 parts, spawned on death)
+ENTITY_WILY_FINAL   = $71       ; Wily final multi-phase boss AI
 ENTITY_FLASH_PROJ   = $74       ; Flash hazard projectile (spawned by $72/$73)
 
 ; ─── Fixed bank entry points ─────────────────────────────────────────────────

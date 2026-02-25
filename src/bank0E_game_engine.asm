@@ -6455,6 +6455,7 @@ quick_boomer_phase_1:
 quick_boomer_physics:  jsr     apply_entity_physics
         rts
 
+; --- bubble_shot_ai -- Bubble Man shot (type $5B) — bounce on floor, deactivate on wall ---
 bubble_shot_ai:
         lda     ent_y_vel,x
         php
@@ -6478,6 +6479,7 @@ bubble_shot_check_deactivate:
 bubble_shot_physics:  jsr     apply_entity_physics
         rts
 
+; --- air_tornado_boss_ai -- Air Tornado boss (type $5D) — timer-based velocity decay ---
 air_tornado_boss_ai:
         lda     ent_state,x
         beq     air_tornado_boss_physics
@@ -6633,6 +6635,7 @@ wily4_shield_rts:  rts
 wily4_shield_physics:  jsr     apply_entity_physics_alt
         rts
 
+; --- wily4_timer_check -- Boobeam Trap controller (type $64) — spawns shield turrets, phase management ---
 wily4_timer_check:
         lda     ent_state,x
         bpl     wily4_timer_positive
@@ -6672,7 +6675,7 @@ wily4_palette_loop:  sta     palette_ram,x
         inc     ent_state,x
         lda     #$18
         sta     $0110,x
-        lda     #$63
+        lda     #ENTITY_WILY4_SHIELD
         sta     temp_00
         ldy     #$0F
 wily4_entity_init_loop:  jsr     find_entity_scan ; find unused entity slot
@@ -6725,7 +6728,7 @@ wily4_boss_phase_2:  dec     $0110,x
         inc     ent_hp,x
 wily4_boss_rts:  rts
 
-wily4_boss_despawn_all:  lda     #$63
+wily4_boss_despawn_all:  lda     #ENTITY_WILY4_SHIELD
         sta     temp_00
         ldy     #$0F
 wily4_despawn_loop:  jsr     find_entity_scan
@@ -6759,7 +6762,7 @@ wily4_shared_velocity:  lda     $0601
         cmp     #$08
         beq     wily4_shared_set_flags
         lda     ent_type,x
-        cmp     #$69
+        cmp     #ENTITY_GUTSDOZER_TURRET
         beq     wily4_shared_set_flags
         lda     ent_flags,x
         ora     #$23
@@ -6770,6 +6773,8 @@ wily4_shared_set_flags:  lda     #$8B
         sta     ent_flags,x
         rts
 
+; --- dragon_body_facing_setup -- Dragon body A (type $65) — set facing from parent velocity ---
+dragon_body_facing_setup:
         lda     #$00
         sta     ent_anim_id,x
         lda     $05A7
@@ -6780,6 +6785,7 @@ wily4_facing_setup:  lda     #$00
         sta     ent_anim_frame,x
         jmp     wily4_enemy_shared_ai
 
+; --- wily4_stage_check -- Dragon body B (type $66) — stage-conditional physics ---
 wily4_stage_check:
         lda     current_stage
         cmp     #WILY_STAGE_START
@@ -6804,6 +6810,7 @@ wily4_pos_reset_anim:  lda     #$00
         sta     ent_anim_frame,x
         rts
 
+; --- wily_capsule_timer_check -- Dragon/platform part (type $67) — vertical oscillation ---
 wily_capsule_timer_check:
         lda     ent_state,x
         bne     wily_capsule_set_movement
@@ -6833,6 +6840,7 @@ wily_capsule_stop_vel:
 ; =============================================================================
 wily_capsule_jmp_shared:  jmp     wily4_shared_velocity
 
+; --- wily_teleport_phase_check -- Wily teleport (type $6A) — multi-phase teleport + velocity targeting ---
 wily_teleport_phase_check:
         lda     ent_anim_id,x
         bne     wily_teleport_ai

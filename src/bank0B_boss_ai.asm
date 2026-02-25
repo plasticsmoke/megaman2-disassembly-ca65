@@ -1729,6 +1729,7 @@ dragon_attr_data:  .byte   $FF,$FF,$FF,$FF,$FF,$5F,$FF,$F3
         bcs     dragon_phase2_entry
         rts
 
+; --- Mecha Dragon Phase 2 — palette load, body part spawn ---
 dragon_phase2_entry:  bne     dragon_palette_done
         ldx     #$0F
 dragon_load_palette:  lda     dragon_palette_data,x
@@ -2096,6 +2097,7 @@ picopico_phase_rts:  rts
 
         jmp     picopico_rts
 
+; --- Picopico-kun Phase 2 — teleport entity spawning and pattern setup ---
         dec     $04E1
         bne     *-6
         lda     #$1F
@@ -2381,6 +2383,7 @@ gutsdozer_setup_complete:  lda     #$00
         inc     $B1
         rts
 
+; --- Guts-Dozer Movement — direction setup from scroll position ---
         lda     $0421
         bmi     *+7
         lda     #$FF
@@ -2429,10 +2432,8 @@ gutsdozer_jmp_movement:  jsr     dragon_apply_movement
 gutsdozer_spawn_screen_table:  .byte   $D7,$C7,$A7,$8C
 gutsdozer_turret_type_table:  .byte   ENTITY_GUTSDOZER_TURRET,$00,ENTITY_WILY4_SHIELD,ENTITY_DRAGON_PART
 gutsdozer_turret_y_table:  .byte   $7F,$00,$A8,$68
-gutsdozer_turret_ai_table:  ora     #$00
-        .byte   $14
-        asl     $A5
-        clv
+gutsdozer_turret_ai_table:  .byte   $09,$00,$14,$06
+        lda     camera_x_offset
         cmp     #$30
         bne     *+8
         lda     #$7D
@@ -2989,6 +2990,7 @@ wily_machine_scroll_rts:  rts
         sta     $04A1
         bne     wily_machine_rng_spawn
         sta     $0421
+; --- Wily Machine Phase 2 — random debris spawn and death sequence ---
 wily_machine_rng_spawn:  lda     rng_seed
         sta     temp_01
         lda     #$20
@@ -3225,6 +3227,7 @@ alien_palette_copy_loop:  lda     alien_palette_table,x
         jsr     play_sound_and_reset_anim
 alien_palette_inc_rts:  rts
 
+; --- Alien Movement — scroll to position and health check ---
 alien_movement_update:  lda     $0461
         cmp     #$D8
         beq     alien_health_check
@@ -3251,8 +3254,9 @@ alien_health_check:  jsr     boss_health_bar_tick
         lda     #$01
         sta     current_entity_slot
         ldx     #$0C
+; --- Alien Death — spawn body part entities ---
 alien_spawn_part_loop:  stx     temp_02
-        lda     #$70
+        lda     #ENTITY_ALIEN_BODY
         jsr     spawn_entity_init_type
         ldx     temp_02
 alien_part_setup_loop:  lda     alien_part_y_table,x
@@ -3707,7 +3711,7 @@ fortress_spawn_check_odd:  and     #$01
         sta     temp_02
         ldx     #$01
 fortress_spawn_entity_loop:  stx     temp_01
-        lda     #$60
+        lda     #ENTITY_BOSS_DEBRIS
         jsr     spawn_entity_init_type
         ldx     temp_02
         clc
