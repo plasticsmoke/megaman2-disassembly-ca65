@@ -5793,7 +5793,7 @@ mole_done:  ldx     current_entity_slot
         dec     ent_state,x
         rts
 
-mole_shot_type_table:  .byte   $49,$48,$49,$48,$49,$48 ; entity types: Mole projectiles (alternating $49/$48)
+mole_shot_type_table:  .byte   ENTITY_JOE_BULLET_A,ENTITY_JOE_BULLET_B,ENTITY_JOE_BULLET_A,ENTITY_JOE_BULLET_B,ENTITY_JOE_BULLET_A,ENTITY_JOE_BULLET_B
 mole_shot_x_offset:  .byte   $18,$58,$50,$20,$28,$60 ; X offsets for Mole shot spawn
 
 mole_shot_y_table:  .byte   $10,$D0,$10,$D0,$10,$D0 ; Mole shot Y-position lookup table

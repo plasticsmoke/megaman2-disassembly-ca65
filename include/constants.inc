@@ -157,10 +157,23 @@ ENTITY_ALIEN_SHOT   = $44       ; Alien Wily shot
 ENTITY_JOE_BULLET_A = $49       ; Sniper Joe bullet (type A)
 ENTITY_JOE_BULLET_B = $48       ; Sniper Joe bullet (type B)
 ENTITY_BUBBLE_SHOT  = $5B       ; Bubble Man shot
+ENTITY_METALMAN_BLADE = $5C     ; Metal Man boss blade projectile
 ENTITY_AIR_TORNADO  = $5D       ; Air Man tornado (boss)
 ENTITY_CRASH_BOMB   = $5E       ; Crash Bomb
 ENTITY_CRASH_BLAST  = $5F       ; Crash Bomb blast
 ENTITY_QUICK_BOOMER = $59       ; Quick Man boomerang (boss) — AI=delayed fall, needs re-verify
+ENTITY_WOODMAN_LEAF = $61       ; Wood Man leaf shield entity
+ENTITY_WOODMAN_TORNADO = $62    ; Wood Man tornado projectile
+ENTITY_DRAGON_BODY_A = $65      ; Mecha Dragon body part A
+ENTITY_DRAGON_BODY_B = $66      ; Mecha Dragon body part B
+ENTITY_DRAGON_PART  = $67       ; Mecha Dragon body/platform part (reused in Guts-Dozer)
+ENTITY_DRAGON_BREATH = $68      ; Mecha Dragon fire breath projectile
+ENTITY_GUTSDOZER_TURRET = $69   ; Guts-Dozer oscillating turret
+ENTITY_WILY_TELEPORT = $6A      ; Wily 5 teleport boss entity
+ENTITY_WILY_GRAVITY = $6B       ; Wily Machine gravity projectile
+ENTITY_WILY_MACHINE_SHOT = $6C  ; Wily Machine aimed shot
+ENTITY_GUTSDOZER_CANNON = $6D   ; Guts-Dozer cannon body part
+ENTITY_ALIEN_BOSS_SHOT = $6F    ; Alien boss phase projectile
 ; Pickups
 ENTITY_LARGE_HEALTH = $76       ; Large health pickup
 ENTITY_SMALL_HEALTH = $77       ; Small health pickup
@@ -181,10 +194,7 @@ ENTITY_APPEAR_BLK_C = $55       ; Heat Man — Appear Block / Yoku Block (timer 
 ; Wily boss entities (code-identified, not yet Mesen-verified)
 ENTITY_WILY_BOSS    = $58       ; Wily boss — multi-phase, spawns copies with velocity pattern
 ENTITY_WILY4_SHIELD = $63       ; Wily 4 — Boobeam turret shield body (spawned by $64)
-; $62-$67: Wily 4 (Boobeam Trap) system — $64=controller, $65-$67=variants
-; $69: oscillating Wily capsule component
-; $6A: teleporting boss, $6B: gravity entity (final boss)
-; $6D: Wily Machine cannon (spawns $6E projectiles at player)
+; $64: Wily 4 controller
 ENTITY_WILY_PROJ    = $6E       ; Wily Machine projectile (spawned by $6D cannon)
 ; $70: Wily boss X position adjuster, $71: Wily final multi-phase AI
 ENTITY_FLASH_PROJ   = $74       ; Flash hazard projectile (spawned by $72/$73)

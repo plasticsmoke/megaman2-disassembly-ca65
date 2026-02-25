@@ -177,7 +177,7 @@ enemy_state_transition:  .byte   $0F,$0F,$0B,$05,$09,$07,$05,$03
 enemy_spawn_sound_ids:  .byte   $51,$67,$6D
         adc     ($55,x)
         .byte   $5C,$64,$6A
-        lda     #$58
+        lda     #ENTITY_WILY_BOSS
         jsr     find_entity_by_type
         bcs     *+12
         lda     $06A1
@@ -217,7 +217,7 @@ heatman_spawn_projectile_loop:  ldx     temp_01
         sta     $0D
         jsr     divide_16bit            ; divide for velocity ratio
         ldx     #$01
-        lda     #$58
+        lda     #ENTITY_WILY_BOSS
         jsr     spawn_entity_from_boss
         ldx     temp_01
         lda     heatman_proj_hitbox_y,x
@@ -398,7 +398,7 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
 ; =============================================================================
 ; Boss AI: Air Man — Leaf Shield creation and leaf projectile spawning ($833C)
 ; =============================================================================
-airman_spawn_leaf_loop:  lda     #$5D
+airman_spawn_leaf_loop:  lda     #ENTITY_AIR_TORNADO
         ldx     #$01
         jsr     spawn_entity_from_boss
         ldx     temp_01
@@ -462,7 +462,7 @@ airman_dec_leaf_count:  lda     #$00
         jsr     boss_update_with_sound
         rts
 
-        lda     #$5D
+        lda     #ENTITY_AIR_TORNADO
         jsr     find_entity_by_type
         bcc     airman_shield_active
         dec     $B1
@@ -542,7 +542,7 @@ boss_update_rts:  rts
         jsr     calc_player_boss_distance
         lda     $04E1
         bne     woodman_check_phase
-        lda     #$61
+        lda     #ENTITY_WOODMAN_LEAF
         ldx     #$01
         jsr     spawn_entity_from_boss
         inc     $04E1
@@ -561,17 +561,17 @@ woodman_inc_timer:  inc     $B2
         lda     #$00
         sta     $B2
         inc     $04E1
-woodman_spawn_tornado:  lda     #$62
+woodman_spawn_tornado:  lda     #ENTITY_WOODMAN_TORNADO
         ldx     #$01
         jsr     spawn_entity_from_boss
 woodman_jmp_frame_update:  jmp     woodman_frame_update
 
-woodman_spawn_multi_tornado:  lda     #$62
+woodman_spawn_multi_tornado:  lda     #ENTITY_WOODMAN_TORNADO
         jsr     find_entity_by_type
         bcc     woodman_frame_update
         lda     #$03
         sta     temp_02
-woodman_tornado_loop:  lda     #$62
+woodman_tornado_loop:  lda     #ENTITY_WOODMAN_TORNADO
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     woodman_advance_phase
@@ -605,7 +605,7 @@ woodman_tornado_x_offset:  .byte   $40
         bne     woodman_phase3_sound
         lda     $0681
         bne     woodman_jmp_frame_update_2
-        lda     #$61
+        lda     #ENTITY_WOODMAN_LEAF
         jsr     find_entity_by_type
 woodman_bcc_frame_update:  bcs     woodman_jmp_frame_update_2
         lda     #$04
@@ -671,7 +671,7 @@ woodman_jmp_frame_update_2:  jsr     woodman_update_with_sound
         bne     woodman_collision_rts
         lda     #$00
         sta     $0681
-        lda     #$62
+        lda     #ENTITY_WOODMAN_TORNADO
         jsr     find_entity_by_type
         bcc     woodman_collision_rts
         lda     #$02
@@ -736,7 +736,7 @@ bubbleman_dec_aim_timer:  dec     $B2
         bne     bubbleman_frame_update
         lda     #$1F
         sta     $B2
-        lda     #$5B
+        lda     #ENTITY_BUBBLE_SHOT
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     #$01
@@ -937,7 +937,7 @@ quickman_check_y_vel:  lda     $0641
         sta     ent_y_px
         lda     #$03
         sta     temp_02
-quickman_spawn_boomerang_loop:  lda     #$59
+quickman_spawn_boomerang_loop:  lda     #ENTITY_QUICK_BOOMER
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     quickman_restore_y
@@ -1169,7 +1169,7 @@ flashman_data_overlap:cmp     #$02
         clc
         adc     temp_04
         sta     ent_y_px
-        lda     #$35
+        lda     #ENTITY_GENERIC_PROJ
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     flashman_restore_y_pos
@@ -1361,7 +1361,7 @@ metalman_check_anim_2:  cmp     #$02
         bne     metalman_frame_rts
         lda     #$23
         jsr     bank_switch_enqueue
-        lda     #$5C
+        lda     #ENTITY_METALMAN_BLADE
         ldx     #$01
         jsr     spawn_entity_from_boss
         clc
@@ -1559,10 +1559,10 @@ crashman_check_anim_fire:  lda     $06A1
         bne     crashman_check_anim_state
         lda     $0681
         bne     crashman_check_anim_state
-        lda     #$5E
+        lda     #ENTITY_CRASH_BOMB
         jsr     find_entity_by_type
         bcc     crashman_check_anim_state
-        lda     #$5E
+        lda     #ENTITY_CRASH_BOMB
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     crashman_check_anim_state
@@ -1714,7 +1714,7 @@ dragon_attr_data:  .byte   $FF,$FF,$FF,$FF,$FF,$5F,$FF,$F3
         .byte   $FF,$55,$7F,$FF,$FF,$FF,$FF,$FF
         lda     $04E1
         bne     *+28
-        lda     #$67
+        lda     #ENTITY_DRAGON_PART
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     nametable_select
@@ -1740,14 +1740,14 @@ dragon_load_palette:  lda     dragon_palette_data,x
         sta     $B1
         lda     #$5D
         sta     $B2
-        lda     #$65
+        lda     #ENTITY_DRAGON_BODY_A
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     #$40
         sta     ent_x_spawn_px,y
         lda     #$87
         sta     ent_y_spawn_px,y
-        lda     #$66
+        lda     #ENTITY_DRAGON_BODY_B
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     #$38
@@ -1848,7 +1848,7 @@ dragon_fire_breath:  lda     #$2C
         jsr     bank_switch_enqueue
         lda     #$01
         sta     $06A1
-        lda     #$68
+        lda     #ENTITY_DRAGON_BREATH
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     dragon_fire_done
@@ -2100,7 +2100,7 @@ picopico_phase_rts:  rts
         bne     *-6
         lda     #$1F
         sta     $04E1
-        lda     #$6A
+        lda     #ENTITY_WILY_TELEPORT
         jsr     find_entity_by_type
         bcc     *-18
         ldx     $B2
@@ -2427,7 +2427,7 @@ gutsdozer_jmp_movement:  jsr     dragon_apply_movement
         rts
 
 gutsdozer_spawn_screen_table:  .byte   $D7,$C7,$A7,$8C
-gutsdozer_turret_type_table:  .byte   $69,$00,$63,$67
+gutsdozer_turret_type_table:  .byte   ENTITY_GUTSDOZER_TURRET,$00,ENTITY_WILY4_SHIELD,ENTITY_DRAGON_PART
 gutsdozer_turret_y_table:  .byte   $7F,$00,$A8,$68
 gutsdozer_turret_ai_table:  ora     #$00
         .byte   $14
@@ -2481,7 +2481,7 @@ gutsdozer_spawn_setup:  lda     #$3F
         lda     temp_00
         cmp     #$38
         bcc     gutsdozer_calc_aim_angle
-        lda     #$69
+        lda     #ENTITY_GUTSDOZER_TURRET
         jsr     find_entity_by_type
         lda     #$01
         sta     $04F0,y
@@ -2496,7 +2496,7 @@ gutsdozer_sprite_scan_loop:  jsr     collision_check_sprite
         beq     gutsdozer_check_anim_state
         dey
         bpl     gutsdozer_sprite_scan_loop
-gutsdozer_spawn_shot:  lda     #$34
+gutsdozer_spawn_shot:  lda     #ENTITY_NEO_METALL
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     gutsdozer_check_anim_state
@@ -2529,7 +2529,7 @@ gutsdozer_aim_shift:  sta     jump_ptr
         asl     jump_ptr
         rol     a
         sta     jump_ptr_hi
-        lda     #$69
+        lda     #ENTITY_GUTSDOZER_TURRET
         jsr     find_entity_by_type
         lda     #$00
         sta     $04F0,y
@@ -2604,7 +2604,7 @@ gutsdozer_ai_table_hi:  .byte   $93,$94,$95,$95,$95,$95
 ; =============================================================================
 ; Boss AI: Guts Dozer — part spawning and position tables ($968B)
 ; =============================================================================
-gutsdozer_spawn_part_loop:  lda     #$6D
+gutsdozer_spawn_part_loop:  lda     #ENTITY_GUTSDOZER_CANNON
         ldx     #$01
         jsr     spawn_entity_from_boss
         ldx     temp_02
@@ -2720,7 +2720,7 @@ boobeam_health_check:  jsr     boss_health_bar_tick
         cmp     #MAX_HP
         bne     boobeam_health_rts
         inc     $B1
-        lda     #$56
+        lda     #ENTITY_NEO_METALL_FLIP
         ldx     #$01
         jsr     spawn_entity_from_boss
         lda     #$AB
@@ -2826,7 +2826,7 @@ wily_machine_apply_facing:  sta     $0421
         sta     $0A
         sta     $0C
         jsr     divide_16bit            ; divide for velocity ratio
-        lda     #$6B
+        lda     #ENTITY_WILY_GRAVITY
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     wily_machine_store_facing
@@ -2888,7 +2888,7 @@ wily_machine_store_facing:  lda     #$83
         jsr     $C84E
         lda     temp_04
         sta     jump_ptr_hi
-        lda     #$6C
+        lda     #ENTITY_WILY_MACHINE_SHOT
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     *+23
@@ -2994,7 +2994,7 @@ wily_machine_rng_spawn:  lda     rng_seed
         lda     #$20
         sta     temp_02
         jsr     divide_8bit
-        lda     #$06
+        lda     #ENTITY_DEATH_EXPLODE
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     wily_machine_inc_timer
@@ -3079,7 +3079,7 @@ wily_machine_death_explosion:  lda     #$74
         sta     $04A1
         lda     #$00
         sta     $04E1
-        lda     #$56
+        lda     #ENTITY_NEO_METALL_FLIP
         jsr     find_entity_by_type
         bcs     wily_machine_death_jmp
         lda     #$00
@@ -3317,7 +3317,7 @@ alien_palette_data_byte:  .byte   $03
         bne     alien_frame_update
         lda     #$3E
         sta     $05A7
-        lda     #$6F
+        lda     #ENTITY_ALIEN_BOSS_SHOT
         jsr     spawn_entity_from_boss
         bcs     alien_frame_update
         lda     #$04
