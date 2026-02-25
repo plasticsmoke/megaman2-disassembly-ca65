@@ -2665,7 +2665,7 @@ anko_spawner_scan:  jsr     find_entity_scan
         dey
         bne     anko_spawner_scan
         bne     anko_spawner_set_timer
-anko_spawner_create:  lda     #$01
+anko_spawner_create:  lda     #ENTITY_ANKO_BODY
         jsr     spawn_entity_from_parent
         lda     #$31
         bne     anko_spawner_store_timer
@@ -2683,7 +2683,7 @@ anko_spawner_dec_timer:
 anko_seg_entry:
         lda     ent_x_vel_sub,x           ; check X velocity (sub)
         bne     anko_seg_track_parent
-        lda     #$03
+        lda     #ENTITY_ANKO_SEG
         jsr     check_entity_collision_scan
         bcc     anko_seg_track_parent
         rts
@@ -2696,10 +2696,10 @@ anko_seg_track_parent:
         bne     anko_seg_dec_timer
         lda     #$03
         sta     temp_01
-        lda     #$04
+        lda     #ENTITY_M445
         jsr     find_entity_count_check
         bcs     anko_seg_set_timer
-        lda     #$04
+        lda     #ENTITY_M445
         jsr     spawn_entity_from_parent
         bcs     anko_seg_set_timer
         lda     $0110,x
@@ -2832,7 +2832,7 @@ claw_spawner_physics:
 claw_spawner_ai_entry:
         lda     ent_x_vel_sub,x
         bne     claw_spawner_copy_pos
-        lda     #$07
+        lda     #ENTITY_CLAW
         jsr     check_entity_collision_scan
         bcc     claw_spawner_copy_pos
         rts
@@ -2845,10 +2845,10 @@ claw_spawner_copy_pos:
         bne     claw_spawner_dec_timer
         lda     #$02
         sta     temp_01
-        lda     #$08
+        lda     #ENTITY_CLAW_VAR
         jsr     find_entity_count_check
         bcs     claw_spawner_set_timer
-        lda     #$08
+        lda     #ENTITY_CLAW_VAR
         jsr     spawn_entity_from_parent
         bcs     claw_spawner_set_timer
         lda     $0110,x
@@ -2970,7 +2970,7 @@ tanishi_hp_check:
         lda     ent_hp,x
         cmp     #$14
         beq     tanishi_check_facing
-        lda     #$0B                    ; entity type $0B = Tanishi (bare/shell-less)
+        lda     #ENTITY_TANISHI_BARE    ; spawn bare Tanishi on HP threshold
         jsr     spawn_entity_from_parent
         lda     ent_spawn_flags,y
         ora     #$04
@@ -3053,7 +3053,7 @@ kerog_ai_entry:
         bcs     kerog_check_jump_state
         lda     #$01
         sta     temp_01
-        lda     #$0D
+        lda     #ENTITY_PETIT_KEROG
         jsr     find_entity_count_check
         bcs     kerog_check_anim
         lda     #$09
@@ -3068,7 +3068,7 @@ kerog_check_jump_state:
         bne     kerog_apply_physics
         lda     #$02
         sta     temp_01
-kerog_spawn_child_loop:  lda     #$0D    ; entity type $0D = Petit Kerog
+kerog_spawn_child_loop:  lda     #ENTITY_PETIT_KEROG
         jsr     spawn_entity_from_parent
         bcs     kerog_check_anim
         ldx     temp_01
@@ -3147,7 +3147,7 @@ boss_skip_palette:
         bne     die_expand_phase
         lda     #$A0
         sta     ent_flags,x
-        lda     #$0F
+        lda     #ENTITY_BOSS_DEATH
         sta     ent_type,x
         ldx     #$01
 die_spawn_part_loop:  stx     temp_01
@@ -3229,7 +3229,7 @@ boss_spawn_debris:  lda     #$04
         sta     temp_02
         lda     ent_y_vel_sub,x
         sta     temp_03
-boss_debris_loop:  lda     #$06
+boss_debris_loop:  lda     #ENTITY_DEATH_EXPLODE
         jsr     spawn_entity_from_parent
         bcs     boss_debris_done
         ldx     temp_02
@@ -3467,7 +3467,7 @@ metalman_blade_calc:
         sta     temp_02
         lda     metalman_blade_src_table,y
         sta     temp_01
-metalman_spawn_blade:  lda     #$15    ; entity type $15 = Metal Blade projectile
+metalman_spawn_blade:  lda     #ENTITY_METAL_BLADE
         jsr     spawn_entity_from_parent
         ldx     temp_01
         lda     metalman_blade_flags,x
@@ -3739,7 +3739,7 @@ quickman_check_pattern:
 quickman_check_timer:  lda     ent_state,x
         bne     quickman_dec_timer
         jsr     entity_face_player
-        lda     #$18                    ; entity type $18 = Quick Boomerang projectile
+        lda     #ENTITY_QUICK_BOOM      ; spawn Quick Boomerang projectile
         jsr     spawn_entity_from_parent
         bcs     quickman_set_timer
         lda     current_entity_slot
@@ -3802,7 +3802,7 @@ quickman_palette_loop:  lda     heatman_palette_data,y
         sta     ent_anim_frame,x
         lda     ent_state,x
         bne     heatman_dec_timer
-        lda     #$1B                    ; entity type $1B = Atomic Fire projectile
+        lda     #ENTITY_ATOMIC_FIRE     ; spawn Atomic Fire projectile
         jsr     spawn_entity_from_parent
         bcs     heatman_spawn_fire
         clc
@@ -3841,7 +3841,7 @@ heatman_apply_physics:  jsr     apply_entity_physics_alt
         bcc     heatman_rts
         lda     #$80
         sta     ent_flags,x
-        lda     #$19                    ; convert self to type $19 (fire/tornado projectile)
+        lda     #ENTITY_AIR_TORNADO1    ; convert self to fire/tornado projectile
         sta     ent_type,x
         lda     #$00
         sta     ent_state,x
@@ -3868,7 +3868,7 @@ heatman_flame_pattern:  lda     ent_state,x
         jsr     bank_switch_enqueue
         lda     #$05
         sta     temp_02
-heatman_flame_loop:  lda     #$06
+heatman_flame_loop:  lda     #ENTITY_DEATH_EXPLODE
         jsr     spawn_entity_from_parent
         bcs     heatman_flame_done
         ldx     temp_01
@@ -4046,7 +4046,7 @@ airman_copy_tiles:  lda     airman_tile_data,x
         bne     airman_rts
         lda     ent_state,x
         bne     airman_rts
-        lda     #$19                    ; entity type $19 = Air Shooter tornado (primary)
+        lda     #ENTITY_AIR_TORNADO1    ; spawn Air Shooter tornado (primary)
         jsr     spawn_entity_from_parent
         lda     #$08
         sta     $04F0,y
@@ -4068,7 +4068,7 @@ airman_copy_tiles:  lda     airman_tile_data,x
         lda     $0610,y
         adc     #$03
         sta     $0610,y
-airman_spawn_tornado_2:  lda     #$1A    ; entity type $1A = Air Shooter tornado (secondary)
+airman_spawn_tornado_2:  lda     #ENTITY_AIR_TORNADO2    ; spawn Air Shooter tornado (secondary)
         jsr     spawn_entity_from_parent
         clc
         lda     ent_x_spawn_px,y
@@ -4217,10 +4217,11 @@ flashman_state_land:  lda     temp_00
 flashman_physics:  jsr     apply_entity_physics
         rts
 
+; --- kukku_spawner_ai -- Kukku spawner (type $1E) — tracks player X, spawns Kukku bodies ---
 kukku_spawner_ai:
         lda     ent_x_vel_sub,x
         bne     kukku_spawner_track
-        lda     #$1E
+        lda     #ENTITY_KUKKU_SPAWN
         jsr     check_entity_collision_scan
         bcc     kukku_spawner_track
         rts
@@ -4233,10 +4234,10 @@ kukku_spawner_track:
         bne     kukku_spawner_dec_timer
         lda     #$01
         sta     temp_01
-        lda     #$1F
+        lda     #ENTITY_KUKKU
         jsr     find_entity_count_check
         bcs     kukku_spawner_set_timer
-        lda     #$1F
+        lda     #ENTITY_KUKKU
         jsr     spawn_entity_from_parent
         bcs     kukku_spawner_set_timer
         clc
@@ -4290,19 +4291,21 @@ kukku_body_airborne:
 kukku_body_physics:  jsr     apply_entity_physics
         rts
 
+; --- kukku_despawn_ai -- Kukku despawner (type $20) — destroys all Kukku spawners via enemy_destroy_scan ---
 kukku_despawn_ai:
-        lda     #$1E
+        lda     #ENTITY_KUKKU_SPAWN
         sta     temp_00
         jmp     enemy_destroy_scan
+; --- boss_telly_spawner -- Telly spawner (type $21) — timer-based, spawns up to 3 Telly bodies ---
 boss_telly_spawner:
         lda     ent_state,x
         bne     boss_telly_dec_timer
         lda     #$03
         sta     temp_01
-        lda     #$22
+        lda     #ENTITY_TELLY
         jsr     find_entity_count_check
         bcs     boss_telly_store_timer
-        lda     #$22
+        lda     #ENTITY_TELLY
         jsr     spawn_entity_from_parent
 boss_telly_store_timer:
         lda     #$DA
@@ -4326,6 +4329,7 @@ boss_spawn_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics
         rts
 
+; --- boss_shot_spawn_init -- Changkey Maker (type $25) — blackout trigger, spawns light restore + Changkey projectiles ---
 boss_shot_spawn_init:
         lda     ent_x_vel_sub,x
         bne     boss_shot_check_timer
@@ -4336,12 +4340,12 @@ boss_shot_spawn_init:
         sta     ent_flags,x
         lda     #$01
         sta     temp_01
-        lda     #$23
+        lda     #ENTITY_CHANGKEY
         jsr     find_entity_count_check
         lda     #$83
         sta     ent_flags,x
         bcs     boss_dec_timer
-        lda     #$26
+        lda     #ENTITY_LIGHT_RESTORE
         jsr     spawn_entity_from_parent
         jmp     boss_dec_timer
 boss_shot_check_timer:
@@ -4359,7 +4363,7 @@ boss_check_anim_state:  lda     ent_anim_id,x
         lda     ent_anim_frame,x
         bne     boss_check_physics
         jsr     entity_face_player
-        lda     #$24
+        lda     #ENTITY_CHANGKEY_PROJ
         jsr     spawn_entity_from_parent
         bcs     boss_random_timer
         sec
@@ -4388,10 +4392,10 @@ boss_random_timer:  lda     rng_seed
 boss_dec_timer:  dec     ent_state,x
 boss_check_physics:  jsr     apply_entity_physics_alt
         bcc     boss_misc_rts
-        lda     #$23
+        lda     #ENTITY_CHANGKEY
         jsr     find_entity_by_type
         bcc     boss_misc_rts
-        lda     #$28
+        lda     #ENTITY_BLACKOUT_RE
         jsr     spawn_entity_from_parent
 boss_misc_rts:  rts
 
@@ -4400,10 +4404,10 @@ boss_palette_check:
         lda     $0357
         cmp     #$0F
         beq     boss_palette_check_done
-        lda     #$23
+        lda     #ENTITY_CHANGKEY
         jsr     find_entity_by_type
         bcc     boss_palette_check_done
-        lda     #$26
+        lda     #ENTITY_LIGHT_RESTORE
         jsr     find_entity_by_type
         bcc     boss_palette_check_done
         lda     ent_state,x
@@ -4473,6 +4477,7 @@ boss_palette_flash_data:  .byte   $0F,$2C,$10,$1C,$0F,$37,$27,$07 ; palette flas
         .byte   $0F,$37,$27,$08,$0F,$17,$06,$08
         .byte   $0F,$36,$26,$16,$0F,$37,$27,$07
         .byte   $0F,$27,$16,$07
+; --- wily_machine_phase_check -- Wily Machine (type $69) — spawns Pierrobot turret child, phase transition ---
 wily_machine_phase_check:
         lda     $0110,x
         bne     wily_machine_ai_entry
@@ -4480,7 +4485,7 @@ wily_machine_phase_check:
         lda     ent_state,x
         cmp     #$3E
         bne     wily_machine_physics
-        lda     #$2A
+        lda     #ENTITY_PIERROBOT
         jsr     spawn_entity_from_parent
         bcs     wily_machine_physics
         lda     #$08
@@ -4583,15 +4588,16 @@ wily_capsule_cleanup:
 wily_capsule_cleanup_rts:
         rts
 
+; --- wily_capsule_spawn_child -- Wily Capsule child spawner — spawns Fly Boy on timer ---
 wily_capsule_spawn_child:
         lda     ent_state,x
         bne     wily_capsule_dec_timer
         lda     #$02
         sta     temp_01
-        lda     #$2C
+        lda     #ENTITY_FLY_BOY
         jsr     find_entity_count_check
         bcs     wily_capsule_set_timer
-        lda     #$2C
+        lda     #ENTITY_FLY_BOY
         jsr     spawn_entity_from_parent
 wily_capsule_set_timer:
         lda     #$7D
@@ -4723,7 +4729,7 @@ mecha_dragon_tile_check:
         lda     #$2B
         sta     ent_state,x
         inc     $0110,x
-        lda     #$52
+        lda     #ENTITY_PRESS_RETRACT
         jsr     spawn_entity_from_parent
         sec
         lda     ent_y_spawn_px,y
@@ -4771,7 +4777,7 @@ mecha_dragon_check_timer:  lda     ent_state,x
         bne     mecha_dragon_check_state
         lda     #$02
         sta     temp_01
-mecha_dragon_spawn_fire:  lda     #$33    ; entity type $33 = Mecha Dragon fireball
+mecha_dragon_spawn_fire:  lda     #ENTITY_MECHA_FIRE
         jsr     spawn_entity_from_parent
         bcs     mecha_dragon_fire_done
         lda     #$E0
@@ -4805,10 +4811,11 @@ mecha_dragon_check_state:  lda     $0110,x
 mecha_dragon_physics:  jsr     apply_entity_physics
         rts
 
+; --- mecha_dragon_spawn_child -- Mecha Dragon child (type $62) — spawns Blocky child, delegates to fire/walk ---
 mecha_dragon_spawn_child:
         lda     $0110,x
         bne     mecha_dragon_check_walk
-        lda     #$32
+        lda     #ENTITY_BLOCKY_PHASE2
         jsr     spawn_entity_from_parent
         txa
         sta     $04F0,y
@@ -4870,7 +4877,7 @@ mecha_dragon_check_hit:  jsr     apply_entity_physics
         jsr     entity_face_player
         lda     #$02
         sta     temp_01
-mecha_dragon_spawn_debris:  lda     #$33    ; entity type $33 = Mecha Dragon fireball (reused as debris)
+mecha_dragon_spawn_debris:  lda     #ENTITY_MECHA_FIRE     ; spawn fireball (reused as debris)
         jsr     spawn_entity_from_parent
         bcs     mecha_dragon_debris_done
         ldx     temp_01
@@ -5012,7 +5019,7 @@ picopico_state_1:  cmp     #$02
         jsr     bank_switch_enqueue
         lda     #$02
         sta     temp_01
-picopico_spawn_shot:  lda     #$35    ; entity type $35 = projectile (shared with Neo Metall)
+picopico_spawn_shot:  lda     #ENTITY_GENERIC_PROJ
         jsr     spawn_entity_from_parent ; spawn projectile
         bcs     picopico_advance_state
         ldx     temp_01
@@ -5125,7 +5132,7 @@ matasaburo_apply_physics:
 boobeam_guard_check:
         lda     ent_x_vel_sub,x
         bne     boobeam_init
-        lda     #$37
+        lda     #ENTITY_PIPI_SPAWN
         jsr     check_entity_collision_scan
         bcc     boobeam_init
         rts
@@ -5143,15 +5150,15 @@ boobeam_init:  lda     ent_x_px
         sta     ent_state,x
         lda     #$01
         sta     temp_01
-        lda     #$38
+        lda     #ENTITY_PIPI
         jsr     find_entity_count_check
         bcs     boobeam_dec_timer
         lda     #$02
         sta     temp_01
-        lda     #$3C
+        lda     #ENTITY_COPIPI
         jsr     find_entity_count_check
         bcs     boobeam_dec_timer
-        lda     #$38
+        lda     #ENTITY_PIPI
         jsr     spawn_entity_from_parent
         bcs     boobeam_dec_timer
         ldx     #$00
@@ -5178,10 +5185,11 @@ entity_shift_flags:
         lsr     ent_flags,x
         rts
 
+; --- capsule_missile_spawn_child -- Capsule missile (type $3E) — spawns Pipi egg child, tracks + fires at player ---
 capsule_missile_spawn_child:
         lda     $0110,x
         bne     capsule_missile_check_timer
-        lda     #$3A
+        lda     #ENTITY_PIPI_EGG
         jsr     spawn_entity_from_parent
         bcs     entity_shift_flags
         txa
@@ -5235,8 +5243,9 @@ capsule_missile_physics:  jsr     apply_entity_physics
         sta     ent_spawn_flags,y
 capsule_missile_rts:  rts
 
+; --- pipi_destroy_scan -- Pipi spawner cleanup — destroys all Pipi spawn entities via enemy_destroy_scan ---
 pipi_destroy_scan:
-        lda     #$37
+        lda     #ENTITY_PIPI_SPAWN
         sta     temp_00
         jmp     enemy_destroy_scan
 
@@ -5262,15 +5271,15 @@ boss_explode_tile_check:
 ; =============================================================================
 ; boss_explode_start -- Boss Explosion — spawn debris ring on boss death ($ACB6)
 ; =============================================================================
-boss_explode_start:  lda     #$3B    ; entity type $3B = explosion flash effect
+boss_explode_start:  lda     #ENTITY_EGG_HATCH      ; spawn explosion flash effect
         jsr     spawn_entity_from_parent
-        lda     #$3B                    ; spawn second flash
+        lda     #ENTITY_EGG_HATCH      ; spawn second flash
         jsr     spawn_entity_from_parent
         lda     #$C4
         sta     ent_spawn_flags,y
         lda     #$07
         sta     temp_01
-boss_explode_spawn_loop:  lda     #$3C    ; entity type $3C = explosion debris
+boss_explode_spawn_loop:  lda     #ENTITY_COPIPI         ; spawn explosion debris
         jsr     spawn_entity_from_parent ; spawn debris piece
         bcs     boss_explode_deactivate
         ldx     temp_01
@@ -5334,7 +5343,7 @@ multi_boss_child_track:
         lda     ent_state,x
         cmp     #$9D
         bne     multi_boss_anim_check
-        lda     #$3F
+        lda     #ENTITY_KAMINARI_BOLT
         jsr     spawn_entity_from_parent
         lda     #$03
         sta     ent_anim_id,x
@@ -5355,13 +5364,14 @@ multi_boss_deactivate:
         lsr     ent_flags,x
         rts
 
+; --- circular_shot_spawn_child -- Kaminari Goro (type $3E) — spawns child, circular shot pattern on timer ---
 circular_shot_spawn_child:
         lda     #$18
         sta     $0150,x
         lda     ent_x_vel_sub,x
         ora     ent_y_vel_sub,x
         bne     circular_shot_timer_check
-        lda     #$3D
+        lda     #ENTITY_KAMINARI_CHILD
         jsr     spawn_entity_from_parent
         bcs     circular_shot_timer_check
         txa
@@ -5456,6 +5466,7 @@ alien_check_phase:
 ; =============================================================================
 alien_jump_physics:  jmp     alien_inc_timer
 
+; --- alien_check_fire -- Alien Wily fire check — spawns orbs when close, shots on descent ---
 alien_check_fire:  lda     temp_00
         cmp     #$28
         bcs     alien_check_descent
@@ -5464,10 +5475,10 @@ alien_check_fire:  lda     temp_00
         bne     alien_check_descent
         lda     #$03
         sta     temp_01
-        lda     #$45
+        lda     #ENTITY_ALIEN_ORB
         jsr     find_entity_count_check
         bcs     alien_check_descent
-        lda     #$45                    ; entity type $45 = Alien Wily orb
+        lda     #ENTITY_ALIEN_ORB      ; spawn Alien orb
         jsr     spawn_entity_from_parent
         bcs     alien_check_descent
         lda     ent_x_vel,x
@@ -5495,7 +5506,7 @@ alien_check_descent:  lda     ent_y_vel_sub,x
         bne     alien_hover_dec
         lda     #$01
         sta     temp_01
-alien_spawn_shot_loop:  lda     #$44    ; entity type $44 = Alien Wily shot
+alien_spawn_shot_loop:  lda     #ENTITY_ALIEN_SHOT     ; spawn Alien shot
         jsr     spawn_entity_from_parent
         bcs     alien_set_hover_timer
         lda     ent_y_spawn_px,y
@@ -5739,9 +5750,9 @@ scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
         sta     ent_state,x
         lda     #$06
         sta     temp_01
-        lda     #$48
+        lda     #ENTITY_JOE_BULLET_B
         jsr     find_entity_count_check
-        lda     #$49
+        lda     #ENTITY_JOE_BULLET_A
         jsr     find_entity_count_check
         bcs     mole_done
         lda     ent_x_vel,x
@@ -5911,7 +5922,7 @@ boss_proj_mgr_fire:  ldx     temp_01
         ldx     current_entity_slot
         lda     #$25
         jsr     bank_switch_enqueue
-        lda     #$4D
+        lda     #ENTITY_SHOTMAN
         jsr     spawn_entity_from_parent
         bcs     boss_fire_done
         ldx     temp_01
@@ -6040,7 +6051,7 @@ multi_boss_check_timer:  lda     ent_state,x
         lda     #$25
         jsr     bank_switch_enqueue
         jsr     entity_face_player
-        lda     #$35
+        lda     #ENTITY_GENERIC_PROJ
         jsr     spawn_entity_from_parent
         bcs     multi_boss_check_cycle
         lda     $0110,x
@@ -6074,7 +6085,7 @@ multi_boss_rts_2:  rts
 
 multi_boss_death_check:  lda     ent_hp,x
         bne     multi_boss_rts_2
-        lda     #$4F
+        lda     #ENTITY_SNIPER_JOE
         jsr     spawn_entity_from_parent
         bcs     multi_boss_rts_2
         lda     #$7E
@@ -6083,6 +6094,7 @@ multi_boss_shot_vel_y_sub:  .byte   $04,$60,$6A,$A0,$88 ; vel Y sub table (also 
 multi_boss_shot_vel_y_hi:  .byte   $12,$58,$FB,$FC,$FD
 multi_boss_shot_vel_x_sub:  .byte   $FE,$FF,$8C,$4E,$9A ; multi-boss shot X velocity table
 multi_boss_shot_vel_x_hi:  .byte   $C2,$D2,$06,$07,$07,$07,$07
+; --- sniper_joe_ai -- Sniper Joe unarmored (type $4F) — face player, 3-shot burst, walk after firing ---
 sniper_joe_ai:
         jsr     entity_face_player
         lda     #$00
@@ -6109,7 +6121,7 @@ sniper_joe_check_shoot:
         bne     sniper_joe_dec_timer
         lda     #$25
         jsr     bank_switch_enqueue
-        lda     #$35
+        lda     #ENTITY_GENERIC_PROJ
         jsr     spawn_entity_from_parent
         bcs     sniper_joe_advance
         lda     #$02
@@ -6137,6 +6149,7 @@ sniper_joe_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics
         rts
 
+; --- scworm_nest_ai -- Scworm nest (type $50) — spawns up to 3 Scworm worms on timer if player in range ---
 scworm_nest_ai:
         lda     ent_state,x
         bne     scworm_nest_dec_timer
@@ -6144,14 +6157,14 @@ scworm_nest_ai:
         sta     ent_state,x
         lda     #$03
         sta     temp_01
-        lda     #$51
+        lda     #ENTITY_SCWORM
         jsr     find_entity_count_check
         bcs     scworm_nest_dec_timer
         jsr     entity_face_player
         lda     temp_00
         cmp     #$48
         bcs     scworm_nest_dec_timer
-        lda     #$51
+        lda     #ENTITY_SCWORM
         jsr     spawn_entity_from_parent
         bcs     scworm_nest_dec_timer
         sec
@@ -6233,12 +6246,12 @@ scworm_worm_wall_timer:  lda     ent_state,x
 scworm_worm_wall_physics:  jsr     apply_entity_physics_alt
         rts
 
-gravity_boss_dec_timer:
+wily_gravity_dec_timer:
         dec     ent_state,x
-        beq     gravity_boss_deactivate
+        beq     wily_gravity_deactivate
         jsr     apply_entity_physics_alt
         rts
-gravity_boss_deactivate:
+wily_gravity_deactivate:
         lsr     ent_flags,x
         rts
 
@@ -6341,6 +6354,7 @@ stage_boss_jmp:  jmp     wily4_enemy_shared_ai
 stage_palette_entries:  .byte   $0F,$39,$18,$12,$0F,$39,$18,$01 ; stage palette entries for boss rooms
         .byte   $0F,$39,$18,$01,$0F,$39,$18,$01
         .byte   $0F,$39,$18,$01,$0F,$39,$18,$0F
+; --- wily_boss_init -- Wily Boss (type $58) — tile collision check, spawns copies with velocity pattern ---
 wily_boss_init:
         lda     $0110,x
         bne     wily_boss_check_phase
@@ -6358,7 +6372,7 @@ wily_boss_first_phase:
         beq     wily_boss_physics
         lda     #$04
         sta     temp_01
-wily_boss_spawn_loop:  lda     #$58
+wily_boss_spawn_loop:  lda     #ENTITY_WILY_BOSS
         jsr     spawn_entity_from_parent
         bcs     wily_boss_setup_vel
         ldx     temp_01
@@ -6412,11 +6426,12 @@ wily_boss_physics:  jsr     apply_entity_physics
 
 wily_boss_vel_table:  .byte   $00,$41,$82,$C4,$06 ; Wily boss velocity table
 wily_boss_vel_hi_table:  .byte   $00,$00,$00,$00,$01
-falling_platform_phase_check:
+; --- quick_boomer_ai -- Quick Boomerang (type $59) — delayed fall: hover, pause, then accelerate toward player ---
+quick_boomer_ai:
         lda     $0110,x
-        bne     falling_platform_phase_1
+        bne     quick_boomer_phase_1
         dec     ent_state,x
-        bne     falling_platform_physics
+        bne     quick_boomer_physics
         inc     $0110,x
         lda     #$1F
         sta     ent_state,x
@@ -6425,19 +6440,19 @@ falling_platform_phase_check:
         sta     ent_x_vel_sub,x
         sta     ent_y_vel,x
         sta     ent_y_vel_sub,x
-        beq     falling_platform_physics
-falling_platform_phase_1:
+        beq     quick_boomer_physics
+quick_boomer_phase_1:
         cmp     #$01
-        bne     falling_platform_physics
+        bne     quick_boomer_physics
         dec     ent_state,x
-        bne     falling_platform_physics
+        bne     quick_boomer_physics
         inc     $0110,x
         lda     #$00
         sta     jump_ptr
         lda     #$04
         sta     jump_ptr_hi
         jsr     calc_entity_velocity
-falling_platform_physics:  jsr     apply_entity_physics
+quick_boomer_physics:  jsr     apply_entity_physics
         rts
 
 bubble_shot_ai:
@@ -6477,6 +6492,7 @@ air_tornado_boss_physics:
         jsr     apply_entity_physics
         rts
 
+; --- crash_bomb_ai -- Crash Bomb (type $5E) — fly until wall hit, stick, countdown, spawn blast ring ---
 crash_bomb_ai:
         lda     ent_state,x
         bne     crash_bomb_phase_check
@@ -6523,7 +6539,7 @@ crash_bomb_timer_check:  lda     $0110,x
         sta     temp_02
         ldx     #$04
         sta     temp_01
-crash_bomb_spawn_blast:  lda     #$5F
+crash_bomb_spawn_blast:  lda     #ENTITY_CRASH_BLAST
         jsr     spawn_entity_from_parent
         bcs     crash_bomb_done
         ldx     temp_02
@@ -6556,17 +6572,18 @@ crash_bomb_check_anim:  lda     ent_anim_id,x
 crash_bomb_physics:  jsr     apply_entity_physics
         rts
 
-gravity_boss_timer_check:
+; --- wily_gravity_timer_check -- Wily gravity entity (type $6B) — flip direction, rise with gravity accel ---
+wily_gravity_timer_check:
         lda     ent_state,x
-        bne     gravity_boss_init
+        bne     wily_gravity_init
         lda     #$00
         sta     ent_anim_frame,x
         jsr     apply_entity_physics
         rts
-gravity_boss_init:
+wily_gravity_init:
         lda     ent_anim_id,x
         ora     ent_anim_frame,x
-        bne     gravity_boss_accel
+        bne     wily_gravity_accel
         lda     ent_flags,x
         eor     #$40
         sta     ent_flags,x
@@ -6574,7 +6591,7 @@ gravity_boss_init:
         sta     ent_y_vel,x
         lda     #$00
         sta     ent_y_vel_sub,x
-gravity_boss_accel:  clc
+wily_gravity_accel:  clc
         lda     ent_y_vel_sub,x
         adc     #$20
         sta     ent_y_vel_sub,x
@@ -6584,10 +6601,11 @@ gravity_boss_accel:  clc
         jsr     apply_entity_physics
         rts
 
-shield_boss_stage_check:
+; --- wily4_shield_ai -- Wily 4 shield (type $63) — stage check, hitbox setup, track parent Y position ---
+wily4_shield_ai:
         lda     current_stage
         cmp     #WILY_STAGE_START
-        beq     shield_boss_hitbox_small
+        beq     wily4_shield_hitbox_small
         lda     #$58
         sta     $0150,x
         sec
@@ -6595,9 +6613,9 @@ shield_boss_stage_check:
         sbc     #$18
         sta     $0160,x
         lda     $AA
-        bne     shield_boss_physics
+        bne     wily4_shield_physics
         jmp     wily4_enemy_shared_ai
-shield_boss_hitbox_small:
+wily4_shield_hitbox_small:
         lda     #$10
         sta     $0150,x
         sec
@@ -6605,14 +6623,14 @@ shield_boss_hitbox_small:
         sbc     #$08
         sta     $0160,x
         lda     $AA
-        bne     shield_boss_physics
+        bne     wily4_shield_physics
         jsr     apply_entity_physics
-        bcc     shield_boss_rts
+        bcc     wily4_shield_rts
         lda     #$00
         sta     $0150,x
-shield_boss_rts:  rts
+wily4_shield_rts:  rts
 
-shield_boss_physics:  jsr     apply_entity_physics_alt
+wily4_shield_physics:  jsr     apply_entity_physics_alt
         rts
 
 wily4_timer_check:
@@ -6680,7 +6698,7 @@ wily4_boss_active:  lda     #$01
         bne     wily4_boss_rts
         lda     #$40
         sta     $0110,x
-        lda     #$63
+        lda     #ENTITY_WILY4_SHIELD
         jsr     spawn_entity_from_parent
         lda     #$01
         sta     $0610,y
@@ -6698,7 +6716,7 @@ wily4_boss_phase_2:  dec     $0110,x
         bmi     wily4_boss_despawn_all
         lda     wily4_y_pos_table,y
         sta     temp_02
-        lda     #$63
+        lda     #ENTITY_WILY4_SHIELD
         jsr     spawn_entity_from_parent
         lda     temp_02
         sta     ent_y_spawn_px,y
@@ -6935,24 +6953,25 @@ wily_final_vert_check:
         lda     ent_x_vel,x
         sbc     #$00
         sta     ent_x_vel,x
-        bne     beam_boss_check_state
+        bne     wily_final_check_state
         cpy     #$00
-        beq     beam_boss_reset_counter
+        beq     wily_final_spawn_projectile
         cpy     #$3E
-        bcs     beam_boss_check_state
+        bcs     wily_final_check_state
         lda     ent_anim_id,x
         cmp     #$06
-        bne     beam_boss_run_physics
+        bne     wily_final_run_physics
         lda     #$04
-        bne     beam_boss_set_state
-beam_boss_reset_counter:  lda     #$77
+        bne     wily_final_set_state
+; --- wily_final_spawn_projectile -- Wily final boss projectile spawn — resets velocity, spawns ENTITY_WILY_PROJ ---
+wily_final_spawn_projectile:  lda     #$77
         sta     ent_x_vel_sub,x
         lda     #$01
         sta     ent_x_vel,x
-        lda     #$6E
+        lda     #ENTITY_WILY_PROJ
         ldx     #$01
         jsr     spawn_entity_from_parent
-        bcs     beam_boss_check_state
+        bcs     wily_final_check_state
         txa
         pha
         tya
@@ -6967,21 +6986,21 @@ beam_boss_reset_counter:  lda     #$77
         pla
         tax
         stx     current_entity_slot
-beam_boss_check_state:  lda     ent_anim_id,x
+wily_final_check_state:  lda     ent_anim_id,x
         cmp     #$04
-        bne     beam_boss_run_physics
+        bne     wily_final_run_physics
         lda     #$00
-beam_boss_set_state:  sta     ent_anim_id,x
-beam_boss_run_physics:  jsr     apply_entity_physics_alt
-        bcc     beam_boss_rts
+wily_final_set_state:  sta     ent_anim_id,x
+wily_final_run_physics:  jsr     apply_entity_physics_alt
+        bcc     wily_final_rts
         sec
         lda     $06C1
         sbc     #$06
         sta     $06C1
-        bcs     beam_boss_rts
+        bcs     wily_final_rts
         lda     #$00
         sta     $06C1
-beam_boss_rts:  rts
+wily_final_rts:  rts
 
         lda     #$00
         sta     ent_anim_frame,x
@@ -7064,7 +7083,7 @@ wily_final_bank_table:                  ; also read as data by walker_ai_check (
         bne     wily_final_check_anim
         lda     ent_anim_frame,x
         bne     wily_final_check_anim
-        lda     #$74
+        lda     #ENTITY_FLASH_PROJ
         jsr     spawn_entity_from_parent
         bcs     wily_final_clear_timer
         lda     ent_type,x

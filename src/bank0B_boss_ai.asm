@@ -3028,7 +3028,7 @@ wily_machine_palette_loop:  sta     palette_ram,x
         lda     #$00
         sta     ent_anim_id
         sta     ent_anim_frame
-        lda     #$0C
+        lda     #ENTITY_KEROG
         sta     ent_type
         lda     #$3E
         sta     $B2
@@ -3796,7 +3796,7 @@ fortress_defeat_check_timer:  lda     $05A9
         bcc     fortress_defeat_spawn_entity
         bne     fortress_defeat_dec_timer
         dec     $05A9
-        lda     #$26
+        lda     #ENTITY_LIGHT_RESTORE
         sta     ent_type
         lda     #$00
         sta     ent_anim_id
@@ -4598,7 +4598,7 @@ air_shooter_killed:  lda     #$00
         lda     ent_flags,x
         and     #$FE
         sta     ent_flags,x
-        lda     #$3D
+        lda     #ENTITY_KAMINARI_CHILD
         sta     ent_type,x
         lda     #$00
         sta     ent_anim_id,x
@@ -4639,7 +4639,7 @@ air_shooter_killed_2:  lda     #$00
         lda     ent_flags,x
         and     #$F2
         sta     ent_flags,x
-        lda     #$3B
+        lda     #ENTITY_EGG_HATCH
         sta     ent_type,x
         lda     #$00
         sta     ent_anim_id,x
@@ -4721,7 +4721,7 @@ crash_bomber_killed:  lda     #$00
         sec
         rts
 
-crash_bomber_deflect:  lda     #$3C
+crash_bomber_deflect:  lda     #ENTITY_COPIPI
         sta     ent_type,x
         lda     ent_flags,x
         and     #$C0

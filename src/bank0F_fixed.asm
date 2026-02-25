@@ -1124,7 +1124,7 @@ column_copy_from_bank:  lda     (jump_ptr),y
         sta     ent_x_px
         lda     #$14
         sta     ent_y_px
-        lda     #$1A
+        lda     #ENTITY_AIR_TORNADO2
         sta     ent_type
 boss_entrance_scroll:  lda     current_stage
         and     #$07
@@ -2702,7 +2702,7 @@ fire_find_slot_loop:  lda     ent_flags,x
 
 fire_setup_projectile:  lda     #$80    ; active flag
         sta     ent_flags,x                 ; activate projectile entity
-        lda     #$24                    ; buster projectile entity type
+        lda     #ENTITY_CHANGKEY_PROJ   ; buster/changkey projectile entity type
         sta     ent_type,x
         lda     ent_x_screen
         sta     ent_x_screen,x
@@ -4749,7 +4749,7 @@ weapon_damage_killed_alt:  lda     #$00
         lda     ent_flags,x
         and     #$FE
         sta     ent_flags,x
-        lda     #$3D
+        lda     #ENTITY_KAMINARI_CHILD
         sta     ent_type,x
         lda     #$00
         sta     ent_anim_id,x
@@ -4794,7 +4794,7 @@ weapon_damage_return:  clc
         lda     ent_flags,x
         and     #$F2
         sta     ent_flags,x
-        lda     #$3B
+        lda     #ENTITY_EGG_HATCH
         sta     ent_type,x
         lda     #$00
         sta     ent_anim_id,x
@@ -4884,7 +4884,7 @@ weapon_coll_rebound_done:  clc
         sec
         rts
 
-        lda     #$3C
+        lda     #ENTITY_COPIPI
         sta     ent_type,x
         lda     ent_flags,x
         and     #$C0
@@ -5241,19 +5241,19 @@ collision_apply_physics:  jsr     apply_entity_physics_alt
         sta     ent_flags,x
         lda     #$01
         sta     temp_01
-        lda     #$23
+        lda     #ENTITY_CHANGKEY
         jsr     $96CF
         lda     #$83
         sta     ent_flags,x
         bcs     *+7
-        lda     #$26
+        lda     #ENTITY_LIGHT_RESTORE
         jsr     spawn_entity_from_parent
         jsr     apply_entity_physics_alt
         bcc     collision_done
-        lda     #$23
+        lda     #ENTITY_CHANGKEY
         jsr     find_entity_by_type
         bcc     collision_done
-        lda     #$28
+        lda     #ENTITY_BLACKOUT_RE
         jsr     spawn_entity_from_parent
 collision_done:  rts
 
@@ -5275,7 +5275,7 @@ collision_check_contact:  pla
         jsr     check_weapon_collision
         bcc     apply_entity_physics
         jsr     item_drop_rng
-        lda     #$06
+        lda     #ENTITY_DEATH_EXPLODE
         sta     ent_type,x
         lda     #$80
         sta     ent_flags,x
@@ -5395,7 +5395,7 @@ physics_alt_check_contact:  pla
         jsr     check_weapon_collision  ; test weapon hits
         bcc     physics_alt_check_offscreen
         jsr     item_drop_rng           ; roll for item drop
-        lda     #$06
+        lda     #ENTITY_DEATH_EXPLODE
         sta     ent_type,x
         lda     #$80
         sta     ent_flags,x

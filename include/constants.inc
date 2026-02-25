@@ -90,12 +90,16 @@ WEAPON_ITEM_3       = $0B       ; Climbing platform
 ; ─── Entity type IDs (confirmed from Mesen + code tracing) ─────────────────
 ; Enemy entities
 ENTITY_SHRINK       = $00       ; Bubble Man — shrimp, spawned by Anko
-ENTITY_KEROG        = $0C       ; Bubble Man — large frog
-ENTITY_PETIT_KEROG  = $0D       ; spawned by Kerog
+ENTITY_ANKO_BODY    = $01       ; Bubble Man — Anko spawner body part
+ENTITY_ANKO_SEG     = $03       ; Bubble Man — Anko body segment (collision check target)
+ENTITY_M445         = $04       ; Bubble Man — jellyfish (Anko child)
+ENTITY_DEATH_EXPLODE = $06      ; Generic death explosion (Anko, boss debris, Friender)
+ENTITY_CLAW         = $07       ; Bubble Man — crab/snapper
+ENTITY_CLAW_VAR     = $08       ; Bubble Man — Claw variant (spawned by $07)
 ENTITY_TANISHI      = $0A       ; Bubble Man/Wood Man — snail
 ENTITY_TANISHI_BARE = $0B       ; Tanishi without shell (Difficult mode)
-ENTITY_M445         = $04       ; Bubble Man — jellyfish
-ENTITY_CLAW         = $07       ; Bubble Man — crab/snapper
+ENTITY_KEROG        = $0C       ; Bubble Man — large frog
+ENTITY_PETIT_KEROG  = $0D       ; spawned by Kerog
 ENTITY_BATTON       = $16       ; Wood Man — bat
 ENTITY_ROBBIT       = $17       ; Wood Man — rabbit
 ENTITY_MONKING      = $1D       ; Wood Man — monkey
@@ -113,8 +117,10 @@ ENTITY_SCWORM       = $51       ; Scworm worm — jumping child (spawned by $50)
 ENTITY_SPRINGER     = $46       ; Heat/Quick/Metal Man — bouncing robot
 ENTITY_SNIPER_ARMOR = $4E       ; Flash/Heat/Quick Man — mech suit
 ENTITY_SNIPER_JOE   = $4F       ; Sniper Joe unarmored — 3-shot burst, faces player (child of $4E)
+ENTITY_SHOTMAN      = $4D       ; Flash Man — Shotman (left-facing shooter)
 ENTITY_CRAZY_CANNON = $4B       ; Flash/Air/Crash Man — cannon enemy
 ENTITY_BLOCKY       = $31       ; Metal/Crash/Flash Man — block enemy
+ENTITY_BLOCKY_PHASE2 = $32      ; Blocky phase 2 (mid-animation)
 ENTITY_PIPI_SPAWN   = $37       ; Crash/Air/Wood Man — bird spawn point
 ENTITY_PIPI         = $38       ; flying bird
 ENTITY_PIPI_EGG     = $3A       ; falling egg
@@ -174,11 +180,14 @@ ENTITY_APPEAR_BLK_B = $54       ; Heat Man — Appear Block / Yoku Block (timer 
 ENTITY_APPEAR_BLK_C = $55       ; Heat Man — Appear Block / Yoku Block (timer $FA = 250 frames)
 ; Wily boss entities (code-identified, not yet Mesen-verified)
 ENTITY_WILY_BOSS    = $58       ; Wily boss — multi-phase, spawns copies with velocity pattern
-; $62-$67: Wily 4 (Boobeam Trap) system — $64=controller, $63=shield, $65-$67=variants
+ENTITY_WILY4_SHIELD = $63       ; Wily 4 — Boobeam turret shield body (spawned by $64)
+; $62-$67: Wily 4 (Boobeam Trap) system — $64=controller, $65-$67=variants
 ; $69: oscillating Wily capsule component
 ; $6A: teleporting boss, $6B: gravity entity (final boss)
 ; $6D: Wily Machine cannon (spawns $6E projectiles at player)
+ENTITY_WILY_PROJ    = $6E       ; Wily Machine projectile (spawned by $6D cannon)
 ; $70: Wily boss X position adjuster, $71: Wily final multi-phase AI
+ENTITY_FLASH_PROJ   = $74       ; Flash hazard projectile (spawned by $72/$73)
 
 ; ─── Fixed bank entry points ─────────────────────────────────────────────────
 ; These are called by all banks via the fixed bank

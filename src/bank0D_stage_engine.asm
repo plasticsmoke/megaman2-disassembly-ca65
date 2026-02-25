@@ -1840,7 +1840,7 @@ wselect_restore_pal_loop:  lda     $0700,x
         sta     game_substate
         sta     ent_anim_frame
         sta     ent_anim_id
-        lda     #$1A
+        lda     #ENTITY_AIR_TORNADO2
         sta     ent_type
         lda     #$03
         sta     $AA
@@ -2346,7 +2346,7 @@ boss_get_land_loop:  clc
         bne     boss_get_land_loop
         lda     #$FD
         jsr     bank_switch_enqueue
-        lda     #$06
+        lda     #ENTITY_DEATH_EXPLODE
         sta     ent_type
         lda     #$01
         sta     ent_anim_id
@@ -2447,7 +2447,7 @@ boss_get_apply_gravity:  jsr     apply_gravity
 ; =============================================================================
 ; Boss Get — Fall Init (orb falls off screen)
 ; =============================================================================
-boss_get_fall_init:  lda     #$0A
+boss_get_fall_init:  lda     #ENTITY_TANISHI
         sta     ent_type
 boss_get_fall_loop:  clc
         lda     ent_x_vel_sub
