@@ -4217,28 +4217,28 @@ flashman_state_land:  lda     temp_00
 flashman_physics:  jsr     apply_entity_physics
         rts
 
-flashman_ai_entry:
+kukku_spawner_ai:
         lda     ent_x_vel_sub,x
-        bne     flashman_copy_pos
+        bne     kukku_spawner_track
         lda     #$1E
         jsr     check_entity_collision_scan
-        bcc     flashman_copy_pos
+        bcc     kukku_spawner_track
         rts
-flashman_copy_pos:
+kukku_spawner_track:
         lda     ent_x_px
         sta     ent_x_px,x
         lda     ent_x_screen
         sta     ent_x_screen,x
         lda     ent_state,x
-        bne     item_2_dec_timer
+        bne     kukku_spawner_dec_timer
         lda     #$01
         sta     temp_01
         lda     #$1F
         jsr     find_entity_count_check
-        bcs     item_2_set_timer
+        bcs     kukku_spawner_set_timer
         lda     #$1F
         jsr     spawn_entity_from_parent
-        bcs     item_2_set_timer
+        bcs     kukku_spawner_set_timer
         clc
         lda     ent_x_spawn_px,y
         adc     #$78
@@ -4249,48 +4249,48 @@ flashman_copy_pos:
         sec
         lda     ent_y_px
         sbc     #$2C
-        bcs     item_2_store_y
+        bcs     kukku_spawn_store_y
         lda     #$08
-item_2_store_y:  sta     ent_y_spawn_px,y
+kukku_spawn_store_y:  sta     ent_y_spawn_px,y
         ldx     current_entity_slot
-item_2_set_timer:  lda     #$1F
+kukku_spawner_set_timer:  lda     #$1F
         sta     ent_state,x
-item_2_dec_timer:  dec     ent_state,x
+kukku_spawner_dec_timer:  dec     ent_state,x
         rts
 
-boss_vert_collision_check:
+kukku_body_ai:
         lda     #$08
         sta     temp_01
         lda     #$14
         sta     temp_02
         jsr     check_vert_tile_collision
         lda     temp_00
-        beq     boss_set_anim_state
+        beq     kukku_body_airborne
         lda     ent_state,x
         cmp     #$13
-        bne     boss_inc_timer
+        bne     kukku_body_inc_timer
         lda     #$04
         sta     ent_y_vel,x
         lda     #$78
         sta     ent_y_vel_sub,x
         lda     #$00
         sta     ent_state,x
-boss_inc_timer:
+kukku_body_inc_timer:
         inc     ent_state,x
-        bne     boss_extra_physics
-boss_set_anim_state:
+        bne     kukku_body_physics
+kukku_body_airborne:
         lda     #$02
         sta     ent_anim_id,x
         lda     #$03
         sta     ent_anim_frame,x
 
 ; =============================================================================
-; boss_extra_physics -- Boss Common — extra physics, random timer, palette flash ($A47A)
+; kukku_body_physics -- Kukku body (type $1F) — apply physics ($A47A)
 ; =============================================================================
-boss_extra_physics:  jsr     apply_entity_physics
+kukku_body_physics:  jsr     apply_entity_physics
         rts
 
-boss_hp_init:
+kukku_despawn_ai:
         lda     #$1E
         sta     temp_00
         jmp     enemy_destroy_scan
@@ -5734,7 +5734,7 @@ scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
         lda     ent_x_screen
         sta     ent_x_screen,x
         lda     ent_state,x
-        bne     sniper_joe_done
+        bne     mole_done
         lda     #$3E
         sta     ent_state,x
         lda     #$06
@@ -5743,7 +5743,7 @@ scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
         jsr     find_entity_count_check
         lda     #$49
         jsr     find_entity_count_check
-        bcs     sniper_joe_done
+        bcs     mole_done
         lda     ent_x_vel,x
         asl     a
         sta     temp_01
@@ -5751,41 +5751,41 @@ scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
         sta     temp_02
 
 ; =============================================================================
-; sniper_joe_spawn_shot -- Enemy AI: Sniper Joe — shielded soldier, shoot and walk ($B137)
-; Spawns entities $49/$48 (Sniper Joe bullets) from sniper_joe_type_table.
+; mole_spawn_shot -- Enemy AI: Mole controller (type $47) — spawn shot children ($B137)
+; Spawns entities $49/$48 (Mole projectiles) from mole_shot_type_table.
 ; =============================================================================
-sniper_joe_spawn_shot:  ldy     temp_01
-        lda     sniper_joe_type_table,y
+mole_spawn_shot:  ldy     temp_01
+        lda     mole_shot_type_table,y
         jsr     spawn_entity_from_parent ; spawn bullet
-        bcs     sniper_joe_done
+        bcs     mole_done
         ldx     temp_01
         clc
         lda     ent_x_spawn_px,y
-        adc     sniper_joe_x_offset_table,x
+        adc     mole_shot_x_offset,x
         sta     ent_x_spawn_px,y
         lda     ent_x_spawn_scr,y
         adc     #$00
         sta     ent_x_spawn_scr,y
-        lda     sniper_joe_y_table,x
+        lda     mole_shot_y_table,x
         sta     ent_y_spawn_px,y
         ldx     current_entity_slot
         inc     temp_01
         dec     temp_02
-        bne     sniper_joe_spawn_shot
+        bne     mole_spawn_shot
         inc     ent_x_vel,x
         lda     ent_x_vel,x
         cmp     #$03
-        bne     sniper_joe_done
+        bne     mole_done
         lda     #$00
         sta     ent_x_vel,x
-sniper_joe_done:  ldx     current_entity_slot
+mole_done:  ldx     current_entity_slot
         dec     ent_state,x
         rts
 
-sniper_joe_type_table:  .byte   $49,$48,$49,$48,$49,$48 ; entity types: Sniper Joe bullets (alternating $49/$48)
-sniper_joe_x_offset_table:  .byte   $18,$58,$50,$20,$28,$60 ; X position offsets for shot spawn
+mole_shot_type_table:  .byte   $49,$48,$49,$48,$49,$48 ; entity types: Mole projectiles (alternating $49/$48)
+mole_shot_x_offset:  .byte   $18,$58,$50,$20,$28,$60 ; X offsets for Mole shot spawn
 
-sniper_joe_y_table:  .byte   $10,$D0,$10,$D0,$10,$D0 ; Sniper Joe Y-position lookup table
+mole_shot_y_table:  .byte   $10,$D0,$10,$D0,$10,$D0 ; Mole shot Y-position lookup table
         lda     #$00
         sta     temp_01
         sec
@@ -6083,7 +6083,7 @@ multi_boss_shot_vel_y_sub:  .byte   $04,$60,$6A,$A0,$88 ; vel Y sub table (also 
 multi_boss_shot_vel_y_hi:  .byte   $12,$58,$FB,$FC,$FD
 multi_boss_shot_vel_x_sub:  .byte   $FE,$FF,$8C,$4E,$9A ; multi-boss shot X velocity table
 multi_boss_shot_vel_x_hi:  .byte   $C2,$D2,$06,$07,$07,$07,$07
-turret_boss_collision_check:
+sniper_joe_ai:
         jsr     entity_face_player
         lda     #$00
         sta     ent_anim_frame,x
@@ -6093,35 +6093,35 @@ turret_boss_collision_check:
         sta     temp_02
         jsr     check_horiz_tile_collision
         lda     ent_anim_id,x
-        bne     turret_boss_ground_check
+        bne     sniper_joe_check_shoot
         lda     #$00
         sta     ent_anim_id,x
         lda     ent_state,x
-        bne     turret_boss_dec_timer
+        bne     sniper_joe_dec_timer
         inc     ent_anim_id,x
         lda     #$1F
         sta     ent_state,x
         lda     ent_flags,x
         and     #$F7
         sta     ent_flags,x
-turret_boss_ground_check:
+sniper_joe_check_shoot:
         lda     ent_state,x
-        bne     turret_boss_dec_timer
+        bne     sniper_joe_dec_timer
         lda     #$25
         jsr     bank_switch_enqueue
         lda     #$35
         jsr     spawn_entity_from_parent
-        bcs     turret_boss_advance
+        bcs     sniper_joe_advance
         lda     #$02
         sta     $0610,y
 
 ; =============================================================================
-; turret_boss_advance -- Turret Boss — stationary shooter with timer ($B469)
+; sniper_joe_advance -- Sniper Joe unarmored (type $4F) — advance shot counter ($B469)
 ; =============================================================================
-turret_boss_advance:  inc     $0110,x
+sniper_joe_advance:  inc     $0110,x
         lda     $0110,x
         cmp     #$03
-        bne     turret_boss_set_timer
+        bne     sniper_joe_set_timer
         lda     #$00
         sta     $0110,x
         sta     ent_anim_id,x
@@ -6130,45 +6130,45 @@ turret_boss_advance:  inc     $0110,x
         lda     ent_flags,x
         ora     #$08
         sta     ent_flags,x
-        bne     turret_boss_dec_timer
-turret_boss_set_timer:  lda     #$1F
+        bne     sniper_joe_dec_timer
+sniper_joe_set_timer:  lda     #$1F
         sta     ent_state,x
-turret_boss_dec_timer:  dec     ent_state,x
+sniper_joe_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics
         rts
 
-turret_boss_spawn_check:
+scworm_nest_ai:
         lda     ent_state,x
-        bne     turret_boss_physics
+        bne     scworm_nest_dec_timer
         lda     #$20
         sta     ent_state,x
         lda     #$03
         sta     temp_01
         lda     #$51
         jsr     find_entity_count_check
-        bcs     turret_boss_physics
+        bcs     scworm_nest_dec_timer
         jsr     entity_face_player
         lda     temp_00
         cmp     #$48
-        bcs     turret_boss_physics
+        bcs     scworm_nest_dec_timer
         lda     #$51
         jsr     spawn_entity_from_parent
-        bcs     turret_boss_physics
+        bcs     scworm_nest_dec_timer
         sec
         lda     ent_y_spawn_px,y
         sbc     #$0C
         sta     ent_y_spawn_px,y
         lda     #$1F
         sta     $04F0,y
-turret_boss_physics:  dec     ent_state,x
+scworm_nest_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics_alt
         rts
 
-jump_boss_init:
+scworm_worm_ai:
         lda     $0110,x
-        bne     jump_boss_phase_dispatch
+        bne     scworm_worm_dispatch
         dec     ent_state,x
-        bne     jump_boss_check_anim
+        bne     scworm_worm_check_anim
         lda     #$87
         sta     ent_flags,x
         jsr     entity_face_player
@@ -6178,9 +6178,9 @@ jump_boss_init:
         sec
         lda     temp_00
         sbc     temp_01
-        bcs     jump_boss_store_dist
+        bcs     scworm_worm_store_dist
         lda     #$00
-jump_boss_store_dist:
+scworm_worm_store_dist:
         sta     temp_00
         lda     #$00
         asl     temp_00
@@ -6195,10 +6195,10 @@ jump_boss_store_dist:
         lda     #$04
         sta     ent_y_vel,x
         inc     $0110,x
-        bne     jump_boss_check_anim
-jump_boss_phase_dispatch:
+        bne     scworm_worm_check_anim
+scworm_worm_dispatch:
         cmp     #$02
-        bcs     jump_boss_wall_timer
+        bcs     scworm_worm_wall_timer
         lda     ent_y_vel,x
         php
         lda     #$05
@@ -6207,30 +6207,30 @@ jump_boss_phase_dispatch:
         sta     temp_02
         jsr     check_horiz_tile_collision
         plp
-        bpl     jump_boss_check_anim
+        bpl     scworm_worm_check_anim
         lda     temp_00
-        beq     jump_boss_check_anim
+        beq     scworm_worm_check_anim
         lda     #$5D
         sta     ent_state,x
         inc     $0110,x
-        bne     jump_boss_wall_timer
-jump_boss_check_anim:  lda     ent_anim_id,x
+        bne     scworm_worm_wall_timer
+scworm_worm_check_anim:  lda     ent_anim_id,x
         cmp     #$0A
-        bne     jump_boss_physics
+        bne     scworm_worm_physics
         lda     #$06
         sta     ent_anim_id,x
-jump_boss_physics:  jsr     apply_entity_physics
+scworm_worm_physics:  jsr     apply_entity_physics
         rts
 
-jump_boss_wall_timer:  lda     ent_state,x
-        beq     jump_boss_wall_physics
+scworm_worm_wall_timer:  lda     ent_state,x
+        beq     scworm_worm_wall_physics
         dec     ent_state,x
         lda     ent_anim_id,x
         cmp     #$0A
-        bne     jump_boss_wall_physics
+        bne     scworm_worm_wall_physics
         lda     #$06
         sta     ent_anim_id,x
-jump_boss_wall_physics:  jsr     apply_entity_physics_alt
+scworm_worm_wall_physics:  jsr     apply_entity_physics_alt
         rts
 
 gravity_boss_dec_timer:
@@ -6440,7 +6440,7 @@ falling_platform_phase_1:
 falling_platform_physics:  jsr     apply_entity_physics
         rts
 
-falling_platform_tile_check:
+bubble_shot_ai:
         lda     ent_y_vel,x
         php
         lda     #$07
@@ -6449,37 +6449,37 @@ falling_platform_tile_check:
         sta     temp_02
         jsr     check_horiz_tile_collision
         plp
-        bpl     falling_platform_check_result
+        bpl     bubble_shot_check_deactivate
         lda     temp_00
-        beq     falling_platform_check_result
+        beq     bubble_shot_check_deactivate
         lda     #$03
         sta     ent_y_vel,x
         lda     #$76
         sta     ent_y_vel_sub,x
-falling_platform_check_result:
+bubble_shot_check_deactivate:
         lda     temp_03
-        beq     beam_boss_physics
+        beq     bubble_shot_physics
         lsr     ent_flags,x
-beam_boss_physics:  jsr     apply_entity_physics
+bubble_shot_physics:  jsr     apply_entity_physics
         rts
 
-beam_boss_timer_check:
+air_tornado_boss_ai:
         lda     ent_state,x
-        beq     beam_boss_timer_physics
+        beq     air_tornado_boss_physics
         dec     ent_state,x
-        bne     beam_boss_timer_physics
+        bne     air_tornado_boss_physics
         lda     #$00
         sta     ent_x_vel,x
         sta     ent_x_vel_sub,x
         sta     ent_y_vel_sub,x
         sta     ent_y_vel,x
-beam_boss_timer_physics:
+air_tornado_boss_physics:
         jsr     apply_entity_physics
         rts
 
-beam_boss_vert_check:
+crash_bomb_ai:
         lda     ent_state,x
-        bne     beam_boss_phase_check
+        bne     crash_bomb_phase_check
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
@@ -6489,9 +6489,9 @@ beam_boss_vert_check:
         sta     temp_02
         jsr     check_vert_tile_collision
         lda     temp_00
-        bne     beam_boss_clear_vel
-        jmp     beam_boss_check_anim
-beam_boss_clear_vel:
+        bne     crash_bomb_stick
+        jmp     crash_bomb_check_anim
+crash_bomb_stick:
         lda     #$00
         sta     ent_x_vel_sub,x
         sta     ent_x_vel,x
@@ -6503,18 +6503,18 @@ beam_boss_clear_vel:
         lda     #$1F
         sta     $0110,x
         inc     ent_state,x
-        bne     beam_boss_check_anim
-beam_boss_phase_check:
+        bne     crash_bomb_check_anim
+crash_bomb_phase_check:
         cmp     #$01
-        bne     beam_pattern_check
+        bne     crash_bomb_timer_check
         dec     $0110,x
-        bne     beam_boss_check_anim
+        bne     crash_bomb_check_anim
         inc     ent_state,x
         lda     #$38
         sta     $0110,x
-beam_pattern_check:  lda     $0110,x
+crash_bomb_timer_check:  lda     $0110,x
         and     #$07
-        bne     beam_pattern_done
+        bne     crash_bomb_done
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     $0110,x
@@ -6523,9 +6523,9 @@ beam_pattern_check:  lda     $0110,x
         sta     temp_02
         ldx     #$04
         sta     temp_01
-beam_pattern_spawn_loop:  lda     #$5F
+crash_bomb_spawn_blast:  lda     #$5F
         jsr     spawn_entity_from_parent
-        bcs     beam_pattern_done
+        bcs     crash_bomb_done
         ldx     temp_02
         clc
         lda     ent_y_spawn_px,y
@@ -6541,19 +6541,19 @@ beam_pattern_spawn_loop:  lda     #$5F
         ldx     current_entity_slot
         inc     temp_02
         dec     temp_01
-        bne     beam_pattern_spawn_loop
-beam_pattern_done:  ldx     current_entity_slot
+        bne     crash_bomb_spawn_blast
+crash_bomb_done:  ldx     current_entity_slot
         dec     $0110,x
-        bpl     beam_boss_check_anim
+        bpl     crash_bomb_check_anim
         lsr     ent_flags,x
         rts
 
-beam_boss_check_anim:  lda     ent_anim_id,x
+crash_bomb_check_anim:  lda     ent_anim_id,x
         cmp     #$04
-        bne     beam_boss_apply_physics
+        bne     crash_bomb_physics
         lda     #$02
         sta     ent_anim_id,x
-beam_boss_apply_physics:  jsr     apply_entity_physics
+crash_bomb_physics:  jsr     apply_entity_physics
         rts
 
 gravity_boss_timer_check:

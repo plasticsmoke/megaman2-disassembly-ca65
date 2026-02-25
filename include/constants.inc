@@ -99,17 +99,20 @@ ENTITY_CLAW         = $07       ; Bubble Man — crab/snapper
 ENTITY_BATTON       = $16       ; Wood Man — bat
 ENTITY_ROBBIT       = $17       ; Wood Man — rabbit
 ENTITY_MONKING      = $1D       ; Wood Man — monkey
-ENTITY_KUKKU        = $1E       ; Wood Man — chicken
+ENTITY_KUKKU_SPAWN  = $1E       ; Wood Man — Kukku invisible spawner (tracks player, spawns $1F)
+ENTITY_KUKKU        = $1F       ; Wood Man — Kukku body (visible bouncing chicken, child of $1E)
+ENTITY_KUKKU_DESPAWN = $20      ; Wood Man — Kukku despawner (destroys all $1E, then self)
 ENTITY_FRIENDER     = $1C       ; Wood Man — fire dog
 ENTITY_MATASABURO   = $36       ; Air Man — fan fiend, wind push
 ENTITY_FLY_BOY      = $2C       ; Crash Man/Heat Man — propeller enemy
 ENTITY_NEO_METALL   = $34       ; Crash Man — advanced Met
 ENTITY_GENERIC_PROJ = $35       ; Generic projectile (Neo Metall, Picopico-kun, Sniper Armor/Joe)
 ENTITY_NEO_METALL_FLIP = $56    ; Neo Metall flipped variant
-ENTITY_SCWORM       = $50       ; Flash/Air/Quick Man — worm head
-ENTITY_SCWORM_SEG   = $51       ; Scworm body segment (child)
+ENTITY_SCWORM_NEST  = $50       ; Flash/Air/Quick Man — ground bump spawner (spawns up to 3x $51)
+ENTITY_SCWORM       = $51       ; Scworm worm — jumping child (spawned by $50)
 ENTITY_SPRINGER     = $46       ; Heat/Quick/Metal Man — bouncing robot
 ENTITY_SNIPER_ARMOR = $4E       ; Flash/Heat/Quick Man — mech suit
+ENTITY_SNIPER_JOE   = $4F       ; Sniper Joe unarmored — 3-shot burst, faces player (child of $4E)
 ENTITY_CRAZY_CANNON = $4B       ; Flash/Air/Crash Man — cannon enemy
 ENTITY_BLOCKY       = $31       ; Metal/Crash/Flash Man — block enemy
 ENTITY_PIPI_SPAWN   = $37       ; Crash/Air/Wood Man — bird spawn point
@@ -134,7 +137,8 @@ ENTITY_KAMINARI_GORO = $3E      ; Air Man — lightning robot (spawn table)
 ENTITY_KAMINARI_CHILD = $3D     ; Kaminari Goro child (role TBD)
 ENTITY_KAMINARI_BOLT = $3F      ; Kaminari Goro lightning bolt
 ; Goblin multi-part (Air Man): $40/$41/$42/$43/$44/$45 — internal breakdown TBD
-; Mole multi-part (Metal Man): $47/$48/$49/$4A — internal breakdown TBD
+ENTITY_MOLE         = $47       ; Air/Metal Man — Mole controller (spawns copies + $48/$49 shots)
+; Mole children: $48/$49 (shared with Sniper Joe bullets), $4A — roles TBD
 ; Boss projectiles
 ENTITY_METAL_BLADE  = $15       ; Metal Man blade projectile
 ENTITY_QUICK_BOOM   = $18       ; Quick Man boomerang projectile
@@ -150,7 +154,7 @@ ENTITY_BUBBLE_SHOT  = $5B       ; Bubble Man shot
 ENTITY_AIR_TORNADO  = $5D       ; Air Man tornado (boss)
 ENTITY_CRASH_BOMB   = $5E       ; Crash Bomb
 ENTITY_CRASH_BLAST  = $5F       ; Crash Bomb blast
-ENTITY_QUICK_BOOMER = $59       ; Quick Man boomerang (boss)
+ENTITY_QUICK_BOOMER = $59       ; Quick Man boomerang (boss) — AI=delayed fall, needs re-verify
 ; Pickups
 ENTITY_LARGE_HEALTH = $76       ; Large health pickup
 ENTITY_SMALL_HEALTH = $77       ; Small health pickup
@@ -165,6 +169,16 @@ ENTITY_STAGE_TRANS  = $09       ; Horizontal stage transition
 ENTITY_RAIL_PLAT    = $12       ; Moving platform on rail
 ENTITY_CRUMBLE      = $13       ; Crumble block (falls when stepped on)
 ENTITY_CRASH_WALL   = $57       ; Destructible wall (Crash Bomber)
+ENTITY_APPEAR_BLK_A = $53       ; Heat Man — Appear Block / Yoku Block (timer $7D = 125 frames)
+ENTITY_APPEAR_BLK_B = $54       ; Heat Man — Appear Block / Yoku Block (timer $BB = 187 frames)
+ENTITY_APPEAR_BLK_C = $55       ; Heat Man — Appear Block / Yoku Block (timer $FA = 250 frames)
+; Wily boss entities (code-identified, not yet Mesen-verified)
+ENTITY_WILY_BOSS    = $58       ; Wily boss — multi-phase, spawns copies with velocity pattern
+; $62-$67: Wily 4 (Boobeam Trap) system — $64=controller, $63=shield, $65-$67=variants
+; $69: oscillating Wily capsule component
+; $6A: teleporting boss, $6B: gravity entity (final boss)
+; $6D: Wily Machine cannon (spawns $6E projectiles at player)
+; $70: Wily boss X position adjuster, $71: Wily final multi-phase AI
 
 ; ─── Fixed bank entry points ─────────────────────────────────────────────────
 ; These are called by all banks via the fixed bank
