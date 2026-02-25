@@ -2523,54 +2523,54 @@ entity_ai_next_special:  inc     current_entity_slot
 ; =============================================================================
 ; entity_ai_ptr_lo -- Entity AI Pointer Table — 128 entries, low/high/bank for each type ($92F0)
 ; =============================================================================
-entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; entity AI routine pointer (low bytes)
-        .byte   $E5,$6F,$76,$2B,$2F,$8F,$2B,$E3
-        .byte   $43,$65,$73,$5B,$90,$CE,$81,$22
-        .byte   $2B,$D1,$36,$54,$69,$F4,$ED,$46
-        .byte   $7E,$85,$A6,$C2,$2B,$5A,$AB,$B8
-        .byte   $C5,$2A,$F1,$0D,$2E,$D7,$D7,$D3
-        .byte   $F2,$EA,$C3,$EC,$4E,$2B,$89,$A4
-        .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B
-        .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA
-        .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21
-        .byte   $96,$D0,$5C,$69,$6D,$71,$E5,$D7
-        .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B
-        .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE
-        .byte   $2B,$FE,$32,$EF,$2B,$25,$2B,$2B
-        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1
-        .byte   $A9,$B1,$A9,$A9,$08,$08,$08,$24
-entity_ai_ptr_hi:  .byte   $94,$94,$95,$95,$95,$96,$96,$96 ; entity AI routine pointer (high bytes)
-        .byte   $96,$97,$97,$98,$98,$98,$98,$98
-        .byte   $9A,$9A,$9A,$9C,$9C,$9D,$9E,$9F
-        .byte   $98,$9F,$A1,$A1,$A1,$A2,$A3,$A4
-        .byte   $A4,$A4,$A4,$A4,$98,$A5,$A5,$A5
-        .byte   $A5,$A6,$A6,$A7,$A7,$A7,$A7,$A7
-        .byte   $A7,$A8,$A9,$A9,$AA,$98,$AB,$AB
-        .byte   $AC,$AC,$AC,$98,$AD,$AD,$AD,$98
-        .byte   $AE,$AE,$AF,$AF,$AF,$AF,$B0,$B0
-        .byte   $B1,$B1,$B2,$B2,$B2,$98,$B2,$B4
-        .byte   $B4,$B4,$B5,$B5,$B5,$B5,$B5,$A7
-        .byte   $B6,$B6,$98,$B7,$98,$B7,$B7,$98
-        .byte   $98,$98,$B8,$B8,$B8,$B9,$B9,$B9
-        .byte   $98,$B9,$BA,$BA,$98,$BB,$98,$98
-        .byte   $BB,$BB,$BC,$BC,$BC,$BC,$BC,$BC
-        .byte   $BC,$BC,$BC,$BC,$BD,$BD,$BD,$BD
-entity_ai_bank_table:  .byte   $01,$02,$01,$00,$01,$00,$01,$00 ; bank for each AI routine (0=local)
-        .byte   $01,$00,$01,$01,$01,$01,$00,$02
-        .byte   $02,$02,$03,$04,$01,$01,$01,$01
-        .byte   $01,$01,$01,$01,$01,$01,$00,$01
-        .byte   $00,$01,$01,$08,$01,$00,$00,$00
-        .byte   $00,$01,$01,$01,$01,$00,$02,$00
-        .byte   $01,$01,$01,$01,$01,$01,$01,$00
-        .byte   $01,$00,$01,$01,$01,$01,$05,$01
-        .byte   $06,$07,$00,$00,$01,$01,$01,$00
-        .byte   $01,$01,$00,$01,$01,$01,$01,$01
-        .byte   $01,$01,$01,$01,$01,$01,$00,$01
-        .byte   $01,$01,$01,$01,$01,$01,$01,$01
-        .byte   $01,$01,$01,$00,$01,$01,$01,$01
-        .byte   $01,$01,$01,$01,$01,$00,$00,$00
-        .byte   $00,$01,$01,$01,$01,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; $00-$07: Shrink, Anko, Anko(02), AnkoSeg, M-445, Anko(05), DeathExplode, Claw
+        .byte   $E5,$6F,$76,$2B,$2F,$8F,$2B,$E3 ; $08-$0F: ClawVar, StageTrans, Tanishi, TanishiBare, Kerog, PetitKerog, Bubble, BossDeath
+        .byte   $43,$65,$73,$5B,$90,$CE,$81,$22 ; $10-$17: Anko(10), Anko(11), RailPlat, Crumble, LaserBeam, MetalBlade, Batton, Robbit
+        .byte   $2B,$D1,$36,$54,$69,$F4,$ED,$46 ; $18-$1F: QuickBoom, AirTornado1, AirTornado2, AtomicFire, Friender, Monking, KukkuSpawn, Kukku
+        .byte   $7E,$85,$A6,$C2,$2B,$5A,$AB,$B8 ; $20-$27: KukkuDesp, TellySpawn, Telly, Changkey, ChangkeyProj, Blackout, LightRestore, BlackoutEnd
+        .byte   $C5,$2A,$F1,$0D,$2E,$D7,$D7,$D3 ; $28-$2F: BlackoutRe, Gear, Pierrobot, FlyBoy(2B), FlyBoy, CrashWallVar, FrienderFire, BossDoor
+        .byte   $F2,$EA,$C3,$EC,$4E,$2B,$89,$A4 ; $30-$37: Press, Blocky, BlockyPh2, MechaFire, NeoMetall, GenericProj, Matasaburo, PipiSpawn
+        .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B ; $38-$3F: Pipi, PipiAlt, PipiEgg, EggHatch, Copipi, KaminariChild, KaminariGoro, KaminariBolt
+        .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA ; $40-$47: Goblin(x6), Springer, Mole
+        .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21 ; $48-$4F: JoeBulletB, JoeBulletA, Mole(4A), CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
+        .byte   $96,$D0,$5C,$69,$6D,$71,$E5,$D7 ; $50-$57: ScwormNest, Scworm, PressRetract, AppearBlkA, AppearBlkB, AppearBlkC, NeoMetallFlip, CrashWall
+        .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B ; $58-$5F: WilyBoss, QuickBoomer, (5A), BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
+        .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE ; $60-$67: BossDebris, WoodmanLeaf, WoodmanTornado, Wily4Shield, BoobeamCtrl, DragonBodyA, DragonBodyB, DragonPart
+        .byte   $2B,$FE,$32,$EF,$2B,$25,$2B,$2B ; $68-$6F: DragonBreath, GutsdozerTurret, WilyTeleport, WilyGravity, WilyMachShot, GutsdozerCannon, WilyProj, AlienBossShot
+        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1 ; $70-$77: AlienBody, WilyFinal, FlashHaz(72), FlashHaz(73), FlashProj, (75), LargeHealth, SmallHealth
+        .byte   $A9,$B1,$A9,$A9,$08,$08,$08,$24 ; $78-$7F: LargeWeapon, SmallWeapon, ETank, ExtraLife, (7C), (7D), (7E), (7F)
+entity_ai_ptr_hi:  .byte   $94,$94,$95,$95,$95,$96,$96,$96 ; $00-$07
+        .byte   $96,$97,$97,$98,$98,$98,$98,$98 ; $08-$0F
+        .byte   $9A,$9A,$9A,$9C,$9C,$9D,$9E,$9F ; $10-$17
+        .byte   $98,$9F,$A1,$A1,$A1,$A2,$A3,$A4 ; $18-$1F
+        .byte   $A4,$A4,$A4,$A4,$98,$A5,$A5,$A5 ; $20-$27
+        .byte   $A5,$A6,$A6,$A7,$A7,$A7,$A7,$A7 ; $28-$2F
+        .byte   $A7,$A8,$A9,$A9,$AA,$98,$AB,$AB ; $30-$37
+        .byte   $AC,$AC,$AC,$98,$AD,$AD,$AD,$98 ; $38-$3F
+        .byte   $AE,$AE,$AF,$AF,$AF,$AF,$B0,$B0 ; $40-$47
+        .byte   $B1,$B1,$B2,$B2,$B2,$98,$B2,$B4 ; $48-$4F
+        .byte   $B4,$B4,$B5,$B5,$B5,$B5,$B5,$A7 ; $50-$57
+        .byte   $B6,$B6,$98,$B7,$98,$B7,$B7,$98 ; $58-$5F
+        .byte   $98,$98,$B8,$B8,$B8,$B9,$B9,$B9 ; $60-$67
+        .byte   $98,$B9,$BA,$BA,$98,$BB,$98,$98 ; $68-$6F
+        .byte   $BB,$BB,$BC,$BC,$BC,$BC,$BC,$BC ; $70-$77
+        .byte   $BC,$BC,$BC,$BC,$BD,$BD,$BD,$BD ; $78-$7F
+entity_ai_bank_table:  .byte   $01,$02,$01,$00,$01,$00,$01,$00 ; $00-$07
+        .byte   $01,$00,$01,$01,$01,$01,$00,$02 ; $08-$0F
+        .byte   $02,$02,$03,$04,$01,$01,$01,$01 ; $10-$17
+        .byte   $01,$01,$01,$01,$01,$01,$00,$01 ; $18-$1F
+        .byte   $00,$01,$01,$08,$01,$00,$00,$00 ; $20-$27
+        .byte   $00,$01,$01,$01,$01,$00,$02,$00 ; $28-$2F
+        .byte   $01,$01,$01,$01,$01,$01,$01,$00 ; $30-$37
+        .byte   $01,$00,$01,$01,$01,$01,$05,$01 ; $38-$3F
+        .byte   $06,$07,$00,$00,$01,$01,$01,$00 ; $40-$47
+        .byte   $01,$01,$00,$01,$01,$01,$01,$01 ; $48-$4F
+        .byte   $01,$01,$01,$01,$01,$01,$00,$01 ; $50-$57
+        .byte   $01,$01,$01,$01,$01,$01,$01,$01 ; $58-$5F
+        .byte   $01,$01,$01,$00,$01,$01,$01,$01 ; $60-$67
+        .byte   $01,$01,$01,$01,$01,$00,$00,$00 ; $68-$6F
+        .byte   $00,$01,$01,$01,$01,$00,$00,$00 ; $70-$77
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; $78-$7F
 entity_special_ai_ptr_lo:  .byte   $B3,$AF,$D8,$F1,$0A,$23,$23,$7C ; special AI pointer (low bytes)
         .byte   $B5,$B5,$B5,$B5,$B5,$B5,$B5
 entity_special_ai_ptr_hi:  .byte   $EF,$EF,$ED,$ED,$EE,$EE,$EE,$EE ; special AI pointer (high bytes)
@@ -2645,6 +2645,7 @@ met_apply_physics:  jsr     apply_entity_physics
         rts
 
 met_delay_table:  .byte   $19,$4A                         ; Met hide/shoot delay timings
+; --- anko_spawner_ai_entry -- Anko spawner (type $02) — state check, spawns shrimp children ---
 anko_spawner_ai_entry:
         lda     ent_state,x
         bne     anko_spawner_dec_timer
@@ -2746,6 +2747,7 @@ collision_scan_set_active:  lda     #$01
         clc
         rts
 
+; --- friender_ai_entry -- Friender fire dog (type $1C) — proximity check, jump/fire pattern ---
 friender_ai_entry:
         lda     ent_x_vel_sub,x
         bne     friender_check_timer
@@ -2888,6 +2890,7 @@ find_entity_count_ok:  clc
 find_entity_count_fail:  sec
         rts
 
+; --- blocky_ai_entry -- Blocky block enemy (type $31) — tile collision, phase transitions ---
 blocky_ai_entry:
         lda     #$0B
         sta     temp_01
@@ -3126,6 +3129,7 @@ kerog_dec_timer:  dec     ent_state,x
 petit_kerog_apply_physics:  jsr     apply_entity_physics
         rts
 
+; --- boss_ai_init_entry -- Boss intro sequence — HP fill, palette flash, countdown ---
 boss_ai_init_entry:
         lda     ent_x_vel_sub,x
         bne     boss_countdown_dec
@@ -3530,6 +3534,7 @@ metalman_blade_timer_table:              ; frame timing per throw pattern (52 en
         .byte   $01,$1F,$1F,$3E,$01,$1F,$3E,$5D
         .byte   $7C,$01,$1F,$01,$1F,$3E,$5D,$7C
         .byte   $01,$1F,$3E,$5D
+; --- woodman_ai_timer_check -- Wood Man boss AI (bank0E) — timer countdown, Leaf Shield trigger ---
 woodman_ai_timer_check:
         lda     ent_state,x
         beq     woodman_timer_expired
@@ -3615,6 +3620,7 @@ woodman_trigger_shield:  lda     #$00
 
 woodman_rts:  rts
 
+; --- bubbleman_ai_init -- Bubble Man boss AI (bank0E) — state init, jump/shoot pattern ---
 bubbleman_ai_init:
         lda     ent_state,x
         bne     bubbleman_check_state
@@ -3693,6 +3699,7 @@ bubbleman_fall_physics:  jsr     apply_entity_physics
         rts
 
 bubbleman_timer_table:  .byte   $3E,$9C         ; Bubbleman AI timer values (62/156 frames)
+; --- quickman_ai_init -- Quick Man boss AI (bank0E) — tile collision, dash/jump pattern ---
 quickman_ai_init:
         lda     ent_y_vel,x
         sta     temp_04
@@ -7116,6 +7123,7 @@ wily_final_inc_timer:
 wily_final_check_anim:  jsr     apply_entity_physics_alt
         rts
 
+; --- walker_ai_check -- Walker/Goblin AI (types $40-$45) — anim check, tile collision ---
 walker_ai_check:
         lda     ent_anim_id,x
         beq     walker_ai_init

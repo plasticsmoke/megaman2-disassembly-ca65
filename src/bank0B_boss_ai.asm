@@ -396,7 +396,7 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
 
 
 ; =============================================================================
-; Boss AI: Air Man — Leaf Shield creation and leaf projectile spawning ($833C)
+; Boss AI: Air Man — tornado pattern spawning and jump movement ($833C)
 ; =============================================================================
 airman_spawn_leaf_loop:  lda     #ENTITY_AIR_TORNADO
         ldx     #$01
@@ -550,7 +550,7 @@ boss_update_rts:  rts
 
 
 ; =============================================================================
-; Boss AI: Wood Man — tornado spawning and wind patterns ($851E)
+; Boss AI: Wood Man — Leaf Shield creation and leaf projectile toss ($851E)
 ; =============================================================================
 woodman_check_phase:  cmp     #$04
         bcs     woodman_spawn_multi_tornado
@@ -718,7 +718,7 @@ bubbleman_ai_table_hi:  .byte   $80,$85,$85,$85
 
 
 ; =============================================================================
-; Boss AI: Bubble Man — Crash Bomber aiming and movement ($8686)
+; Boss AI: Bubble Man — bubble shot aiming and ceiling bounce ($8686)
 ; =============================================================================
 bubbleman_aim_check_dist:  cmp     #$03
         bcs     bubbleman_frame_update
@@ -1127,7 +1127,7 @@ flashman_rts:  rts
 
 
 ; =============================================================================
-; Boss AI: Flash Man — flame charge and projectile patterns ($8A08)
+; Boss AI: Flash Man — Time Stopper activation and buster shot patterns ($8A08)
 ; =============================================================================
 flashman_frame_update:  jsr     flashman_update_with_sound
         rts
@@ -1495,7 +1495,7 @@ crashman_aim_y_offset:  sta     $0B
 
 
 ; =============================================================================
-; Boss AI: Crash Man — Time Stopper freeze and movement ($8D36)
+; Boss AI: Crash Man — Crash Bomber aiming and jump patterns ($8D36)
 ; =============================================================================
 crashman_setup_velocity:  lda     #$37
         sta     $0D
