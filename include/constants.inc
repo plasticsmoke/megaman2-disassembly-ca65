@@ -104,8 +104,10 @@ ENTITY_FRIENDER     = $1C       ; Wood Man — fire dog
 ENTITY_MATASABURO   = $36       ; Air Man — fan fiend, wind push
 ENTITY_FLY_BOY      = $2C       ; Crash Man/Heat Man — propeller enemy
 ENTITY_NEO_METALL   = $34       ; Crash Man — advanced Met
+ENTITY_GENERIC_PROJ = $35       ; Generic projectile (Neo Metall, Picopico-kun, Sniper Armor/Joe)
 ENTITY_NEO_METALL_FLIP = $56    ; Neo Metall flipped variant
-ENTITY_SCWORM       = $50       ; Flash/Air/Quick Man — worm
+ENTITY_SCWORM       = $50       ; Flash/Air/Quick Man — worm head
+ENTITY_SCWORM_SEG   = $51       ; Scworm body segment (child)
 ENTITY_SPRINGER     = $46       ; Heat/Quick/Metal Man — bouncing robot
 ENTITY_SNIPER_ARMOR = $4E       ; Flash/Heat/Quick Man — mech suit
 ENTITY_CRAZY_CANNON = $4B       ; Flash/Air/Crash Man — cannon enemy
@@ -117,6 +119,22 @@ ENTITY_EGG_HATCH    = $3B       ; Pipi egg hatch / boss explosion flash (shared 
 ENTITY_COPIPI       = $3C       ; Copipi from egg / boss explosion debris (shared type)
 ENTITY_TELLY_SPAWN  = $21       ; Telly spawn point
 ENTITY_TELLY        = $22       ; Telly body
+ENTITY_LASER_BEAM   = $14       ; Quick Man — instant-kill laser
+ENTITY_CHANGKEY     = $23       ; Quick Man — flame enemy
+ENTITY_CHANGKEY_PROJ = $24      ; Changkey projectile (child)
+ENTITY_BLACKOUT     = $25       ; Quick Man — screen blackout trigger
+ENTITY_LIGHT_RESTORE = $26      ; Quick Man — light restore (child, spawns with Changkey Maker)
+ENTITY_BLACKOUT_END = $27       ; Quick Man — blackout zone end, permanent light restore
+ENTITY_BLACKOUT_RE  = $28       ; Quick Man — re-darken on Changkey Maker death (child)
+ENTITY_GEAR         = $29       ; Metal Man — spinning cog platform
+ENTITY_PIERROBOT    = $2A       ; Metal Man — rides gear (child)
+ENTITY_PRESS        = $30       ; Metal/Air Man — ceiling crusher (descending)
+ENTITY_PRESS_RETRACT = $52      ; Press retracting state
+ENTITY_KAMINARI_GORO = $3E      ; Air Man — lightning robot (spawn table)
+ENTITY_KAMINARI_CHILD = $3D     ; Kaminari Goro child (role TBD)
+ENTITY_KAMINARI_BOLT = $3F      ; Kaminari Goro lightning bolt
+; Goblin multi-part (Air Man): $40/$41/$42/$43/$44/$45 — internal breakdown TBD
+; Mole multi-part (Metal Man): $47/$48/$49/$4A — internal breakdown TBD
 ; Boss projectiles
 ENTITY_METAL_BLADE  = $15       ; Metal Man blade projectile
 ENTITY_QUICK_BOOM   = $18       ; Quick Man boomerang projectile
@@ -128,6 +146,11 @@ ENTITY_ALIEN_ORB    = $45       ; Alien Wily orb
 ENTITY_ALIEN_SHOT   = $44       ; Alien Wily shot
 ENTITY_JOE_BULLET_A = $49       ; Sniper Joe bullet (type A)
 ENTITY_JOE_BULLET_B = $48       ; Sniper Joe bullet (type B)
+ENTITY_BUBBLE_SHOT  = $5B       ; Bubble Man shot
+ENTITY_AIR_TORNADO  = $5D       ; Air Man tornado (boss)
+ENTITY_CRASH_BOMB   = $5E       ; Crash Bomb
+ENTITY_CRASH_BLAST  = $5F       ; Crash Bomb blast
+ENTITY_QUICK_BOOMER = $59       ; Quick Man boomerang (boss)
 ; Pickups
 ENTITY_LARGE_HEALTH = $76       ; Large health pickup
 ENTITY_SMALL_HEALTH = $77       ; Small health pickup
