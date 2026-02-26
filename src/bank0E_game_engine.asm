@@ -6659,8 +6659,8 @@ wily4_timer_positive:
         lda     #$E0
         sta     col_update_addr_lo
         lda     #$00
-        sta     $04E1
-        sta     $06C1
+        sta     boss_ai_state
+        sta     boss_hp
         sta     $05A9
         sta     boss_action_timer
         lda     #$B8
@@ -6750,13 +6750,13 @@ wily4_despawn_done:  ldx     current_entity_slot
 
 wily4_timer_table:  .byte   $40,$01,$20,$28,$FF ; Wily stage 4 spawn timer table
 wily4_y_pos_table:  .byte   $98,$98,$48,$78 ; Wily stage 4 Y position table
-wily4_enemy_shared_ai:  lda     $0641
+wily4_enemy_shared_ai:  lda     boss_y_vel
         sta     ent_y_vel,x
-        lda     $0661
+        lda     boss_y_vel_sub
         sta     ent_y_vel_sub,x
-wily4_shared_velocity:  lda     $0601
+wily4_shared_velocity:  lda     boss_x_vel
         sta     ent_x_vel,x
-        lda     $0621
+        lda     boss_x_vel_sub
         sta     ent_x_vel_sub,x
         lda     $05A7
         sta     ent_flags,x
@@ -6804,7 +6804,7 @@ wily4_stage_physics:
         lda     ent_anim_id,x
         ora     ent_anim_frame,x
         bne     wily4_pos_check_rts
-        inc     $04E1
+        inc     boss_ai_state
         lsr     ent_flags,x
 wily4_pos_check_rts:  rts
 
@@ -6917,9 +6917,9 @@ picopico_anim_check:  lda     ent_anim_id,x
 picopico_set_anim:  jsr     apply_entity_physics
         bcc     picopico_rts2
         sec
-        lda     $06C1
+        lda     boss_hp
         sbc     #$02
-        sta     $06C1
+        sta     boss_hp
 picopico_rts2:  rts
 
 picopico_timer_table:  .byte   $3E,$1F,$1F,$1F ; Picopico-kun timing table
@@ -6958,7 +6958,7 @@ picopico_late_vert_check:
         bne     big_fish_ai             ; unconditional ($78 always NZ)
 ; --- DEAD CODE: unreachable after unconditional BNE above ---
 ; Remnant of a cut/refactored boss routine. Contains velocity decel, BOOBEAM_SHOT
-; spawning, and boss HP ($06C1) damage — never executed in the shipped game.
+; spawning, and boss HP (boss_hp) damage — never executed in the shipped game.
         sec
         lda     ent_x_vel_sub,x
         sbc     #$01
@@ -7008,12 +7008,12 @@ dead_boss_set_state:  sta     ent_anim_id,x
 dead_boss_run_physics:  jsr     apply_entity_physics_alt
         bcc     dead_boss_rts
         sec
-        lda     $06C1
+        lda     boss_hp
         sbc     #$06
-        sta     $06C1
+        sta     boss_hp
         bcs     dead_boss_rts
         lda     #$00
-        sta     $06C1
+        sta     boss_hp
 dead_boss_rts:  rts
 ; --- alien_body_ai -- Alien Body (type $70) — reset anim frame + X position adjust ($BB98) ---
 alien_body_ai:

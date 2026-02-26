@@ -39,6 +39,31 @@ ent_timer           = $06D0  ; entity timer / countdown ($06D0,x)
 ent_screen_x        = $06E0  ; screen-relative X position ($06E0,x)
 ent_ai_behavior     = $06F0  ; AI behavior table index ($06F0,x)
 
+; ─── Boss Entity (Slot $01) ─────────────────────────────────────────────────
+; Direct (non-indexed) access to entity slot $01, the boss during boss fights.
+; Also reused for ending scene protagonist animation.
+boss_type           = ent_type + 1        ; $0401
+boss_flags          = ent_flags + 1       ; $0421 — bit 7=active, 6=facing
+boss_x_screen       = ent_x_screen + 1    ; $0441
+boss_x_px           = ent_x_px + 1        ; $0461
+boss_x_sub          = ent_x_sub + 1       ; $0481
+boss_y_px           = ent_y_px + 1        ; $04A1
+boss_y_sub          = ent_y_sub + 1       ; $04C1
+boss_ai_state       = ent_state + 1       ; $04E1 — AI sub-state counter
+boss_x_vel          = ent_x_vel + 1       ; $0601
+boss_x_vel_sub      = ent_x_vel_sub + 1   ; $0621
+boss_y_vel          = ent_y_vel + 1       ; $0641
+boss_y_vel_sub      = ent_y_vel_sub + 1   ; $0661
+boss_anim_frame     = ent_anim_frame + 1  ; $0681
+boss_anim_id        = ent_anim_id + 1     ; $06A1
+boss_hp             = ent_hp + 1          ; $06C1
+boss_screen_x       = ent_screen_x + 1    ; $06E1
+
+; ─── Boss State (non-entity-array) ─────────────────────────────────────────
+boss_spawn_timer    = $05A6  ; boss spawn/intro countdown timer
+boss_hit_timer      = $05A8  ; boss hit stun timer (set to $12 on hit, decrements)
+boss_hit_count      = $05AA  ; weapon hit counter (inc per hit in boss_check_weapon_hit)
+
 ; ─── RAM Buffers ────────────────────────────────────────────────────────────
 oam_buffer          = $0200  ; OAM sprite buffer, 256 bytes ($0200-$02FF)
 ppu_update_buf      = $0300  ; PPU nametable update buffer ($0300)

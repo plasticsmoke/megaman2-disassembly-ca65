@@ -2189,23 +2189,23 @@ boss_get_normal_init:  lda     #$12
         jsr     enable_nmi_and_rendering
         lda     #$FF
         sta     ent_x_screen
-        sta     $0441
+        sta     boss_x_screen
         lda     #$D0
         sta     ent_x_px
-        sta     $0461
+        sta     boss_x_px
         lda     #$68
         sta     ent_y_px
         lda     #$80
-        sta     $04A1
+        sta     boss_y_px
         lda     #$00
         sta     ent_type
-        sta     $0681
+        sta     boss_anim_frame
         sta     ent_x_sub
-        sta     $0481
+        sta     boss_x_sub
         sta     ent_y_sub
-        sta     $04C1
+        sta     boss_y_sub
         lda     #$01
-        sta     $0401
+        sta     boss_type
 
 ; =============================================================================
 ; Boss Get — Walk-In Loop (both entities walk toward center)
@@ -2217,11 +2217,11 @@ boss_get_walk_loop:  clc
         lda     ent_x_px
         adc     #$01
         sta     ent_x_px
-        sta     $0461
+        sta     boss_x_px
         lda     ent_x_screen
         adc     #$00
         sta     ent_x_screen
-        sta     $0441
+        sta     boss_x_screen
         bne     boss_get_walk_frame
         lda     ent_x_px
         cmp     #$68                    ; Reached center X=$68?
@@ -2412,7 +2412,7 @@ boss_get_bounce_render:  jsr     clear_oam_buffer
         lda     ent_type
         bne     boss_get_apply_gravity
         lda     ent_x_px
-        sta     $0461
+        sta     boss_x_px
         jsr     update_animation_frame
         ldx     #$01
         jsr     entity_update_handler
@@ -2534,18 +2534,18 @@ boss_get_title_hold_frame:  lda     $FD
 ; =============================================================================
 ; Entity Update & Physics
 ; =============================================================================
-update_animation_frame:  inc     $0681
-        lda     $0681
+update_animation_frame:  inc     boss_anim_frame
+        lda     boss_anim_frame
         cmp     #$06                    ; 6-tick animation speed
         bcc     update_anim_frame_rts
         lda     #$00
-        sta     $0681
-        inc     $0401
-        lda     $0401
+        sta     boss_anim_frame
+        inc     boss_type
+        lda     boss_type
         cmp     #$04                    ; 4 walk frames total
         bcc     update_anim_frame_rts
         lda     #$01
-        sta     $0401
+        sta     boss_type
 update_anim_frame_rts:  rts
 
 ; =============================================================================
@@ -3100,9 +3100,9 @@ credits_clear_entities:  sta     ent_x_screen,x
         lda     #$00
         sta     ent_y_px
         lda     #$28
-        sta     $04A1
+        sta     boss_y_px
         lda     #$00
-        sta     $04C1
+        sta     boss_y_sub
         lda     #$00
         sta     $04A2
         lda     #$47
@@ -3971,19 +3971,19 @@ ending_player_gravity:  sec
         lda     #$48
         sta     ent_y_px
 ending_player2_gravity:  sec
-        lda     $04C1
+        lda     boss_y_sub
         sbc     ent_y_vel_sub
-        sta     $04C1
-        lda     $04A1
+        sta     boss_y_sub
+        lda     boss_y_px
         sbc     ent_y_vel
-        sta     $04A1
+        sta     boss_y_px
         bcs     ending_gravity_accel
         lda     #$02
         jsr     ending_spawn_entity
         lda     #$00
-        sta     $04C1
+        sta     boss_y_sub
         lda     #$48
-        sta     $04A1
+        sta     boss_y_px
 ending_gravity_accel:  clc
         lda     ent_y_vel_sub
         adc     #$02
@@ -5334,10 +5334,10 @@ ending_scene_init:
         lda     #$00
         sta     ent_anim_id
         sta     ent_anim_frame
-        sta     $0681
+        sta     boss_anim_frame
         sta     ent_type
-        sta     $0401
-        sta     $04A1
+        sta     boss_type
+        sta     boss_y_px
         lda     #$0F
         ldx     #$1F
 
@@ -5615,25 +5615,25 @@ ending_scene_anim_call:  jsr     ending_player_anim
 ending_scene_walk_render:  jsr     ending_player_render
         ldx     ent_anim_id
         clc
-        lda     $04C1
+        lda     boss_y_sub
         adc     ending_walk_vel_sub,x
-        sta     $04C1
-        lda     $04A1
+        sta     boss_y_sub
+        lda     boss_y_px
         adc     ending_walk_vel_whole,x
-        sta     $04A1
+        sta     boss_y_px
         lda     frame_counter
         and     #$07
         bne     ending_scene_anim_frame
-        inc     $0681
-        lda     $0681
+        inc     boss_anim_frame
+        lda     boss_anim_frame
         cmp     #$04
         bne     ending_scene_anim_frame
         lda     #$00
-        sta     $0681
+        sta     boss_anim_frame
 ending_scene_anim_frame:  lda     ent_anim_id
         asl     a
         asl     a
-        adc     $0681
+        adc     boss_anim_frame
         tax
         lda     ending_sprite_tile_table,x
         sta     temp_02
@@ -5660,7 +5660,7 @@ ending_scene_oam_write:  ldy     temp_00
         ldx     #$15
 ending_scene_oam_loop:  clc
         lda     ending_sprite_y_table,x
-        adc     $04A1
+        adc     boss_y_px
         sta     oam_buffer,y
         iny
         lda     temp_02

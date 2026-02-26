@@ -19,7 +19,7 @@
 .include "include/zeropage.inc"
 .include "include/constants.inc"
 
-zp_F4           := $00F4
+sound_temp      := $00F4
 data_ref_0604           := $0604
 data_ref_1501           := $1501
 data_ref_1F05           := $1F05
@@ -505,7 +505,7 @@ hud_energy_bar_update:  ldy     #$0C
         cpy     $EE
         beq     hud_energy_store_f4
         and     #$0F
-hud_energy_store_f4:  sta     zp_F4
+hud_energy_store_f4:  sta     sound_temp
         lda     $E8
         and     #$7F
         beq     hud_energy_clamp_check
@@ -523,14 +523,14 @@ hud_energy_check_drain:  tay
         bmi     hud_energy_refill_loop
         ldx     #$FF
 hud_energy_drain_loop:  inx
-        cpx     zp_F4
+        cpx     sound_temp
         beq     hud_energy_clamp_check
         dey
         bne     hud_energy_drain_loop
-        stx     zp_F4
+        stx     sound_temp
         jmp     hud_energy_clamp_check
 
-hud_energy_refill_loop:  dec     zp_F4
+hud_energy_refill_loop:  dec     sound_temp
         beq     hud_energy_clamp_check
         dey
         bne     hud_energy_refill_loop
@@ -573,13 +573,13 @@ hud_energy_delta_read:  lda     ($EC),y
         lda     #$00
         jmp     hud_energy_store_result
 
-hud_energy_clamp_max:  cmp     zp_F4
+hud_energy_clamp_max:  cmp     sound_temp
         bcc     hud_energy_store_result
-        lda     zp_F4
-hud_energy_store_result:  sta     zp_F4
+        lda     sound_temp
+hud_energy_store_result:  sta     sound_temp
         lda     ($EC),y
         and     #$F0
-        ora     zp_F4
+        ora     sound_temp
         sta     ($EC),y
 hud_energy_check_sweep:  lda     $EF
         lsr     a
@@ -630,9 +630,9 @@ hud_sweep_negate_delta:  lda     #$00
         sta     ($EC),y
 hud_sweep_read_current:  ldy     #$1E
         lda     ($EC),y
-        cmp     zp_F4
+        cmp     sound_temp
         bcs     hud_sweep_compare_slot
-        sta     zp_F4
+        sta     sound_temp
 hud_sweep_compare_slot:  ldy     #$02
         cpy     $EE
         beq     hud_sound_write_volume
@@ -641,10 +641,10 @@ hud_sweep_compare_slot:  ldy     #$02
         tay
         lda     ($EC),y
         and     #$F0
-        ora     zp_F4
-        sta     zp_F4
+        ora     sound_temp
+        sta     sound_temp
 hud_sound_write_volume:  ldx     $EB
-        lda     zp_F4
+        lda     sound_temp
         sta     SQ1_VOL,x
         lda     $F5
         bpl     hud_sound_sweep_mode_b
@@ -698,17 +698,17 @@ hud_vibrato_reset:  lda     #$00
         rol     a
         rol     a
         and     #$07
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$19
         lda     ($EC),y
         asl     a
         bcc     hud_vibrato_apply_delta
         lda     #$00
         sec
-        sbc     zp_F4
-        sta     zp_F4
+        sbc     sound_temp
+        sta     sound_temp
         dex
-hud_vibrato_apply_delta:  lda     zp_F4
+hud_vibrato_apply_delta:  lda     sound_temp
         clc
         ldy     #$1A
         adc     ($EC),y
@@ -720,14 +720,14 @@ hud_vibrato_apply_delta:  lda     zp_F4
         ldy     #$15
         lda     ($EC),y
         and     #$1F
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$19
         lda     ($EC),y
         clc
         adc     #$01
         sta     ($EC),y
         and     #$7F
-        cmp     zp_F4
+        cmp     sound_temp
         bne     hud_frequency_calc
         lda     ($EC),y
         and     #$80
@@ -785,9 +785,9 @@ hud_frequency_calc:  lda     $F5
         ldy     $F5
         lda     ($EC),y
         and     #$80
-        sta     zp_F4
+        sta     sound_temp
         txa
-        ora     zp_F4
+        ora     sound_temp
         tax
         ldy     #$00
 hud_frequency_write:  txa
@@ -837,7 +837,7 @@ sound_state_init_slot:  ldy     #$14
         lda     ($EC),y
         asl     a
         bcc     sound_state_clear_regs
-        ldy     zp_F4
+        ldy     sound_temp
         lda     ($EC),y
         ldx     #$02
         cpx     $EE
@@ -875,16 +875,16 @@ sound_dispatch_table:  txa
         tay
         iny
         pla
-        sta     zp_F4
+        sta     sound_temp
         pla
         sta     $F5
-        lda     (zp_F4),y
+        lda     (sound_temp),y
         tax
         iny
-        lda     (zp_F4),y
+        lda     (sound_temp),y
         sta     $F5
-        stx     zp_F4
-        jmp     (zp_F4)
+        stx     sound_temp
+        jmp     (sound_temp)
 
 
 ; =============================================================================
@@ -907,7 +907,7 @@ sound_stream_refill_read:  iny
         cpy     $EE
         beq     sound_stream_set_mode
         and     #$0F
-sound_stream_set_mode:  sta     zp_F4
+sound_stream_set_mode:  sta     sound_temp
         lda     #$93
         sta     $F5
         jmp     hud_sound_sweep_check
@@ -925,15 +925,15 @@ sound_stream_cmd_check:  txa             ; check for special command ($xF)
         jmp     sound_state_save_restore
 
 sound_stream_new_note:  and     #$07     ; extract note duration bits
-        sta     zp_F4
+        sta     sound_temp
         jsr     sound_data_read_byte
         ldy     #$11
         sta     ($EC),y
         iny
-        lda     zp_F4
+        lda     sound_temp
         sta     ($EC),y
         lda     #$13
-        sta     zp_F4
+        sta     sound_temp
         jsr     sound_state_init_slot
         jmp     hud_sound_channel_off
 
@@ -949,22 +949,22 @@ sound_stream_dispatch:  jsr     sound_dispatch_table
         sta     ($EC),y
         jmp     sound_stream_fetch
         jsr     sound_data_read_byte    ; handler 2: set duty/volume
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$13
         lda     ($EC),y
         and     #$3F
-        ora     zp_F4
+        ora     sound_temp
         jmp     sound_cmd_store_param
 
         jsr     sound_data_read_byte
         ldy     #$02
         cpy     $EE
         beq     sound_cmd_store_param
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$13
         lda     ($EC),y
         and     #$C0
-        ora     zp_F4
+        ora     sound_temp
 sound_cmd_store_param:  ldy     #$13
         sta     ($EC),y
         jmp     sound_stream_fetch
@@ -976,10 +976,10 @@ sound_cmd_store_param:  ldy     #$13
         beq     sound_stream_skip_update
         inc     $F3
 :       jsr     sound_data_read_byte
-        sta     zp_F4
+        sta     sound_temp
         jsr     sound_data_read_byte
         sta     $F1
-        lda     zp_F4
+        lda     sound_temp
         sta     $F0
         jmp     sound_stream_fetch
 
@@ -996,12 +996,12 @@ sound_stream_skip_update:
         jmp     sound_stream_fetch
 
         lda     #$14
-        sta     zp_F4
+        sta     sound_temp
 sound_cmd_load_regs:  jsr     sound_data_read_byte
-        ldy     zp_F4
+        ldy     sound_temp
         sta     ($EC),y
-        inc     zp_F4
-        ldy     zp_F4
+        inc     sound_temp
+        ldy     sound_temp
         cpy     #$18
         bne     sound_cmd_load_regs
         jmp     sound_stream_fetch
@@ -1044,7 +1044,7 @@ sound_cmd_load_instrument:  ldy     #$06
         tax
         jsr     sound_instrument_load
         lda     #$0C
-        sta     zp_F4
+        sta     sound_temp
         jmp     sound_state_init_slot
 
 
@@ -1158,10 +1158,10 @@ sound_pattern_volume_dec:  ldy     #$06
         beq     sound_pattern_lookup_freq
         sec
         sbc     #$20
-        sta     zp_F4
+        sta     sound_temp
         lda     ($EC),y
         and     #$1F
-        ora     zp_F4
+        ora     sound_temp
         sta     ($EC),y
         lda     $EF
         lsr     a
@@ -1186,16 +1186,16 @@ sound_pattern_freq_table:  asl     a
         ldy     #$07
         clc
         adc     ($EC),y
-        sta     zp_F4
+        sta     sound_temp
         lda     #$00
         iny
         adc     ($EC),y
         sta     $F5
         ldy     #$01
-        lda     (zp_F4),y
+        lda     (sound_temp),y
         tax
         dey
-        lda     (zp_F4),y
+        lda     (sound_temp),y
 sound_pattern_store_freq:  ldy     #$0A
         sta     ($EC),y
         iny
@@ -1203,7 +1203,7 @@ sound_pattern_store_freq:  ldy     #$0A
         sta     ($EC),y
         ldy     #$0D
         lda     ($EC),y
-        sta     zp_F4
+        sta     sound_temp
         and     #$7F
         beq     sound_pattern_check_sweep
         jsr     sound_portamento_init
@@ -1213,7 +1213,7 @@ sound_pattern_check_sweep:  lda     $EF
         rts
 
 sound_pattern_init_state:  lda     #$0C
-        sta     zp_F4
+        sta     sound_temp
         jsr     sound_state_init_slot
         jmp     hud_sound_channel_off
 
@@ -1222,11 +1222,11 @@ sound_pattern_set_vol_env:  ror     a
         ror     a
         ror     a
         and     #$E0
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$06
         lda     ($EC),y
         and     #$1F
-        ora     zp_F4
+        ora     sound_temp
         sta     ($EC),y
         rts
 
@@ -1253,21 +1253,21 @@ sound_cmd_dispatch:  jsr     sound_dispatch_table
         sta     ($EC),y
         jmp     sound_pattern_fetch
         jsr     sound_stream_read_next  ; cmd 2: set duty cycle
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$0C
         lda     ($EC),y
         and     #$3F
-        ora     zp_F4
+        ora     sound_temp
         jmp     sound_cmd_store_duty
         jsr     sound_stream_read_next  ; cmd 3: set envelope type
         ldy     #$02
         cpy     $EE
         beq     sound_cmd_store_duty
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$0C
         lda     ($EC),y
         and     #$C0
-        ora     zp_F4
+        ora     sound_temp
 sound_cmd_store_duty:  ldy     #$0C
         sta     ($EC),y
         jmp     sound_pattern_fetch
@@ -1278,13 +1278,13 @@ sound_cmd_store_duty:  ldy     #$0C
         ldy     #$05
         lda     ($EC),y
         and     #$7F
-        sta     zp_F4
-        cpx     zp_F4
+        sta     sound_temp
+        cpx     sound_temp
         beq     sound_cmd_skip_note
-        inc     zp_F4
+        inc     sound_temp
         lda     ($EC),y
         and     #$80
-        ora     zp_F4
+        ora     sound_temp
         sta     ($EC),y
 sound_cmd_read_note_data:
         jsr     sound_stream_read_next
@@ -1315,12 +1315,12 @@ sound_cmd_skip_note:  lda     ($EC),y
         jsr     sound_stream_read_next
         ldx     #$85
         ldy     #$89
-        stx     zp_F4
+        stx     sound_temp
         sty     $F5
         asl     a
         ldy     #$07
         clc
-        adc     zp_F4
+        adc     sound_temp
         sta     ($EC),y
         lda     #$00
         adc     $F5
@@ -1350,7 +1350,7 @@ sound_cmd_set_portamento:  jsr     sound_stream_read_next
         ldy     #$0F
         sta     ($EC),y
         pla
-        sta     zp_F4
+        sta     sound_temp
         and     #$7F
         beq     sound_cmd_portamento_done
         jsr     sound_portamento_init
@@ -1359,26 +1359,26 @@ sound_cmd_portamento_done:  jmp     sound_pattern_fetch
 sound_portamento_init:  lda     #$00
         ldy     #$0E
         sta     ($EC),y
-        lda     zp_F4
+        lda     sound_temp
         bpl     sound_portamento_dir_up
         lda     #$0F
         jmp     sound_portamento_store
 
 sound_portamento_dir_up:  lda     #$00
-sound_portamento_store:  sta     zp_F4
+sound_portamento_store:  sta     sound_temp
         ldy     #$0F
         lda     ($EC),y
         and     #$F0
-        ora     zp_F4
+        ora     sound_temp
         sta     ($EC),y
         rts
 
         jsr     sound_stream_read_next  ; cmd 9: set sweep
-        sta     zp_F4
+        sta     sound_temp
         ldy     #$06
         lda     ($EC),y
         and     #$E0
-        ora     zp_F4
+        ora     sound_temp
         sta     ($EC),y
         lda     $EF
         lsr     a
@@ -1399,13 +1399,13 @@ sound_instrument_offset:  clc
         bne     sound_instrument_offset
 sound_instrument_copy:  clc
         adc     $057C
-        sta     zp_F4
+        sta     sound_temp
         lda     #$00
         adc     $057D
         sta     $F5
         ldx     #$00
         ldy     #$14
-sound_instrument_byte:  lda     (zp_F4,x)
+sound_instrument_byte:  lda     (sound_temp,x)
         sta     ($EC),y
         iny
         cpy     #$18
@@ -1414,8 +1414,8 @@ sound_instrument_byte:  lda     (zp_F4,x)
 
 sound_instrument_next:  lda     #$01
         clc
-        adc     zp_F4
-        sta     zp_F4
+        adc     sound_temp
+        sta     sound_temp
         lda     #$00
         adc     $F5
         sta     $F5
@@ -1445,16 +1445,16 @@ sound_instrument_next:  lda     #$01
 ; =============================================================================
 sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
         lda     ($EC),y
-        sta     zp_F4
+        sta     sound_temp
         iny
         lda     ($EC),y
         sta     $F5
         dey
-        lda     (zp_F4),y
+        lda     (sound_temp),y
         tax
         lda     #$01
         clc
-        adc     zp_F4
+        adc     sound_temp
         sta     ($EC),y
         lda     #$00
         adc     $F5
@@ -1467,7 +1467,7 @@ sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
 ; =============================================================================
 ; sound_freq_multiply — Sound Frequency Multiply — multiply frequency by duty cycle period ($8954)
 ; =============================================================================
-sound_freq_multiply:  sta     zp_F4      ; multiply freq by period count
+sound_freq_multiply:  sta     sound_temp      ; multiply freq by period count
         lda     #$00
         sta     $F5
         ldy     #$04
@@ -1475,7 +1475,7 @@ sound_freq_multiply:  sta     zp_F4      ; multiply freq by period count
         tay
         lda     #$00
 sound_freq_mult_loop:  clc
-        adc     zp_F4
+        adc     sound_temp
         bcc     sound_freq_mult_dec
         inc     $F5
 sound_freq_mult_dec:  dey

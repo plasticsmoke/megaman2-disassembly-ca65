@@ -531,7 +531,7 @@ reset_sound_state:  lda     #$00
         sta     $05AA                   ; clear sound channel state
         sta     $05A7
         sta     $05A9
-        sta     $05A8
+        sta     boss_hit_timer
         sta     game_mode
         lda     #$FE                    ; set boss HP to pre-intro value
         sta     boss_phase
@@ -2021,13 +2021,13 @@ render_check_flash:  lda     $F9
         bne     render_flash_jump
         beq     render_load_sprite_data
 render_skip_flash:  bne     render_load_sprite_data
-        lda     $05A8
+        lda     boss_hit_timer
         beq     render_load_sprite_data
         lda     frame_counter
         and     #$02
         bne     render_dec_extra_timer
         ldy     #$18
-render_dec_extra_timer:  dec     $05A8
+render_dec_extra_timer:  dec     boss_hit_timer
 render_load_sprite_data:  lda     banked_entry,y
         sta     jump_ptr
         lda     $8200,y
@@ -2187,7 +2187,7 @@ render_hp_bars:  lda     ent_hp          ; player HP (entity slot 0)
         bcs     render_hp_done
 render_weapon_hp:  lda     boss_phase
         beq     render_hp_done
-        lda     $06C1
+        lda     boss_hp
         sta     temp_00
         lda     #$03
         ldy     boss_id
@@ -3497,7 +3497,7 @@ crash_xvel_tbl:  .byte   $04,$00,$00,$00,$04,$02,$02,$00
         ldy     #$08
         jsr     weapon_spawn_projectile
         lda     #$01
-        sta     $05A6
+        sta     boss_spawn_timer
         lda     #$21
         jsr     bank_switch_enqueue
 fire_weapon_finish:  lda     #$0F
