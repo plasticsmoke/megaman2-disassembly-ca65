@@ -7,7 +7,6 @@
 ; cold_boot_init in the fixed bank after reset.
 ; =============================================================================
 
-
         .setcpu "6502"
 
 .include "include/hardware.inc"
@@ -45,7 +44,7 @@ lookup_tile_from_map           := $CBC3
 clear_oam_buffer           := $CC6C
 render_all_sprites           := $CC77
 ppu_buffer_transfer           := $D11B
-weapon_palette_setup           := $D2ED
+weapon_palette_copy           := $D2ED
 weapon_set_base_type           := $D3A8
 weapon_spawn_projectile           := $D3E0
 entity_spawn_scan           := $D658
@@ -171,7 +170,7 @@ game_init_fill_timers:  sta     $0140,x
         lda     #$00
         sta     game_mode
         sta     current_weapon
-        jsr     weapon_palette_setup
+        jsr     weapon_palette_copy
         jsr     chr_upload_run
         lda     #$00
         sta     scroll_x

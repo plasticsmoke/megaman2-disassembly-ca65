@@ -6,7 +6,6 @@
 ; management, and sprite handling for all enemy types.
 ; =============================================================================
 
-
         .setcpu "6502"
 
 .include "include/hardware.inc"
@@ -21,7 +20,8 @@ sound_column_copy           := $C5F1
 divide_8bit           := $C84E
 divide_16bit           := $C874
 metatile_render           := $C8EF
-scroll_attr_update           := $CA0B
+metatile_column_render           := $CA0B
+scroll_column_render           := $CB0C
 tile_lookup           := $CC63
 fire_weapon_buster           := $D332
 weapon_spawn_projectile           := $D3E0
@@ -862,7 +862,7 @@ bubbleman_collision_params:  lda     #$09
         sta     temp_01
         lda     #$03
         sta     temp_02
-        jsr     $C84E
+        jsr     divide_8bit
         ldx     temp_04
         lda     temp_00
         clc
@@ -1624,7 +1624,7 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
         lda     boss_ai_state
         bne     @skip_2
         lda     #$09
-        jsr     $C5F1
+        jsr     sound_column_copy
         inc     boss_action_timer
         lda     boss_action_timer
         cmp     #$40
@@ -2109,7 +2109,7 @@ dragon_move_facing_left:  sec
         bne     @skip
         inc     boss_action_timer
         lda     #$0B
-        jsr     $C051
+        jsr     bank_switch_enqueue
 @skip:
         jsr     boss_health_bar_tick
         lda     boss_hp
@@ -2151,7 +2151,7 @@ picopico_copy_data_loop:  lda     picopico_spawn_data,y
         sta     temp_01
         ldx     #$00
 picopico_spawn_entity_loop:  stx     temp_02
-        lda     #$6A
+        lda     #ENTITY_PICOPICO
         ldx     #$01
         jsr     spawn_entity_from_boss
         ldx     temp_01
@@ -2248,7 +2248,7 @@ picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
         sta     boss_action_timer
         inc     boss_hit_count
         lda     #$FF
-        jsr     $C051
+        jsr     bank_switch_enqueue
 @done:
         rts
         lda     boss_action_timer
@@ -2922,14 +2922,14 @@ wily_machine_store_facing:  lda     #$83
         sta     temp_01
         lda     #$18
         sta     temp_02
-        jsr     $C84E
+        jsr     divide_8bit
         lda     temp_04
         sta     jump_ptr
         lda     rng_seed
         sta     temp_01
         lda     #$30
         sta     temp_02
-        jsr     $C84E
+        jsr     divide_8bit
         lda     temp_04
         sta     jump_ptr_hi
         lda     #ENTITY_WILY_MACHINE_SHOT
@@ -3203,7 +3203,7 @@ alien_jmp_dispatch:  jmp     (jump_ptr)
         bne     @skip
         ldy     #$0F
         ldx     #$0E
-        jsr     $D3E0
+        jsr     weapon_spawn_projectile
         lda     #$08
         sta     $04AE
         lda     #$B4
@@ -3458,7 +3458,7 @@ alien_palette_fill_loop:  sta     palette_ram,x
         lda     boss_action_timer
         beq     @skip
         lda     #$08
-        jsr     $C5F1
+        jsr     sound_column_copy
         dec     boss_action_timer
         rts
 @skip:
@@ -3473,7 +3473,7 @@ alien_palette_fill_loop:  sta     palette_ram,x
         lda     $FD
         cmp     #$60
         bcs     @skip_2
-        jsr     $CB0C
+        jsr     scroll_column_render
         rts
 @skip_2:
         inc     boss_ai_state
@@ -3500,7 +3500,7 @@ alien_scroll_update:  lda     #$0C
         sta     jump_ptr
         lda     alien_scroll_col_hi
         sta     jump_ptr_hi
-        jsr     scroll_attr_update
+        jsr     metatile_column_render
         lda     #$0D
         sta     current_stage
         inc     alien_scroll_col_lo
@@ -3643,7 +3643,7 @@ alien_vel_y_hi_data:  .byte   $03,$02
         and     #$07
         bne     @skip
         lda     #$2B
-        jsr     $C051
+        jsr     bank_switch_enqueue
 @skip:
         ldx     #$0F
         lda     frame_counter
@@ -3815,7 +3815,7 @@ fortress_inc_spawn_timer:  inc     fortress_explode_timer
         lda     current_stage
         cmp     #$0C
         bne     fortress_spawn_rts
-        lda     #$76
+        lda     #ENTITY_LARGE_HEALTH
         ldx     #$0E
         jsr     spawn_entity_init_type
         lda     #$02

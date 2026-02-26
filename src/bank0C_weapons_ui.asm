@@ -6,7 +6,6 @@
 ; password screen, and CHR-RAM tile upload routines.
 ; =============================================================================
 
-
         .setcpu "6502"
 
 .include "include/hardware.inc"
@@ -15,19 +14,6 @@
 .include "include/constants.inc"
 
 sound_temp      := $00F4
-data_ref_0604           := $0604
-data_ref_1501           := $1501
-data_ref_1F05           := $1F05
-data_ref_2260           := $2260
-data_ref_606C           := $606C
-data_ref_608A           := $608A
-data_ref_6868           := $6868
-data_ref_6A60           := $6A60
-data_ref_6A6C           := $6A6C
-data_ref_6D80           := $6D80
-data_ref_6F6C           := $6F6C
-data_ref_7171           := $7171
-data_ref_ED06           := $ED06
         jmp     hud_update_main
 
         cmp     #$FC

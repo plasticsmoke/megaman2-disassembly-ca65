@@ -6,7 +6,6 @@
 ; OAM sprite management, entity update/physics, and stage transitions.
 ; =============================================================================
 
-
         .setcpu "6502"
 
 .include "include/hardware.inc"
