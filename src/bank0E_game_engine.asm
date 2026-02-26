@@ -2530,7 +2530,7 @@ entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; $00-$07: Shrink, An
         .byte   $7E,$85,$A6,$C2,$2B,$5A,$AB,$B8 ; $20-$27: KukkuDesp, TellySpawn, Telly, Changkey, ChangkeyProj, Blackout, LightRestore, BlackoutEnd
         .byte   $C5,$2A,$F1,$0D,$2E,$D7,$D7,$D3 ; $28-$2F: BlackoutRe, Gear, Pierrobot, FlyBoy(2B), FlyBoy, CrashWallVar, FrienderFire, BossDoor
         .byte   $F2,$EA,$C3,$EC,$4E,$2B,$89,$A4 ; $30-$37: Press, Blocky, BlockyPh2, MechaFire, NeoMetall, GenericProj, Matasaburo, PipiSpawn
-        .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B ; $38-$3F: Pipi, PipiAlt, PipiEgg, EggHatch, Copipi, KaminariCloud, KaminariGoro, KaminariBolt
+        .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B ; $38-$3F: Pipi, PipiDespawn, PipiEgg, EggHatch, Copipi, KaminariCloud, KaminariGoro, KaminariBolt
         .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA ; $40-$47: Goblin, GoblinB, GoblinCleanA, GoblinCleanB, GoblinHorn, PetitGoblin, Springer, Mole
         .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21 ; $48-$4F: MoleShotUp, MoleShotDn, MoleDespawn, CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
         .byte   $96,$D0,$5C,$69,$6D,$71,$E5,$D7 ; $50-$57: ScwormNest, Scworm, PressRetract, AppearBlkA, AppearBlkB, AppearBlkC, NeoMetallFlip, CrashWall
@@ -5249,8 +5249,8 @@ capsule_missile_physics:  jsr     apply_entity_physics
         sta     ent_spawn_flags,y
 capsule_missile_rts:  rts
 
-; --- pipi_alt_ai -- Pipi alt spawner (type $39) — destroys all Pipi spawn entities via enemy_destroy_scan ---
-pipi_alt_ai:
+; --- pipi_despawn_ai -- Pipi despawner (type $39) — destroys all Pipi spawn ($37) entities via enemy_destroy_scan ---
+pipi_despawn_ai:
         lda     #ENTITY_PIPI_SPAWN
         sta     temp_00
         jmp     enemy_destroy_scan
@@ -6933,7 +6933,7 @@ picopico_target_hi:  .byte   $01,$01,$02,$02
 picopico_gravity:
         lda     boss_phase
         cmp     #$04
-        bcs     wily_final_vert_check
+        bcs     picopico_late_vert_check
         clc
         lda     ent_y_vel_sub,x
         adc     #$40
@@ -6942,12 +6942,12 @@ picopico_gravity:
         adc     #$00
         sta     ent_y_vel,x
 ; =============================================================================
-; big_fish_ai -- Big Fish (type $71) — simple physics, jumps from pit ($BB06)
+; big_fish_ai -- Big Fish helper — apply physics + return ($BB06)
 ; =============================================================================
 big_fish_ai:  jsr     apply_entity_physics
         rts
-
-wily_final_vert_check:
+; --- picopico_late_vert_check -- Picopico late phase (boss_phase >= 4): vert collision + bounce ---
+picopico_late_vert_check:
         lda     #$07
         sta     temp_01
         lda     #$08
@@ -6959,7 +6959,10 @@ wily_final_vert_check:
         sta     ent_y_vel,x
         lda     #$78
         sta     ent_y_vel_sub,x
-        bne     big_fish_ai
+        bne     big_fish_ai             ; unconditional ($78 always NZ)
+; --- DEAD CODE: unreachable after unconditional BNE above ---
+; Remnant of a cut/refactored boss routine. Contains velocity decel, BOOBEAM_SHOT
+; spawning, and boss HP ($06C1) damage — never executed in the shipped game.
         sec
         lda     ent_x_vel_sub,x
         sbc     #$01
@@ -6968,25 +6971,25 @@ wily_final_vert_check:
         lda     ent_x_vel,x
         sbc     #$00
         sta     ent_x_vel,x
-        bne     wily_final_check_state
+        bne     dead_boss_check_state
         cpy     #$00
-        beq     wily_final_spawn_projectile
+        beq     dead_boss_spawn_projectile
         cpy     #$3E
-        bcs     wily_final_check_state
+        bcs     dead_boss_check_state
         lda     ent_anim_id,x
         cmp     #$06
-        bne     wily_final_run_physics
+        bne     dead_boss_run_physics
         lda     #$04
-        bne     wily_final_set_state
-; --- wily_final_spawn_projectile -- Wily final boss projectile spawn — resets velocity, spawns ENTITY_BOOBEAM_SHOT ---
-wily_final_spawn_projectile:  lda     #$77
+        bne     dead_boss_set_state
+; --- dead_boss_spawn_projectile -- (dead code) projectile spawn — resets velocity, spawns ENTITY_BOOBEAM_SHOT ---
+dead_boss_spawn_projectile:  lda     #$77
         sta     ent_x_vel_sub,x
         lda     #$01
         sta     ent_x_vel,x
         lda     #ENTITY_BOOBEAM_SHOT
         ldx     #$01
         jsr     spawn_entity_from_parent
-        bcs     wily_final_check_state
+        bcs     dead_boss_check_state
         txa
         pha
         tya
@@ -7001,40 +7004,41 @@ wily_final_spawn_projectile:  lda     #$77
         pla
         tax
         stx     current_entity_slot
-wily_final_check_state:  lda     ent_anim_id,x
+dead_boss_check_state:  lda     ent_anim_id,x
         cmp     #$04
-        bne     wily_final_run_physics
+        bne     dead_boss_run_physics
         lda     #$00
-wily_final_set_state:  sta     ent_anim_id,x
-wily_final_run_physics:  jsr     apply_entity_physics_alt
-        bcc     wily_final_rts
+dead_boss_set_state:  sta     ent_anim_id,x
+dead_boss_run_physics:  jsr     apply_entity_physics_alt
+        bcc     dead_boss_rts
         sec
         lda     $06C1
         sbc     #$06
         sta     $06C1
-        bcs     wily_final_rts
+        bcs     dead_boss_rts
         lda     #$00
         sta     $06C1
-wily_final_rts:  rts
-
+dead_boss_rts:  rts
+; --- alien_body_ai -- Alien Body (type $70) — reset anim frame + X position adjust ($BB98) ---
+alien_body_ai:
         lda     #$00
         sta     ent_anim_frame,x
         ldy     ent_anim_id,x
         clc
         lda     ent_x_px,x
-        adc     wily_final_x_adjust_table,y
+        adc     alien_body_x_adjust_tbl,y
         sta     ent_x_px,x
         rts
 
-wily_final_x_adjust_table:  .byte   $03,$02
-; --- wily_final_ai_main -- Wily Final: face player + phase dispatch ($BBAD) ---
-wily_final_ai_main:
+alien_body_x_adjust_tbl:  .byte   $03,$02
+; --- big_fish_ai_main -- Big Fish (type $71) — face player + jump from pit ($BBAD) ---
+big_fish_ai_main:
         jsr     entity_face_player
         lda     ent_state,x
-        bne     wily_final_phase_active
+        bne     big_fish_phase_active
         lda     temp_00
         cmp     #$38
-        bcs     wily_final_apply_physics
+        bcs     big_fish_apply_physics
         lda     rng_seed
         sta     temp_01
         lda     #$03
@@ -7042,22 +7046,22 @@ wily_final_ai_main:
         jsr     divide_8bit
         ldy     temp_04
         ldx     current_entity_slot
-        lda     wily_final_timer_table,y
+        lda     big_fish_timer_table,y
         sta     $0110,x
         inc     ent_state,x
-wily_final_apply_physics:  jsr     apply_entity_physics_alt
+big_fish_apply_physics:  jsr     apply_entity_physics_alt
         rts
 
-wily_final_phase_active:
+big_fish_phase_active:
         cmp     #$02
-        bcs     wily_final_gravity
+        bcs     big_fish_gravity
         lda     temp_00
         cmp     #$38
-        bcc     wily_final_timer_check
+        bcc     big_fish_timer_check
         dec     ent_state,x
-        beq     wily_final_apply_physics
-wily_final_timer_check:  dec     $0110,x
-        bne     wily_final_apply_physics
+        beq     big_fish_apply_physics
+big_fish_timer_check:  dec     $0110,x
+        bne     big_fish_apply_physics
         lda     #$02
         sta     ent_y_vel,x
         lda     #$00
@@ -7065,28 +7069,28 @@ wily_final_timer_check:  dec     $0110,x
         lda     #$83
         sta     ent_flags,x
         inc     ent_state,x
-wily_final_gravity:  lda     ent_y_vel,x
-        bpl     wily_final_rise_check
+big_fish_gravity:  lda     ent_y_vel,x
+        bpl     big_fish_rise_check
         lda     ent_y_px,x
         cmp     #$E0
-        bcc     wily_final_physics_2
+        bcc     big_fish_physics
         lda     #$00
         sta     ent_state,x
         lda     #$A0
         sta     ent_flags,x
-        bne     wily_final_physics_2
-wily_final_rise_check:  lda     ent_y_px,x
+        bne     big_fish_physics
+big_fish_rise_check:  lda     ent_y_px,x
         cmp     #$80
-        bcs     wily_final_physics_2
+        bcs     big_fish_physics
         lda     #$FF
         sta     ent_y_vel_sub,x
         sta     ent_y_vel,x
         lda     #$87
         sta     ent_flags,x
-wily_final_physics_2:  jsr     apply_entity_physics
+big_fish_physics:  jsr     apply_entity_physics
         rts
 
-wily_final_timer_table:  .byte   $1F,$2E,$7D ; Wily final boss timer table (3 entries: RNG/3)
+big_fish_timer_table:  .byte   $1F,$2E,$7D ; Big Fish jump interval table (3 entries: RNG/3)
 ; --- flash_hazard_ai -- Flash hazard (types $72/$73) — timer check + projectile spawn ($BC30) ---
 flash_hazard_ai:
         lda     ent_state,x
@@ -7138,14 +7142,14 @@ pickup_ai_init:
         sta     temp_02
         jsr     check_vert_tile_collision
         lda     temp_00
-        beq     wily_final_check_physics
+        beq     red_liquid_apply_physics
         ldy     ent_state,x
         lda     flash_hazard_bank_table,y
         jsr     bank_switch_enqueue
         inc     ent_anim_id,x
         rts
 
-wily_final_check_physics:  jsr     apply_entity_physics
+red_liquid_apply_physics:  jsr     apply_entity_physics
         rts
 
         .byte   $3D,$3E                 ; unknown padding bytes

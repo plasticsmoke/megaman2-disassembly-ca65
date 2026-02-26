@@ -123,6 +123,7 @@ ENTITY_BLOCKY       = $31       ; Metal/Crash/Flash Man — block enemy
 ENTITY_BLOCKY_PHASE2 = $32      ; Blocky phase 2 (mid-animation)
 ENTITY_PIPI_SPAWN   = $37       ; Crash/Air/Wood Man — bird spawn point
 ENTITY_PIPI         = $38       ; flying bird
+ENTITY_PIPI_DESPAWN = $39       ; Pipi despawner (destroys all $37 spawners at screen transition)
 ENTITY_PIPI_EGG     = $3A       ; falling egg
 ENTITY_EGG_HATCH    = $3B       ; Pipi egg hatch / boss explosion flash (shared type)
 ENTITY_COPIPI       = $3C       ; Copipi from egg / boss explosion debris (shared type)

@@ -1448,6 +1448,10 @@ metatile_offset_table:  .byte   $00,$08,$02,$0A
         pla
         jsr     bank_switch
         rts
+; --- DEAD CODE: unreachable metatile attribute update routine (no entry point) ---
+; Labels metatile_attr_loop and metatile_attr_done are only self-referenced.
+; Complete routine that loads stage bank, computes PPU attribute data, and
+; writes to update buffer — but nothing calls or branches into it.
         lda     current_stage
         and     #$07
         jsr     bank_switch
