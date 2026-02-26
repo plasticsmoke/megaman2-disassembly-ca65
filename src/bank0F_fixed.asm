@@ -739,8 +739,9 @@ palette_anim_done:  rts
         sta     $0B
         lda     current_stage
         and     #$08
-        beq     *+4
+        beq     @skip
         inc     $0B
+@skip:
         ldy     #$00
         lda     ($0A),y
         sta     temp_00
@@ -1087,9 +1088,10 @@ column_copy_from_ptr:  lda     ($FE),y
         sta     jump_ptr
         lda     $FD
         cmp     #$08
-        bcc     *+7
+        bcc     @skip
         lda     jump_ptr_hi
         jmp     $C783
+@skip:
         lda     jump_ptr_hi
         adc     #$09
         sta     col_update_addr_hi
@@ -1254,8 +1256,9 @@ div16_next:  dey
         ldy     #$20
         lda     jump_ptr_hi
         and     #$01
-        beq     *+4
+        beq     @skip
         ldy     #$24
+@skip:
         sty     $0B
         lda     jump_ptr
         lsr     a
@@ -1290,8 +1293,9 @@ div16_next:  dey
         ldy     #$08
         lda     jump_ptr_hi
         and     #$01
-        beq     *+4
+        beq     @skip_2
         ldy     #$09
+@skip_2:
         sty     $0B
         lda     $0A
         and     #$F8
@@ -1485,8 +1489,9 @@ metatile_offset_table:  .byte   $00,$08,$02,$0A
         ldx     #$20
         lda     nametable_select
         and     #$01
-        beq     *+4
+        beq     @skip
         ldx     #$24
+@skip:
         txa
         ora     ppu_update_buf
         sta     ppu_update_buf
@@ -1582,8 +1587,9 @@ metatile_attr_done:  lda     #$80
 
         lda     $FD
         cmp     #$60
-        bcc     *+3
+        bcc     @skip
         rts
+@skip:
         lda     current_bank
         pha
         lda     $FD
@@ -3245,17 +3251,19 @@ find_slot_found:  clc
         rts
 
         lda     $F9
-        bne     *+23
+        bne     @in_range
         ldx     current_weapon
-        beq     *+6
+        beq     @skip
         lda     $9B,x
-        beq     *+15
+        beq     @in_range
+@skip:
         lda     weapon_dispatch_lo_tbl,x
         sta     jump_ptr
         lda     weapon_dispatch_hi_tbl,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
+@in_range:
         sec
         rts
 
@@ -3289,12 +3297,13 @@ fire_weapon_no_slot:  sec
 
         lda     p1_new_presses
         and     #$02
-        beq     *+14
+        beq     @in_range
         ldx     #$02
         ldy     #$01
         jsr     weapon_spawn_projectile
         lda     #$82
         sta     ent_flags,x
+@in_range:
         sec
         rts
 
@@ -3328,13 +3337,13 @@ fire_weapon_multi_fail:  sec
 
         lda     p1_new_presses
         and     #$02
-        beq     *+30
+        beq     fire_weapon_spread_loop_in_range
         lda     $0422
-        bmi     *+25
+        bmi     fire_weapon_spread_loop_in_range
         sec
         lda     $9E
         sbc     #$03
-        bcc     *+18
+        bcc     fire_weapon_spread_loop_in_range
         ldx     #$05
 fire_weapon_spread_loop:  stx     temp_02
         ldy     #$03
@@ -3343,6 +3352,7 @@ fire_weapon_spread_loop:  stx     temp_02
         dex
         cpx     #$01
         bne     fire_weapon_spread_loop
+fire_weapon_spread_loop_in_range:
         sec
         rts
 
@@ -3374,13 +3384,14 @@ fire_weapon_bubble_fail:  sec
 
         lda     p1_new_presses
         and     #$02
-        bne     *+12
+        bne     @skip
         lda     $AB
         cmp     #$0B
-        beq     *+6
+        beq     @skip
         inc     $AB
         clc
         rts
+@skip:
         ldx     #$05
 fire_weapon_leaf_scan:  lda     ent_flags,x
         bpl     fire_weapon_leaf_fire
@@ -3408,13 +3419,13 @@ fire_weapon_leaf_fail:  sec
 
         lda     p1_new_presses
         and     #$02
-        beq     *+31
+        beq     @in_range
         lda     $0422
-        bmi     *+26
+        bmi     @in_range
         sec
         lda     $A3
         sbc     #$04
-        bcc     *+19
+        bcc     @in_range
         sta     $A3
         ldx     #$02
         ldy     #$06
@@ -3422,6 +3433,7 @@ fire_weapon_leaf_fail:  sec
         lda     #$24
         jsr     bank_switch_enqueue
         jmp     fire_weapon_set_timer
+@in_range:
         sec
         rts
 
@@ -3476,10 +3488,10 @@ crash_xvel_tbl:  .byte   $04,$00,$00,$00,$04,$02,$02,$00
         .byte   $04,$02,$02,$00,$00,$00,$00,$00
         lda     p1_new_presses
         and     #$02
-        beq     *+33
+        beq     fire_weapon_finish_in_range
         ldx     #$02
         lda     $0422
-        bmi     *+26
+        bmi     fire_weapon_finish_in_range
         ldy     #$08
         jsr     weapon_spawn_projectile
         lda     #$01
@@ -3491,6 +3503,7 @@ fire_weapon_finish:  lda     #$0F
         lda     #$03
         jmp     fire_weapon_set_dir
 
+fire_weapon_finish_in_range:
         sec
         rts
 
@@ -3517,9 +3530,9 @@ fire_weapon_star_fail:  sec
 
         lda     p1_new_presses
         and     #$02
-        beq     *+27
+        beq     @done
         lda     $0422
-        bmi     *+22
+        bmi     @done
         ldx     #$02
         ldy     #$0A
         jsr     weapon_spawn_projectile
@@ -3528,18 +3541,20 @@ fire_weapon_star_fail:  sec
         lda     #$13
         sta     $06C2
         jmp     fire_weapon_finish
+@done:
         rts
         lda     p1_new_presses
         and     #$02
-        beq     *+22
+        beq     @done_2
         lda     $0422
-        bmi     *+17
+        bmi     @done_2
         ldx     #$02
         ldy     #$0B
         jsr     weapon_spawn_projectile
         lda     #$1F
         sta     $06C2
         jmp     fire_weapon_finish
+@done_2:
         rts
 weapon_dispatch_lo_tbl:  .byte   $6C,$9F,$B3,$E6,$0A,$3B,$31,$9F
         .byte   $7A,$58,$7D,$9D
@@ -3589,8 +3604,9 @@ entity_special_dispatch_lo:  .byte   $34,$34,$48,$74,$6F,$CE,$16,$58
 entity_special_dispatch_hi:  .byte   $DD,$DD,$DE,$DE,$DF,$DF,$E0,$E1
         .byte   $E1,$E1,$E2,$E2,$E4,$E4,$E4,$E4
         lda     ent_state,x
-        beq     *+5
+        beq     @skip
         jmp     $DDEC
+@skip:
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
@@ -3834,7 +3850,7 @@ bubble_yvel_tbl:  .byte   $04,$FC
         sta     temp_02
         jsr     check_horiz_tile_collision
         lda     ent_state,x
-        bne     *+34
+        bne     metal_blade_launch_skip
         lda     temp_00
         beq     metal_blade_physics
         inc     ent_state,x
@@ -3848,6 +3864,7 @@ metal_blade_launch:  lda     #$C0
         lda     #$02
         sta     ent_x_vel,x
         bne     metal_blade_physics
+metal_blade_launch_skip:
         cmp     #$01
         bne     metal_blade_check_stop
         lda     temp_03
@@ -3901,7 +3918,7 @@ metal_blade_accelerate:  clc
         rts
 
         lda     ent_state,x
-        bne     *+121
+        bne     quick_boomerang_hit_skip
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
@@ -3913,7 +3930,7 @@ metal_blade_accelerate:  clc
         sta     $0B
         lda     ent_flags,x
         and     #$40
-        bne     *+18
+        bne     @no_match
         sec
         lda     ent_x_px,x
         sbc     #$06
@@ -3921,6 +3938,7 @@ metal_blade_accelerate:  clc
         lda     ent_x_screen,x
         sbc     #$00
         jmp     $E053
+@no_match:
         clc
         lda     ent_x_px,x
         adc     #$06
@@ -3955,6 +3973,7 @@ quick_boomerang_hit:  lda     #$2E
         lda     #$7E
         sta     ent_hp,x
         bne     quick_boomerang_bounds
+quick_boomerang_hit_skip:
         cmp     #$01
         bne     quick_boomerang_phase2
         lda     ent_anim_id,x
@@ -4040,17 +4059,18 @@ scatter_offset_x_hi_3:  .byte   $FF,$00
 tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         .byte   $01
         dec     ent_x_vel_sub,x
-        bne     *+23
+        bne     @skip
         lda     #$0F
         sta     ent_x_vel_sub,x
         dec     $A1
-        bne     *+14
+        bne     @skip
         lsr     ent_flags,x
         lda     #$00
         sta     game_mode
         lda     #$01
         sta     $50
         rts
+@skip:
         lda     #$01
         sta     game_mode
         lda     #$00
@@ -4067,22 +4087,25 @@ tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         rts
 
         lda     ent_state,x
-        bne     *+37
+        bne     @skip_3
         inc     ent_hp,x
         lda     ent_hp,x
         cmp     #$BB
-        beq     *+17
+        beq     @skip_2
         lda     ent_anim_id,x
         cmp     #$02
-        bne     *+7
+        bne     @done
         lda     #$00
         sta     ent_anim_id,x
+@done:
         jmp     air_shooter_collision
 
+@skip_2:
         lda     #$3E
         sta     ent_hp,x
         inc     ent_state,x
         bne     air_shooter_collision
+@skip_3:
         cmp     #$01
         bne     air_shooter_physics
         lda     ent_anim_id,x
@@ -4123,9 +4146,10 @@ air_shooter_physics:  jsr     apply_entity_physics
 air_shooter_done:  rts
 
         lda     ent_state,x
-        beq     *+7
+        beq     @skip
         dec     ent_state,x
         bne     leaf_shield_wall_check
+@skip:
         dec     ent_hp,x
         bne     leaf_shield_accel
         lda     #$13
@@ -4624,31 +4648,33 @@ weapon_collision_dispatch:  ldy     current_weapon ; current weapon ID for handl
         ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
-        bne     *+54
+        bne     @skip_2
         lda     ent_type,y
         tay
         lda     weapon_damage_table,y
         sta     temp_00
-        beq     *+43
+        beq     @skip_2
         jsr     apply_difficulty_modifier
         lsr     ent_flags,x
         lda     #$2B
         jsr     bank_switch_enqueue
         ldx     current_entity_slot
         lda     $0100,x
-        bne     *+50
+        bne     @no_match
         inc     $0100,x
         sec
         lda     ent_hp,x
         sbc     temp_00
         sta     ent_hp,x
-        beq     *+4
-        bcs     *+34
+        beq     @skip
+        bcs     @no_match
+@skip:
         lda     #$00
         sta     ent_hp,x
         sec
         rts
 
+@skip_2:
         lda     ent_flags,x
         eor     #$40
         and     #$FE
@@ -4659,6 +4685,7 @@ weapon_collision_dispatch:  ldy     current_weapon ; current weapon ID for handl
         lda     #$2D
         jsr     bank_switch_enqueue
         ldx     current_entity_slot
+@no_match:
         clc
         rts
 
@@ -4670,16 +4697,18 @@ weapon_collision_dispatch:  ldy     current_weapon ; current weapon ID for handl
         tay
         lda     ent_state,x
         cmp     #$02
-        bcc     *+21
-        beq     *+8
+        bcc     @skip_3
+        beq     @no_match_2
         lda     $EA14,y
         jmp     weapon_damage_apply
+@no_match_2:
         clc
         lda     weapon_damage_table,y
         asl     a
         adc     weapon_damage_table,y
         jmp     weapon_damage_apply
 
+@skip_3:
         lda     weapon_damage_table,y
 weapon_damage_apply:  sta     temp_00
         beq     weapon_damage_zero
@@ -4719,7 +4748,7 @@ weapon_damage_done:  ldx     current_entity_slot
         ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
-        bne     *+55
+        bne     weapon_damage_killed_alt_skip
         lda     ent_type,y
         tay
         lda     $EA8C,y
@@ -4748,6 +4777,7 @@ weapon_damage_killed_alt:  lda     #$00
         sec
         rts
 
+weapon_damage_killed_alt_skip:
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     ent_flags,x
@@ -4765,12 +4795,12 @@ weapon_damage_return:  clc
         ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
-        bne     *+55
+        bne     @skip_2
         lda     ent_type,y
         tay
         lda     $EB04,y
         sta     temp_00
-        beq     *+44
+        beq     @skip_2
         jsr     apply_difficulty_modifier
         txa
         pha
@@ -4780,19 +4810,21 @@ weapon_damage_return:  clc
         tay
         ldx     current_entity_slot
         lda     $0100,x
-        bne     *+59
+        bne     weapon_coll_handler_done_no_match
         inc     $0100,x
         sec
         lda     ent_hp,x
         sbc     temp_00
         sta     ent_hp,x
-        beq     *+4
+        beq     @skip
         bcs     weapon_coll_deactivate
+@skip:
         lda     #$00
         sta     ent_hp,x
         sec
         rts
 
+@skip_2:
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     ent_flags,x
@@ -4806,6 +4838,7 @@ weapon_damage_return:  clc
         sta     ent_state,x
         sta     ent_hp,x
 weapon_coll_handler_done:  ldx     current_entity_slot
+weapon_coll_handler_done_no_match:
         clc
         rts
 
@@ -4860,12 +4893,12 @@ weapon_coll_rebound_done:  clc
         ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
-        bne     *+55
+        bne     @skip_2
         lda     ent_type,y
         tay
         lda     $EBF4,y
         sta     temp_00
-        beq     *+44
+        beq     @skip_2
         jsr     apply_difficulty_modifier
         txa
         pha
@@ -4875,19 +4908,21 @@ weapon_coll_rebound_done:  clc
         tay
         ldx     current_entity_slot
         lda     $0100,x
-        bne     *+73
+        bne     weapon_coll_handler_2_done_no_match
         inc     $0100,x
         sec
         lda     ent_hp,x
         sbc     temp_00
         sta     ent_hp,x
-        beq     *+4
+        beq     @skip
         bcs     weapon_coll_deactivate_2
+@skip:
         lda     #$00
         sta     ent_hp,x
         sec
         rts
 
+@skip_2:
         lda     #ENTITY_COPIPI
         sta     ent_type,x
         lda     ent_flags,x
@@ -4907,6 +4942,7 @@ weapon_coll_rebound_done:  clc
         lda     #$2D
         jsr     bank_switch_enqueue
 weapon_coll_handler_2_done:  ldx     current_entity_slot
+weapon_coll_handler_2_done_no_match:
         clc
         rts
 
@@ -4966,12 +5002,12 @@ weapon_coll_stun_done:  ldx     current_entity_slot
         ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
-        bne     *+55
+        bne     @skip_2
         lda     ent_type,y
         tay
         lda     $ECE4,y
         sta     temp_00
-        beq     *+44
+        beq     @skip_2
         jsr     apply_difficulty_modifier
         txa
         pha
@@ -4981,19 +5017,21 @@ weapon_coll_stun_done:  ldx     current_entity_slot
         tay
         ldx     current_entity_slot
         lda     $0100,x
-        bne     *+60
+        bne     weapon_coll_handler_3_done_no_match
         inc     $0100,x
         sec
         lda     ent_hp,x
         sbc     temp_00
         sta     ent_hp,x
-        beq     *+4
-        bcs     *+46
+        beq     @skip
+        bcs     weapon_coll_handler_3_done_skip
+@skip:
         lda     #$00
         sta     ent_hp,x
         sec
         rts
 
+@skip_2:
         lda     #$03
         sta     ent_y_vel,x
         lda     #$B2
@@ -5008,9 +5046,11 @@ weapon_coll_stun_done:  ldx     current_entity_slot
         lda     #$2D
         jsr     bank_switch_enqueue
 weapon_coll_handler_3_done:  ldx     current_entity_slot
+weapon_coll_handler_3_done_no_match:
         clc
         rts
 
+weapon_coll_handler_3_done_skip:
         lda     #$00
         sta     ent_flags,y
         beq     weapon_coll_handler_3_done
@@ -5162,9 +5202,10 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         .byte   $00,$00,$00,$00,$A9,$14,$9D
         bvc     *+3
         jsr     apply_entity_physics_alt
-        bcc     *+7
+        bcc     @in_range
         lda     #$00
         sta     $0150,x
+@in_range:
         sec
         lda     ent_y_px,x
         sbc     #$04
@@ -5174,9 +5215,10 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         lda     #$18
         sta     $0150,x
         jsr     apply_entity_physics_alt
-        bcc     *+7
+        bcc     @in_range_2
         lda     #$00
         sta     $0150,x
+@in_range_2:
         sec
         lda     ent_y_px,x
         sbc     #$08
@@ -5186,9 +5228,10 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         lda     #$18
         sta     $0150,x
         jsr     apply_entity_physics_alt
-        bcc     *+7
+        bcc     @in_range_3
         lda     #$00
         sta     $0150,x
+@in_range_3:
         sec
         lda     ent_y_px,x
         sbc     #$08
@@ -5204,19 +5247,22 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         sta     temp_01
         lda     ent_flags,x
         and     #$20
-        beq     *+29
+        beq     @skip_3
         ldy     temp_01
         lda     #$15
         cmp     $0358,y
-        bne     *+9
+        bne     @skip
         lda     #$04
         sta     ent_x_vel_sub,x
-        bne     *+8
+        bne     @skip_2
+@skip:
         lda     temp_00
         cmp     #$60
         bcs     collision_apply_physics
+@skip_2:
         lda     #$82
         sta     ent_flags,x
+@skip_3:
         lda     ent_x_vel_sub,x
         cmp     #$04
         bcs     collision_apply_physics
@@ -5237,7 +5283,7 @@ collision_apply_physics:  jsr     apply_entity_physics_alt
         rts
 
         lda     ent_x_vel_sub,x
-        bne     *+36
+        bne     @skip
         lda     #$6E
         sta     ent_state,x
         inc     ent_x_vel_sub,x
@@ -5249,9 +5295,10 @@ collision_apply_physics:  jsr     apply_entity_physics_alt
         jsr     $96CF
         lda     #$83
         sta     ent_flags,x
-        bcs     *+7
+        bcs     @skip
         lda     #ENTITY_LIGHT_RESTORE
         jsr     spawn_entity_from_parent
+@skip:
         jsr     apply_entity_physics_alt
         bcc     collision_done
         lda     #ENTITY_CHANGKEY
@@ -5263,8 +5310,9 @@ collision_done:  rts
 
         rts
         lda     #$01
-        bne     *+4
+        bne     @skip
         lda     #$00
+@skip:
         sta     $4E
         lda     ent_flags,x
         and     #$03
@@ -5379,12 +5427,13 @@ physics_despawn_secondary:  lda     #$FF
         rts
 
         lda     #$01
-        bne     *+4
+        bne     apply_entity_physics_alt_skip
 
 ; =============================================================================
 ; apply_entity_physics_alt — Alternate physics — used for weapons/projectiles ($EFB3)
 ; =============================================================================
 apply_entity_physics_alt:  lda     #$00
+apply_entity_physics_alt_skip:
         sta     $4E
         lda     ent_flags,x
         and     #$03                    ; check contact/weapon bits
@@ -5637,12 +5686,13 @@ spawn_entity_no_slot:  pla
         lda     $2D
         sbc     $2E
         sta     temp_00
-        bcs     *+12
+        bcs     @skip
         lda     temp_00
         eor     #$FF
         adc     #$01
         ldy     #$00
         sta     temp_00
+@skip:
         lda     ent_flags,x
         and     #$BF
         sta     ent_flags,x

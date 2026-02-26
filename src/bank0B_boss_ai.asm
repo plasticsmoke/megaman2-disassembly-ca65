@@ -45,10 +45,11 @@ fixed_DA43           := $DA43
         ldy     boss_id
         lda     game_mode
         and     #$01
-        beq     *+10
+        beq     @skip
         lda     enemy_spawn_timer_table,y
-        beq     *+5
+        beq     @skip
         jmp     $8063
+@skip:
         ldx     boss_phase
         bpl     enemy_ai_dispatch
         jmp     enemy_ai_fallback
@@ -124,7 +125,7 @@ boss_spawn_done:  rts
         sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     $04E1
-        bne     *+44
+        bne     boss_frame_update_rts_skip_2
         ldy     boss_id
         lda     $813E,y
         sta     temp_01
@@ -132,17 +133,19 @@ boss_spawn_done:  rts
         sta     temp_02
         jsr     boss_floor_collision_check
         lda     temp_00
-        bne     *+14
+        bne     boss_frame_update_rts_skip
         lda     #$00
         sta     $06A1
         sta     $0681
 boss_frame_update_rts:  jsr     boss_apply_movement_physics
         rts
 
+boss_frame_update_rts_skip:
         lda     #$00
         sta     $0641
         sta     $0661
         inc     $04E1
+boss_frame_update_rts_skip_2:
         lda     $06A1
         ldy     boss_id
         cmp     enemy_state_transition,y
@@ -179,11 +182,12 @@ enemy_spawn_sound_ids:  .byte   $51,$67,$6D
         .byte   $5C,$64,$6A
         lda     #ENTITY_HEATMAN_FIRE
         jsr     find_entity_by_type
-        bcs     *+12
+        bcs     @skip
         lda     $06A1
         bne     heatman_frame_update
         sta     $0681
         beq     heatman_frame_update
+@skip:
         lda     $0681
         bne     heatman_frame_update
         lda     $06A1
@@ -254,12 +258,13 @@ heatman_proj_hitbox_mask:  .byte   $07
         ora     temp_03
 heatman_proj_speed_table:  .byte   $3A,$2E,$1C
         lda     $04E1
-        bne     *+55
+        bne     @skip_2
         lda     $06A1
         cmp     #$02
-        bne     *+7
+        bne     @skip
         lda     #$00
         sta     $06A1
+@skip:
         dec     boss_action_timer
         bne     heatman_frame_update
         lda     #$03
@@ -279,6 +284,7 @@ heatman_proj_speed_table:  .byte   $3A,$2E,$1C
         jsr     bank_switch_enqueue
         inc     $04E1
         bne     heatman_frame_update
+@skip_2:
         cmp     #$01
         bne     heatman_check_death_anim
         lda     $06A1
@@ -318,13 +324,14 @@ heatman_jmp_frame_update:  jmp     heatman_frame_update
 
 heatman_random_delay_table:  .byte   $1F,$3E,$5D
         lda     $06A1
-        beq     *+53
+        beq     @skip_2
         dec     boss_phase
         lda     #$8B
         ldx     $0461
         cpx     #$80
-        bcs     *+4
+        bcs     @skip
         lda     #$CB
+@skip:
         sta     $0421
         lda     #$00
         sta     $04E1
@@ -341,13 +348,15 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         jsr     play_sound_and_reset_anim
         lda     #$38
         jsr     bank_switch_enqueue
+@skip_2:
         jsr     boss_apply_movement_physics
         rts
 
         lda     $06A1
         cmp     #$04
-        beq     *+5
+        beq     @done
         jmp     heatman_frame_update
+@done:
         jmp     boss_activate_phase
 
         .byte   $D3,$5E,$FD,$90,$CC,$80,$81,$81
@@ -364,7 +373,7 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         sta     $50
         lda     boss_action_timer
         cmp     #$03
-        bne     *+30
+        bne     @skip_3
         lda     #$00
         sta     boss_action_timer
         lda     #$68
@@ -376,7 +385,8 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         sta     boss_phase
         lda     #$FF
         sta     $0641
-        bne     *+97
+        bne     airman_spawn_leaf_loop_skip
+@skip_3:
         lda     rng_seed
         sta     temp_01
         lda     #$05
@@ -422,6 +432,7 @@ airman_spawn_leaf_loop:  lda     #ENTITY_AIR_TORNADO
         lda     #$00
         sta     $06A1
         sta     $0681
+airman_spawn_leaf_loop_skip:
         jsr     boss_update_with_sound
         rts
 
@@ -633,7 +644,7 @@ woodman_jmp_frame_update_2:  jsr     woodman_update_with_sound
         bvs     woodman_bcc_frame_update
         .byte   $52
         lda     $0681
-        bne     *+20
+        bne     @skip
         lda     #$04
         sta     $0641
         lda     #$01
@@ -641,6 +652,7 @@ woodman_jmp_frame_update_2:  jsr     woodman_update_with_sound
         lda     $0421
         ora     #$04
         sta     $0421
+@skip:
         lda     #$01
         sta     $0681
         lda     $0641
@@ -705,8 +717,9 @@ bubbleman_ai_table_hi:  .byte   $80,$85,$85,$85
         sta     $0421
         jsr     calc_player_boss_distance
         lda     ent_anim_id,x
-        bne     *+5
+        bne     @skip
         sta     $0681
+@skip:
         lda     $04E1
         bne     bubbleman_dec_aim_timer
         sec
@@ -771,7 +784,7 @@ bubbleman_frame_update:  jsr     bubbleman_update_with_sound
         jsr     bubbleman_update_with_sound
         lda     $04A1
         cmp     #$50
-        bcs     *+22
+        bcs     @skip
         lda     #$FF
         sta     $0641
         lda     #$00
@@ -780,6 +793,7 @@ bubbleman_frame_update:  jsr     bubbleman_update_with_sound
         sta     $0621
         lda     #$04
         sta     boss_phase
+@skip:
         jsr     calc_player_boss_distance
         lda     boss_action_timer
         bne     bubbleman_dec_shot_timer
@@ -851,7 +865,7 @@ bubbleman_collision_params:  lda     #$09
         jmp     (jump_ptr)
 
         lda     $04E1
-        bne     *+83
+        bne     @skip_2
         lda     #$87
         sta     $0421
         jsr     calc_player_boss_distance
@@ -867,8 +881,9 @@ bubbleman_collision_params:  lda     #$09
         sta     temp_01
         sec
         sbc     #$40
-        bcs     *+4
+        bcs     @skip
         lda     #$00
+@skip:
         sta     temp_02
         lda     #$00
         sta     $0661
@@ -888,6 +903,7 @@ bubbleman_collision_params:  lda     #$09
         sta     $0621
         inc     $04E1
         inc     boss_action_timer
+@skip_2:
         lda     #$08
         sta     temp_01
         lda     #$0C
@@ -979,11 +995,11 @@ quickman_phase_transition:  lda     #$00
 quickman_phase_id_table:  .byte   $02,$05
 quickman_sound_table:  .byte   $55,$58
         dec     $04E1
-        beq     *+44
+        beq     quickman_state2_frame_update_skip
         jsr     quickman_hitbox_params
         rts
         lda     $04E1
-        bne     *+22
+        bne     @skip
         lda     #$87
         sta     $0421
         jsr     calc_player_boss_distance
@@ -992,6 +1008,7 @@ quickman_sound_table:  .byte   $55,$58
         lda     #$3E
         sta     boss_action_timer
         inc     $04E1
+@skip:
         dec     boss_action_timer
         bne     quickman_state2_frame_update
         ldx     #$00
@@ -999,6 +1016,7 @@ quickman_sound_table:  .byte   $55,$58
 quickman_state2_frame_update:  jsr     quickman_hitbox_params
         rts
 
+quickman_state2_frame_update_skip:
         lda     #$00
         sta     $04E1
         sta     boss_action_timer
@@ -1064,7 +1082,7 @@ quickman_update_rts:  rts
         inc     boss_action_timer
         lda     boss_action_timer
         cmp     #$BB
-        bcc     *+30
+        bcc     @skip
         lda     #$00
         sta     $04E1
         lda     #$03
@@ -1078,6 +1096,7 @@ quickman_update_rts:  rts
         jsr     bank_switch_enqueue
         rts
 
+@skip:
         jsr     flashman_update_with_sound
         lda     temp_03
         beq     flashman_rts
@@ -1137,7 +1156,7 @@ flashman_frame_update:  jsr     flashman_update_with_sound
         lda     $06A1
         beq     flashman_frame_update
 flashman_data_overlap:cmp     #$02
-        bne     *+29
+        bne     @skip
         lda     #$02
         sta     boss_phase
         lda     #$00
@@ -1149,6 +1168,7 @@ flashman_data_overlap:cmp     #$02
         jsr     play_sound_and_reset_anim
         jsr     calc_player_boss_distance
         jmp     flashman_frame_update
+@skip:
         jsr     calc_player_boss_distance
         lda     #$00
         sta     $0681
@@ -1209,7 +1229,7 @@ flashman_jmp_frame_update:  jmp     flashman_frame_update
 
 flashman_aim_offset_table:  .byte   $08,$F8
         lda     $04E1
-        bne     *+26
+        bne     @skip
         jsr     calc_player_boss_distance
         lda     #$00
         sta     $0661
@@ -1219,6 +1239,7 @@ flashman_aim_offset_table:  .byte   $08,$F8
         lda     #$80
         sta     $0621
         inc     $04E1
+@skip:
         jsr     flashman_update_with_sound
         bne     flashman_hit_response
 flashman_collision_rts:  rts
@@ -1273,10 +1294,11 @@ flashman_no_hit:  lda     #$00
         jsr     calc_player_boss_distance
         lda     p1_new_presses
         and     #$02
-        bne     *+8
+        bne     @skip
         lda     boss_action_timer
         cmp     #$BB
-        bne     *+21
+        bne     @skip_2
+@skip:
         lda     rng_seed
         sta     temp_01
         lda     #$03
@@ -1286,6 +1308,7 @@ flashman_no_hit:  lda     #$00
         jsr     metalman_fire_blade
         jmp     metalman_inc_timer
 
+@skip_2:
         lda     temp_00
         cmp     #$48
         bcs     metalman_inc_timer
@@ -1464,12 +1487,13 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         rts
         lda     p1_new_presses
         and     #$02
-        bne     *+12
+        bne     @skip
         lda     $05A7
-        beq     *+89
+        beq     crashman_setup_velocity_skip
         .byte   $CE,$A7
         ora     $D0
         .byte   $52
+@skip:
         lda     #$87
         sta     $0421
         jsr     calc_player_boss_distance
@@ -1512,6 +1536,7 @@ crashman_setup_velocity:  lda     #$37
         lda     #$04
         sta     boss_phase
         bne     crashman_frame_update
+crashman_setup_velocity_skip:
         ldx     $0461
         lda     $0421
         and     #$40
@@ -1604,14 +1629,15 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
         sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     $04E1
-        bne     *+29
+        bne     @skip_2
         lda     #$09
         jsr     $C5F1
         inc     boss_action_timer
         lda     boss_action_timer
         cmp     #$40
-        beq     *+3
+        beq     @skip
         rts
+@skip:
         inc     $04E1
         lda     #$00
         sta     boss_action_timer
@@ -1619,6 +1645,7 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
         sta     $05A7
         rts
 
+@skip_2:
         cmp     #$01
         bne     dragon_phase2_check
         ldx     boss_action_timer
@@ -1713,7 +1740,7 @@ dragon_column_length_table:  .byte   $03,$06,$08,$0A,$0B,$05,$02,$07
 dragon_attr_data:  .byte   $FF,$FF,$FF,$FF,$FF,$5F,$FF,$F3
         .byte   $FF,$55,$7F,$FF,$FF,$FF,$FF,$FF
         lda     $04E1
-        bne     *+28
+        bne     @skip
         lda     #ENTITY_DRAGON_PART
         ldx     #$01
         jsr     spawn_entity_from_boss
@@ -1725,6 +1752,7 @@ dragon_attr_data:  .byte   $FF,$FF,$FF,$FF,$FF,$5F,$FF,$F3
         sta     ent_y_spawn_px,y
         inc     $04E1
         rts
+@skip:
         cmp     #$02
         bcs     dragon_phase2_entry
         rts
@@ -1870,10 +1898,11 @@ dragon_fire_setup_velocity:  sta     jump_ptr_hi
 dragon_fire_done:  rts
 
         lda     $04E1
-        bne     *+10
+        bne     @skip
         ldy     #$A0
         jsr     $90C5
         inc     $04E1
+@skip:
         jsr     dragon_check_fire_range
         bcs     dragon_phase3_reset
         lda     $0461
@@ -1927,12 +1956,13 @@ dragon_apply_facing:  lda     $05A7
         rts
 
         lda     $04E1
-        bne     *+15
+        bne     @skip
         ldy     #$58
         jsr     $90C5
         lda     #$83
         sta     $05A7
         inc     $04E1
+@skip:
         lda     $0461
         cmp     #$58
         beq     dragon_phase2_reset
@@ -1958,10 +1988,11 @@ dragon_no_fire:  clc
         rts
 
         lda     boss_action_timer
-        bne     *+10
+        bne     @skip
         lda     #$0F
         sta     $0366
         jmp     fortress_post_defeat
+@skip:
         jsr     picopico_palette_flash
         lda     frame_counter
         and     #$0F
@@ -2080,10 +2111,11 @@ dragon_move_facing_left:  sec
         sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     boss_action_timer
-        bne     *+9
+        bne     @skip
         inc     boss_action_timer
         lda     #$0B
         jsr     $C051
+@skip:
         jsr     boss_health_bar_tick
         lda     $06C1
         cmp     #MAX_HP
@@ -2216,21 +2248,24 @@ picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
         .byte   $FF,$01,$00,$00,$CB,$8B,$50,$50
         .byte   $FF,$01,$00,$00,$8B,$CB,$50,$50
         lda     $06C1
-        bne     *+14
+        bne     @done
         lda     #$BB
         sta     boss_action_timer
         inc     $05AA
         lda     #$FF
         jsr     $C051
+@done:
         rts
         lda     boss_action_timer
-        beq     *+15
+        beq     @skip_2
         dec     boss_action_timer
-        beq     *+6
+        beq     @skip
         jsr     picopico_palette_flash
         rts
+@skip:
         lda     #$80
         sta     $05A7
+@skip_2:
         lda     #$0F
         sta     $0366
         jmp     fortress_post_defeat
@@ -2259,7 +2294,7 @@ picopico_palette_store:  stx     $0366
 
         jsr     boss_health_bar_tick
         lda     $04E1
-        bne     *+39
+        bne     @skip
         lda     #$02
         sta     $0354
         lda     #$04
@@ -2275,6 +2310,7 @@ picopico_palette_store:  stx     $0366
         lda     #$69
         sta     boss_action_timer
         inc     $04E1
+@skip:
         lda     $04E1
         cmp     #$01
         bne     gutsdozer_phase2_check
@@ -2385,9 +2421,10 @@ gutsdozer_setup_complete:  lda     #$00
 
 ; --- Guts-Dozer Movement — direction setup from scroll position ---
         lda     $0421
-        bmi     *+7
+        bmi     @skip
         lda     #$FF
         sta     $0461
+@skip:
         ldx     $04E1
         lda     camera_x_offset
         cmp     gutsdozer_spawn_screen_table,x
@@ -2435,10 +2472,11 @@ gutsdozer_turret_y_table:  .byte   $7F,$00,$A8,$68
 gutsdozer_turret_ai_table:  .byte   $09,$00,$14,$06
         lda     camera_x_offset
         cmp     #$30
-        bne     *+8
+        bne     @skip
         lda     #$7D
         sta     boss_action_timer
         inc     boss_phase
+@skip:
         lda     #$8B
 gutsdozer_set_facing:  sta     $05A7
         lda     #$60
@@ -2448,10 +2486,11 @@ gutsdozer_set_facing:  sta     $05A7
 
         lda     camera_x_offset
         cmp     #$80
-        bne     *+8
+        bne     @skip
         lda     #$7D
         sta     boss_action_timer
         inc     boss_phase
+@skip:
         lda     #$CB
         bne     gutsdozer_set_facing
         lda     #$05
@@ -2596,8 +2635,9 @@ gutsdozer_ai_table_hi:  .byte   $93,$94,$95,$95,$95,$95
         jsr     boss_health_bar_tick
         lda     $06C1
         cmp     #MAX_HP
-        beq     *+3
+        beq     @skip
         rts
+@skip:
         lda     #$04
         sta     temp_02
 
@@ -2633,7 +2673,7 @@ boobeam_turret_flags_table:  .byte   $C3,$C3,$83,$83,$83,$7C,$57,$96
         lda     #$00
         sta     $0681
         lda     $04E1
-        bne     *+55
+        bne     boobeam_fill_palette_loop_skip
         lda     #$02
         sta     $0354
         lda     #$04
@@ -2661,6 +2701,7 @@ boobeam_fill_palette_loop:  sta     $035A,x
         lda     #$52
         sta     boss_action_timer
         inc     $04E1
+boobeam_fill_palette_loop_skip:
         lda     $04E1
         cmp     #$01
         bne     boobeam_phase2_check
@@ -2794,8 +2835,9 @@ boobeam_tile_row_loop:  lda     projectile_anim_frames,x
 
         lda     $0461
         cmp     #$38
-        bcs     *+4
+        bcs     @skip
         inc     boss_phase
+@skip:
         lda     #$83
 
 
@@ -2862,8 +2904,9 @@ wily_machine_store_facing:  lda     #$83
 
         lda     $0461
         cmp     #$98
-        bcc     *+4
+        bcc     @skip
         dec     boss_phase
+@skip:
         lda     #$C3
         jmp     wily_machine_apply_facing
 
@@ -2872,7 +2915,7 @@ wily_machine_store_facing:  lda     #$83
         sta     $0681
         sta     $06A1
         dec     $05AB
-        bne     *+67
+        bne     @skip_2
         lda     #$0C
         sta     $05AB
         lda     rng_seed
@@ -2892,7 +2935,7 @@ wily_machine_store_facing:  lda     #$83
         lda     #ENTITY_WILY_MACHINE_SHOT
         ldx     #$01
         jsr     spawn_entity_from_boss
-        bcs     *+23
+        bcs     @skip_2
         sec
         lda     $04A1
         sbc     #$18
@@ -2903,6 +2946,7 @@ wily_machine_store_facing:  lda     #$83
         lda     $0461
         adc     jump_ptr
         sta     ent_x_spawn_px,y
+@skip_2:
         lda     $04E1
         bne     wily_machine_phase_check
         lda     #$73
@@ -2962,7 +3006,7 @@ wily_machine_advance_phase:  inc     boss_phase
         rts
 
         lda     $04E1
-        beq     *+30
+        beq     wily_machine_scroll_rts_skip
         lda     ent_y_px
         cmp     #$E0
         bcs     wily_machine_clear_flags
@@ -2978,6 +3022,7 @@ wily_machine_clear_flags:  lda     #$00
         sta     boss_phase
 wily_machine_scroll_rts:  rts
 
+wily_machine_scroll_rts_skip:
         jsr     picopico_palette_flash
         lda     $04A1
         beq     wily_machine_rng_spawn
@@ -3153,7 +3198,7 @@ projectile_tile_ids:  .byte   $00,$E6,$E7,$E8,$00,$00,$E9,$EA
 alien_jmp_dispatch:  jmp     (jump_ptr)
 
         lda     $04E1
-        bne     *+34
+        bne     @skip
         ldy     #$0F
         ldx     #$0E
         jsr     $D3E0
@@ -3167,6 +3212,7 @@ alien_jmp_dispatch:  jmp     (jump_ptr)
         sta     $0354
         sta     $0355
         inc     $04E1
+@skip:
         lda     $04E1
         cmp     #$02
         bcs     alien_phase2_check
@@ -3297,11 +3343,12 @@ alien_palette_block_2:  .byte   $0F,$16,$29,$19
         cmp     #$01
         bne     alien_facing_store
         lda     $05AA
-        beq     *+10
+        beq     @skip
         lda     #$00
         sta     $04E1
         inc     boss_phase
         rts
+@skip:
         ldx     #$30
 alien_facing_store:  .byte   $8E
         .byte   $66
@@ -3405,11 +3452,12 @@ alien_palette_fill_loop:  sta     palette_ram,x
 
         jsr     alien_palette_flash_tick
         lda     boss_action_timer
-        beq     *+10
+        beq     @skip
         lda     #$08
         jsr     $C5F1
         dec     boss_action_timer
         rts
+@skip:
         inc     $04E1
         lda     #$00
         sta     $FD
@@ -3420,9 +3468,10 @@ alien_palette_fill_loop:  sta     palette_ram,x
         jsr     alien_palette_flash_tick
         lda     $FD
         cmp     #$60
-        bcs     *+6
+        bcs     @skip_2
         jsr     $CB0C
         rts
+@skip_2:
         inc     $04E1
         lda     #$00
         sta     $05A7
@@ -3508,11 +3557,12 @@ alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
         .byte   $0F,$20,$6D,$9E
         lda     $05A9
         cmp     #$24
-        beq     *+11
+        beq     @skip
         jsr     $9CD8
         stx     temp_03
         jsr     $A157
         rts
+@skip:
         lda     #$84
         sta     $0421
         lda     #$00
@@ -3581,12 +3631,13 @@ alien_deactivate_loop:  lsr     ent_spawn_flags,x
 alien_vel_y_data:  .byte   $76,$00
 alien_vel_y_hi_data:  .byte   $03,$02
         lda     boss_action_timer
-        beq     *+29
+        beq     alien_palette_flash_store_skip
         lda     frame_counter
         and     #$07
-        bne     *+7
+        bne     @skip
         lda     #$2B
         jsr     $C051
+@skip:
         ldx     #$0F
         lda     frame_counter
         and     #$04
@@ -3596,6 +3647,7 @@ alien_palette_flash_store:  stx     $0366
         dec     boss_action_timer
         rts
 
+alien_palette_flash_store_skip:
         lda     #$0F
         sta     $0366
         inc     $05A7
@@ -3638,8 +3690,9 @@ alien_advance_phase:  inc     $04E1
         sta     temp_02
         jsr     boss_floor_collision_check
         lda     temp_00
-        bne     *+3
+        bne     @skip
         rts
+@skip:
         lda     ent_flags
         and     #$BF
         ldx     ent_x_px
@@ -3662,9 +3715,10 @@ alien_facing_update:  sta     ent_flags
 
         jsr     calc_player_boss_distance
         lda     $05A7
-        beq     *+6
+        beq     @skip
         dec     $05A7
         rts
+@skip:
         lda     #$00
         sta     $06A1
         sta     $0681
@@ -4508,9 +4562,10 @@ buster_deflect_done:  clc
 
         lda     boss_id
         cmp     #$00
-        bne     *+5
+        bne     @skip
         jmp     weapon_force_kill_boss
 
+@skip:
         lda     $0421
         and     #$08
         bne     metal_blade_deflect
@@ -4571,13 +4626,14 @@ metal_blade_done:  clc
 
         lda     $0421
         and     #$08
-        bne     *+50
+        bne     air_shooter_killed_skip
         ldy     boss_id
         lda     $A95E,y
         sta     temp_00
-        beq     *+41
-        bpl     *+5
+        beq     air_shooter_killed_skip
+        bpl     @skip
         jmp     weapon_force_kill_boss
+@skip:
         jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
@@ -4595,6 +4651,7 @@ air_shooter_killed:  lda     #$00
         sec
         rts
 
+air_shooter_killed_skip:
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
@@ -4612,13 +4669,14 @@ air_shooter_killed:  lda     #$00
 
         lda     $0421
         and     #$08
-        bne     *+50
+        bne     air_shooter_killed_2_skip
         ldy     boss_id
         lda     $A96C,y
         sta     temp_00
-        beq     *+41
-        bpl     *+5
+        beq     air_shooter_killed_2_skip
+        bpl     @skip
         jmp     weapon_force_kill_boss
+@skip:
         jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
@@ -4636,6 +4694,7 @@ air_shooter_killed_2:  lda     #$00
         sec
         rts
 
+air_shooter_killed_2_skip:
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
@@ -4801,13 +4860,14 @@ quick_boomerang_done:  clc
 
         lda     $0421
         and     #$08
-        bne     *+50
+        bne     atomic_fire_killed_skip
         ldy     boss_id
         lda     $A9A4,y
         sta     temp_00
-        beq     *+41
-        bpl     *+5
+        beq     atomic_fire_killed_skip
+        bpl     @skip
         jmp     weapon_force_kill_boss
+@skip:
         jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
@@ -4825,6 +4885,7 @@ atomic_fire_killed:  lda     #$00
         sec
         rts
 
+atomic_fire_killed_skip:
         lda     #$03
         sta     ent_y_vel,x
         lda     #$B2
