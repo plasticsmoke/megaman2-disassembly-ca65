@@ -19,9 +19,6 @@
 .include "include/zeropage.inc"
 .include "include/constants.inc"
 
-ppu_addr_2020           := $2020
-ppu_addr_2220           := $2220
-ppu_addr_2820           := $2820
 bank_switch_enqueue           := $C051
 boss_death_sequence           := $C10B
 explosion_array_setup_inner           := $C3A8
@@ -512,9 +509,8 @@ airman_frame_update:  ldx     #$01
         jsr     boss_update_with_sound
         rts
 
-        .byte   $20,$D9
-        sty     current_weapon
-        .byte   $0B,$85,$01,$A9,$10,$85,$02,$20
+        .byte   $20,$D9,$84,$A9,$0B,$85,$01,$A9
+        .byte   $10,$85,$02,$20
         .byte   $D4,$A2,$A5,$00,$F0,$3A,$A6,$B2
         .byte   $BD,$CD,$84,$8D,$61,$06,$BD,$D0
         .byte   $84,$8D,$41,$06,$BD,$D3,$84,$8D
@@ -2281,9 +2277,8 @@ picopico_palette_flash:  ldx     #$0F
 picopico_palette_store:  stx     $0366
         rts
 
-        .byte   $21
-        eor     $57
-        .byte   $92,$92,$93,$CA,$BD,$62,$96
+        .byte   $21,$45,$57,$92,$92,$93,$CA,$BD
+        .byte   $62,$96
         sta     jump_ptr
         lda     gutsdozer_ai_table_hi,x
         sta     jump_ptr_hi
@@ -3727,8 +3722,7 @@ alien_facing_update:  sta     ent_flags
         sta     boss_phase
 alien_phase_rts:  rts
 
-        sec
-        .byte   $6B,$0F
+        .byte   $38,$6B,$0F
 alien_phase_ptr_lo:  .byte   $65,$80,$A2,$41,$8F,$F3,$57,$9A
 alien_phase_ptr_hi_table:  .byte   $9B,$9C,$9D
 alien_phase_dispatch_hi:  .byte   $9D,$9D,$9D,$9E,$9E,$9E,$9F,$9F
