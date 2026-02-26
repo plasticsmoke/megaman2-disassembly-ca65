@@ -142,7 +142,8 @@ ENTITY_PRESS_RETRACT = $52      ; Press retracting state
 ENTITY_KAMINARI_GORO = $3E      ; Air Man — lightning robot (spawn table)
 ENTITY_KAMINARI_CHILD = $3D     ; Kaminari Goro child (role TBD)
 ENTITY_KAMINARI_BOLT = $3F      ; Kaminari Goro lightning bolt
-; Goblin multi-part (Air Man): $40/$41/$42/$43/$44/$45 — internal breakdown TBD
+ENTITY_GOBLIN       = $40       ; Goblin body A — Air Man screens $04,$06,$10 (US: Air Tikki)
+ENTITY_GOBLIN_B     = $41       ; Goblin body B — Air Man screens $05,$06,$11
 ENTITY_MOLE         = $47       ; Air/Metal Man — Mole controller (spawns copies + $48/$49 shots)
 ; Mole children: $48/$49 (shared with Sniper Joe bullets), $4A — roles TBD
 ; Boss projectiles
@@ -152,8 +153,8 @@ ENTITY_AIR_TORNADO1 = $19       ; Air Man tornado / Heat Man fire (shared type)
 ENTITY_AIR_TORNADO2 = $1A       ; Air Man tornado (secondary)
 ENTITY_ATOMIC_FIRE  = $1B       ; Heat Man fire projectile
 ENTITY_MECHA_FIRE   = $33       ; Mecha Dragon fireball
-ENTITY_ALIEN_ORB    = $45       ; Alien Wily orb
-ENTITY_ALIEN_SHOT   = $44       ; Alien Wily shot
+ENTITY_GOBLIN_HORN  = $44       ; Goblin horn (indestructible, contact dmg) — reused as Alien Wily shot
+ENTITY_PETIT_GOBLIN = $45       ; Petit Goblin (1 HP, max 3, spawned by Goblin) — reused as Alien Wily orb (US: Gremlin)
 ENTITY_JOE_BULLET_A = $49       ; Sniper Joe bullet (type A)
 ENTITY_JOE_BULLET_B = $48       ; Sniper Joe bullet (type B)
 ENTITY_BUBBLE_SHOT  = $5B       ; Bubble Man shot

@@ -2531,7 +2531,7 @@ entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; $00-$07: Shrink, An
         .byte   $C5,$2A,$F1,$0D,$2E,$D7,$D7,$D3 ; $28-$2F: BlackoutRe, Gear, Pierrobot, FlyBoy(2B), FlyBoy, CrashWallVar, FrienderFire, BossDoor
         .byte   $F2,$EA,$C3,$EC,$4E,$2B,$89,$A4 ; $30-$37: Press, Blocky, BlockyPh2, MechaFire, NeoMetall, GenericProj, Matasaburo, PipiSpawn
         .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B ; $38-$3F: Pipi, PipiAlt, PipiEgg, EggHatch, Copipi, KaminariChild, KaminariGoro, KaminariBolt
-        .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA ; $40-$47: Goblin(x6), Springer, Mole
+        .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA ; $40-$47: Goblin, GoblinB, GoblinCleanA, GoblinCleanB, GoblinHorn, PetitGoblin, Springer, Mole
         .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21 ; $48-$4F: JoeBulletB, JoeBulletA, Mole(4A), CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
         .byte   $96,$D0,$5C,$69,$6D,$71,$E5,$D7 ; $50-$57: ScwormNest, Scworm, PressRetract, AppearBlkA, AppearBlkB, AppearBlkC, NeoMetallFlip, CrashWall
         .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B ; $58-$5F: WilyBoss, QuickBoomer, (5A), BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
@@ -2747,7 +2747,7 @@ collision_scan_set_active:  lda     #$01
         clc
         rts
 
-; --- friender_ai_entry -- Friender fire dog (type $1C) — proximity check, jump/fire pattern ---
+; --- friender_ai_entry -- proximity check, face player, timer (ptr table: type $04) ---
 friender_ai_entry:
         lda     ent_x_vel_sub,x
         bne     friender_check_timer
@@ -2890,7 +2890,7 @@ find_entity_count_ok:  clc
 find_entity_count_fail:  sec
         rts
 
-; --- blocky_ai_entry -- Blocky block enemy (type $31) — tile collision, phase transitions ---
+; --- blocky_ai_entry -- tile collision, fall trigger, face player (ptr table: type $08) ---
 blocky_ai_entry:
         lda     #$0B
         sta     temp_01
@@ -3129,7 +3129,7 @@ kerog_dec_timer:  dec     ent_state,x
 petit_kerog_apply_physics:  jsr     apply_entity_physics
         rts
 
-; --- boss_ai_init_entry -- Boss intro sequence — HP fill, palette flash, countdown ---
+; --- boss_ai_init_entry -- Boss intro sequence — HP fill, palette flash, countdown (ptr table: type $0F) ---
 boss_ai_init_entry:
         lda     ent_x_vel_sub,x
         bne     boss_countdown_dec
@@ -3534,7 +3534,7 @@ metalman_blade_timer_table:              ; frame timing per throw pattern (52 en
         .byte   $01,$1F,$1F,$3E,$01,$1F,$3E,$5D
         .byte   $7C,$01,$1F,$01,$1F,$3E,$5D,$7C
         .byte   $01,$1F,$3E,$5D
-; --- woodman_ai_timer_check -- Wood Man boss AI (bank0E) — timer countdown, Leaf Shield trigger ---
+; --- woodman_ai_timer_check -- Wood Man boss AI (bank0E) — timer countdown, Leaf Shield trigger (ptr table: type $15) ---
 woodman_ai_timer_check:
         lda     ent_state,x
         beq     woodman_timer_expired
@@ -3620,7 +3620,7 @@ woodman_trigger_shield:  lda     #$00
 
 woodman_rts:  rts
 
-; --- bubbleman_ai_init -- Bubble Man boss AI (bank0E) — state init, jump/shoot pattern ---
+; --- bubbleman_ai_init -- Bubble Man boss AI (bank0E) — state init, jump/shoot pattern (ptr table: type $16) ---
 bubbleman_ai_init:
         lda     ent_state,x
         bne     bubbleman_check_state
@@ -3699,7 +3699,7 @@ bubbleman_fall_physics:  jsr     apply_entity_physics
         rts
 
 bubbleman_timer_table:  .byte   $3E,$9C         ; Bubbleman AI timer values (62/156 frames)
-; --- quickman_ai_init -- Quick Man boss AI (bank0E) — tile collision, dash/jump pattern ---
+; --- quickman_ai_init -- Quick Man boss AI (bank0E) — tile collision, dash/jump pattern (ptr table: type $17) ---
 quickman_ai_init:
         lda     ent_y_vel,x
         sta     temp_04
@@ -5482,10 +5482,10 @@ alien_check_fire:  lda     temp_00
         bne     alien_check_descent
         lda     #$03
         sta     temp_01
-        lda     #ENTITY_ALIEN_ORB
+        lda     #ENTITY_PETIT_GOBLIN
         jsr     find_entity_count_check
         bcs     alien_check_descent
-        lda     #ENTITY_ALIEN_ORB      ; spawn Alien orb
+        lda     #ENTITY_PETIT_GOBLIN   ; spawn Petit Goblin (also Alien orb in Wily fight)
         jsr     spawn_entity_from_parent
         bcs     alien_check_descent
         lda     ent_x_vel,x
@@ -5513,7 +5513,7 @@ alien_check_descent:  lda     ent_y_vel_sub,x
         bne     alien_hover_dec
         lda     #$01
         sta     temp_01
-alien_spawn_shot_loop:  lda     #ENTITY_ALIEN_SHOT     ; spawn Alien shot
+alien_spawn_shot_loop:  lda     #ENTITY_GOBLIN_HORN    ; spawn Goblin horn (also Alien shot in Wily fight)
         jsr     spawn_entity_from_parent
         bcs     alien_set_hover_timer
         lda     ent_y_spawn_px,y
@@ -7123,7 +7123,7 @@ wily_final_inc_timer:
 wily_final_check_anim:  jsr     apply_entity_physics_alt
         rts
 
-; --- walker_ai_check -- Walker/Goblin AI (types $40-$45) — anim check, tile collision ---
+; --- walker_ai_check -- pickup/item physics init (ptr table: type $74) — anim check, tile collision ---
 walker_ai_check:
         lda     ent_anim_id,x
         beq     walker_ai_init
