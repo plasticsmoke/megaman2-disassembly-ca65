@@ -67,6 +67,12 @@ current_etanks        = $A7    ; E-tank count ($A7)
 current_lives         = $A8    ; lives remaining ($A8)
 current_weapon        = $A9    ; selected weapon ID ($A9)
 
+; ─── Boss Battle State ────────────────────────────────────────────────────
+game_mode             = $AA    ; game mode / entity dispatch flag ($AA) — 0=normal, bit2=pause entities
+boss_phase            = $B1    ; boss fight phase counter ($B1) — inc/dec to advance boss AI state
+boss_action_timer     = $B2    ; boss action timer ($B2) — countdown/up for boss attack timing
+boss_id               = $B3    ; boss index ($B3) — indexes into boss property tables
+
 ; ─── Camera Offsets (screen shake) ─────────────────────────────────────────
 camera_y_offset       = $B6    ; camera Y offset, subtracted from scroll_y in NMI ($B6)
 camera_x_offset       = $B8    ; camera X offset low, subtracted from scroll_x in NMI ($B8)

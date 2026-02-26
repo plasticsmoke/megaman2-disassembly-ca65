@@ -26,6 +26,19 @@ ent_anim_frame      = $0680  ; animation frame counter ($0680,x)
 ent_anim_id         = $06A0  ; animation sequence index ($06A0,x)
 ent_hp              = $06C0  ; hit points ($06C0,x — player=$06C0, boss=$06C1)
 
+; ─── Entity Arrays (extended) ─────────────────────────────────────────────
+ent_x_spawn_sub     = $0490  ; spawn X sub-pixel ($0490,x)
+ent_y_spawn_sub     = $04D0  ; spawn Y sub-pixel ($04D0,x)
+ent_drop_flag       = $04F0  ; item drop / spawn parameter ($04F0,x)
+ent_weapon_type     = $0590  ; weapon/damage type ($0590,x)
+ent_hitbox_w_lo     = $0610  ; hitbox width mask low ($0610,x)
+ent_hitbox_w_hi     = $0630  ; hitbox width mask high ($0630,x)
+ent_hitbox_h_lo     = $0650  ; hitbox height mask low ($0650,x)
+ent_hitbox_h_hi     = $0670  ; hitbox height mask high ($0670,x)
+ent_timer           = $06D0  ; entity timer / countdown ($06D0,x)
+ent_screen_x        = $06E0  ; screen-relative X position ($06E0,x)
+ent_ai_behavior     = $06F0  ; AI behavior table index ($06F0,x)
+
 ; ─── RAM Buffers ────────────────────────────────────────────────────────────
 oam_buffer          = $0200  ; OAM sprite buffer, 256 bytes ($0200-$02FF)
 ppu_update_buf      = $0300  ; PPU nametable update buffer ($0300)

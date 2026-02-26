@@ -1533,9 +1533,9 @@ wselect_clear_palette_loop:  sta     palette_ram,x
 ; =============================================================================
 ; Weapon Select — Boss Stage Palette Override
 ; =============================================================================
-wselect_check_boss_stage:  lda     $B1
+wselect_check_boss_stage:  lda     boss_phase
         beq     wselect_check_wily_10
-        lda     $B3
+        lda     boss_id
         cmp     #WILY_STAGE_START
         bcc     wselect_check_wily_10
         ldx     #$00
@@ -1548,7 +1548,7 @@ wselect_check_boss_stage:  lda     $B1
 wselect_check_wily_10:  lda     #$0A
         cmp     current_stage
         bne     wselect_calc_scroll_pos
-        lda     $B1
+        lda     boss_phase
         beq     wselect_calc_scroll_pos
         lda     #$0F
         ldx     #$02
@@ -1806,7 +1806,7 @@ wselect_render_col_call:  jsr     metatile_render_column
         lda     current_stage
         cmp     #$0A
         bne     wselect_restore_palette
-        lda     $B1
+        lda     boss_phase
         beq     wselect_restore_palette
         ldx     #$02
 wselect_wily10_restore:  lda     wselect_wily10_pal_data,x
@@ -1843,7 +1843,7 @@ wselect_restore_pal_loop:  lda     $0700,x
         lda     #ENTITY_AIR_TORNADO2
         sta     ent_type
         lda     #$03
-        sta     $AA
+        sta     game_mode
         lda     #$30
         jsr     bank_switch_enqueue
         rts

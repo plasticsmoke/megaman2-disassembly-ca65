@@ -111,32 +111,32 @@
 ;   $0460,x     Entity X position low byte (pixel)
 ;   $0470,x     Entity spawn X pixel
 ;   $0480,x     Entity X sub-pixel
-;   $0490,x     Entity spawn X sub-pixel
+;   $0490,x     Entity spawn X sub-pixel                    [ent_x_spawn_sub]
 ;   $04A0,x     Entity Y position (pixel)
 ;   $04B0,x     Entity spawn Y position
 ;   $04C0,x     Entity Y sub-pixel
-;   $04D0,x     Spawn Y sub-pixel
+;   $04D0,x     Spawn Y sub-pixel                              [ent_y_spawn_sub]
 ;   $04E0,x     Entity state / AI phase counter
-;   $04F0,x     Item drop flag
-;   $0590,x     Entity weapon/damage type
+;   $04F0,x     Item drop flag                                 [ent_drop_flag]
+;   $0590,x     Entity weapon/damage type                     [ent_weapon_type]
 ;   $059E,x     Hitbox width (for collision)
 ;   $05A0-$05AA Sound/music control
 ;   $0600,x     Entity X velocity (whole)
-;   $0610,x     Spawn hitbox width
+;   $0610,x     Spawn hitbox width                             [ent_hitbox_w_lo]
 ;   $0620,x     Entity X velocity (sub-pixel)
-;   $0630,x     Spawn hitbox height mask
+;   $0630,x     Spawn hitbox height mask                       [ent_hitbox_w_hi]
 ;   $0640,x     Entity Y velocity (whole)
-;   $0650,x     Spawn hitbox Y mask
+;   $0650,x     Spawn hitbox Y mask                            [ent_hitbox_h_lo]
 ;   $0660,x     Entity Y velocity (sub-pixel)
-;   $0670,x     Spawn hitbox Y offset
+;   $0670,x     Spawn hitbox Y offset                          [ent_hitbox_h_hi]
 ;   $0680,x     Animation frame counter
 ;   $0690,x     Animation state backup
 ;   $06A0,x     Animation sequence index
 ;   $06B0,x     General entity variable
 ;   $06C0,x     Entity HP / hit points
-;   $06D0,x     Entity timer / countdown
-;   $06E0,x     Entity screen-relative X position
-;   $06F0,x     Entity AI behavior index
+;   $06D0,x     Entity timer / countdown                       [ent_timer]
+;   $06E0,x     Entity screen-relative X position              [ent_screen_x]
+;   $06F0,x     Entity AI behavior index                       [ent_ai_behavior]
 ;
 ; RAM Buffers:
 ;   $0200-$02FF OAM sprite buffer (DMA source for $4014)
@@ -471,7 +471,7 @@ boss_intro_loop:  jsr     boss_fight_frame
         sta     game_substate
         jmp     boss_death_sequence
 
-boss_intro_done:  lda     $B1
+boss_intro_done:  lda     boss_phase
         cmp     #$FF
         bne     boss_intro_loop
         lda     #$00
@@ -532,9 +532,9 @@ reset_sound_state:  lda     #$00
         sta     $05A7
         sta     $05A9
         sta     $05A8
-        sta     $AA
+        sta     game_mode
         lda     #$FE                    ; set boss HP to pre-intro value
-        sta     $B1
+        sta     boss_phase
         rts
 
         lda     #$00
@@ -700,7 +700,7 @@ explosion_flags_tbl:  .byte   $00,$40,$00,$00,$40,$40,$00,$00 ; explosion facing
 ; =============================================================================
 ; palette_anim_update — Update palette animation cycling ($C427)
 ; =============================================================================
-palette_anim_update:  lda     $AA       ; check special mode flag
+palette_anim_update:  lda     game_mode       ; check special mode flag
         bne     palette_anim_done
         lda     $0355                   ; check palette anim frame count
         beq     palette_anim_done
@@ -900,7 +900,7 @@ find_entity_done:  rts
 ; =============================================================================
 ; process_sound_and_bosses — Process sound engine and check boss encounter ($C5A9)
 ; =============================================================================
-process_sound_and_bosses:  lda     $B1  ; check boss HP / intro state
+process_sound_and_bosses:  lda     boss_phase  ; check boss HP / intro state
         beq     process_sound_done
         lda     #$0B                    ; switch to game logic bank
         jsr     bank_switch
@@ -1156,7 +1156,7 @@ boss_entrance_done:  lda     #$30
         rts
 
         lda     current_stage
-        sta     $B3
+        sta     boss_id
         lda     #$0B
         jsr     bank_switch
         jsr     banked_entry
@@ -1181,7 +1181,7 @@ boss_fight_wait_render:  jsr     wait_one_rendering_frame
         lda     #$00
         sta     $FC
 boss_fight_wait_vblank:  jsr     wait_for_vblank
-        lda     $B1
+        lda     boss_phase
         cmp     #$02
         bcc     boss_fight_frame
         rts
@@ -1661,14 +1661,14 @@ cached_tile_scan_loop:  dey
         bmi     lookup_tile_from_map
         ldx     $56,y
         lda     jump_ptr
-        and     $0610,x
-        cmp     $0650,x
+        and     ent_hitbox_w_lo,x
+        cmp     ent_hitbox_h_lo,x
         bne     cached_tile_scan_loop
         lda     $0A
-        and     $0630,x
-        cmp     $0670,x
+        and     ent_hitbox_w_hi,x
+        cmp     ent_hitbox_h_hi,x
         bne     cached_tile_scan_loop
-        lda     $04F0,x
+        lda     ent_drop_flag,x
         sta     temp_00
         rts
 
@@ -1780,7 +1780,7 @@ render_all_sprites:  lda     #$0A       ; switch to sound data bank
         sta     temp_06
         sta     $0D
         sta     $0C
-        lda     $AA
+        lda     game_mode
         beq     render_even_frame
         jmp     render_special_mode
 
@@ -1850,7 +1850,7 @@ render_special_mode:  lda     frame_counter
         sta     $0C
         lda     #$00
         sta     current_entity_slot
-        lda     $AA
+        lda     game_mode
         and     #$04
         beq     render_special_check_entity
         jsr     render_entity_special
@@ -1858,7 +1858,7 @@ render_special_mode:  lda     frame_counter
 
 render_special_check_entity:  jsr     render_entity_normal
 render_special_entity_loop:  inc     current_entity_slot
-render_special_entity_inner:  lda     $AA
+render_special_entity_inner:  lda     game_mode
         and     #$02
         bne     render_special_jump_1
         jsr     render_entity_normal
@@ -1892,7 +1892,7 @@ render_special_weapon_rev:  jsr     render_weapon_special
         lda     current_entity_slot
         cmp     #$0F
         bne     render_special_weapon_rev
-render_special_entity_rev:  lda     $AA
+render_special_entity_rev:  lda     game_mode
         and     #$02
         bne     render_special_entity_inner_2
         jsr     render_entity_normal
@@ -1902,7 +1902,7 @@ render_special_entity_inner_2:  jsr     render_entity_special
 render_special_carry_2:  bcs     render_special_jump_end
         dec     current_entity_slot
         bne     render_special_entity_rev
-        lda     $AA
+        lda     game_mode
         and     #$04
         beq     render_special_check_2
         jsr     render_entity_special
@@ -2175,12 +2175,12 @@ render_hp_bars:  lda     ent_hp          ; player HP (entity slot 0)
         sta     temp_01
         jsr     render_hp_bar_loop
         bcs     render_hp_done
-render_weapon_hp:  lda     $B1
+render_weapon_hp:  lda     boss_phase
         beq     render_hp_done
         lda     $06C1
         sta     temp_00
         lda     #$03
-        ldy     $B3
+        ldy     boss_id
         cpy     #$08
         beq     render_boss_hp_start
         cpy     #$0D
@@ -2691,7 +2691,7 @@ fire_weapon_buster:  lda     #$26       ; sound effect: buster shot
         sta     ent_x_vel_sub
         lsr     $042F
         lda     #$00
-        sta     $AA
+        sta     game_mode
         ldx     #$0E
 fire_find_slot_loop:  lda     ent_flags,x
         bpl     fire_setup_projectile
@@ -2787,7 +2787,7 @@ weapon_spawn_set_y:  lda     ent_y_px      ; copy player Y position
         lda     projectile_yvel_tbl,y
         sta     ent_y_vel,x
         lda     projectile_damage_type_tbl,y
-        sta     $0590,x
+        sta     ent_weapon_type,x
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
@@ -3094,30 +3094,30 @@ entity_init_from_type:  sta     ent_spawn_type,x ; store enemy type ID
         lda     entity_flags_table,y    ; look up default entity flags
         sta     ent_spawn_flags,x                 ; store entity spawn flags
         lda     entity_ai_behavior_tbl,y ; look up AI behavior index
-        sta     $06F0,x                 ; store entity AI behavior
+        sta     ent_ai_behavior,x                 ; store entity AI behavior
         lda     #$14                    ; default entity timer (20 frames)
-        sta     $06D0,x
+        sta     ent_timer,x
         lda     entity_hitbox_width_idx_tbl,y
         tay
         lda     hitbox_width_lo_tbl,y
-        sta     $0610,x
+        sta     ent_hitbox_w_lo,x
         lda     hitbox_width_hi_tbl,y
-        sta     $0630,x
+        sta     ent_hitbox_w_hi,x
         pla
         tay
         lda     entity_hitbox_height_idx_tbl,y
         tay
         lda     hitbox_height_lo_tbl,y
-        sta     $0650,x
+        sta     ent_hitbox_h_lo,x
         lda     hitbox_height_hi_tbl,y
-        sta     $0670,x
+        sta     ent_hitbox_h_hi,x
         lda     #$00
         sta     $06B0,x
         sta     $0690,x
-        sta     $04F0,x
+        sta     ent_drop_flag,x
         sta     $0120,x
-        sta     $0490,x
-        sta     $04D0,x
+        sta     ent_x_spawn_sub,x
+        sta     ent_y_spawn_sub,x
         sta     $0110,x
 entity_activate_done:  rts
 
@@ -3147,7 +3147,7 @@ activate_sec_check_dup:  cmp     $0130,x
         sta     $0120,x
         tay
         lda     $0140,y
-        sta     $06D0,x
+        sta     ent_timer,x
         rts
 
 entity_flags_table:  .byte   $83,$83,$A0,$A0,$83,$A0,$80,$A0 ; default flags per entity type
@@ -3554,7 +3554,7 @@ update_entity_loop:  stx     current_entity_slot
         sec
         lda     ent_x_px,x
         sbc     scroll_x                     ; subtract scroll X for screen pos
-        sta     $06E0,x                 ; store screen-relative X
+        sta     ent_screen_x,x                 ; store screen-relative X
         jsr     apply_entity_physics    ; apply velocity and gravity
 update_entity_next:  ldx     current_entity_slot
         dex
@@ -3569,7 +3569,7 @@ update_entity_special:  lda     #$DC
         sec
         lda     ent_x_px,x
         sbc     scroll_x
-        sta     $06E0,x
+        sta     ent_screen_x,x
         sec
         lda     ent_type,x
         sbc     #$2F
@@ -3653,14 +3653,14 @@ etank_spawn_projectile:  lda     $F9
         lda     temp_00
         lsr     a
         sta     ent_state,x
-        sta     $0590,x
+        sta     ent_weapon_type,x
         tay
         lda     etank_anim_frame_tbl,y
         sta     ent_anim_id,x
         sec
         lda     ent_x_px,x
         sbc     scroll_x
-        sta     $06E0,x
+        sta     ent_screen_x,x
 etank_deduct_ammo:  sec
         lda     $9C
         sbc     etank_cost_tbl,y
@@ -4043,12 +4043,12 @@ tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         bne     *+14
         lsr     ent_flags,x
         lda     #$00
-        sta     $AA
+        sta     game_mode
         lda     #$01
         sta     $50
         rts
         lda     #$01
-        sta     $AA
+        sta     game_mode
         lda     #$00
         sta     $50
         sta     $4F
@@ -4243,7 +4243,7 @@ time_stopper_check_down:  lda     temp_04
         lda     #$76
         sta     ent_y_vel_sub,x
 time_stopper_clear_dmg:  lda     #$00
-        sta     $0590,x
+        sta     ent_weapon_type,x
         lda     ent_anim_id,x
         cmp     #$04
         bne     time_stopper_dec_timer
@@ -4290,8 +4290,8 @@ time_stopper_check_done:  lda     temp_00
         bne     time_stopper_inc_dmg
         lda     #$05
         sta     ent_anim_id,x
-time_stopper_inc_dmg:  inc     $0590,x
-        lda     $0590,x
+time_stopper_inc_dmg:  inc     ent_weapon_type,x
+        lda     ent_weapon_type,x
         cmp     #$3E
         bcc     time_stopper_dec_timer
 time_stopper_finish:  lda     #$0A
@@ -4488,7 +4488,7 @@ spawn_weapon_from_entity:  lda     ent_x_px,x
         sec
         lda     ent_x_px,x
         sbc     scroll_x
-        sta     $06E0,x
+        sta     ent_screen_x,x
         ldx     current_entity_slot
         rts
 
@@ -4509,7 +4509,7 @@ check_player_collision:  lda     #$00
         bcs     player_coll_check_range
         eor     #$FF
         adc     #$01
-player_coll_check_range:  ldy     $06E0,x ; entity screen-relative X
+player_coll_check_range:  ldy     ent_screen_x,x ; entity screen-relative X
         cmp     contact_damage_range_x_tbl,y ; compare to hitbox width
         bcs     player_collision_done
         sec
@@ -4568,7 +4568,7 @@ player_collision_return:  rts
 ; =============================================================================
 check_weapon_collision:  lda     ent_y_px,x
         sta     temp_00
-        lda     $06E0,x
+        lda     ent_screen_x,x
         sta     jump_ptr
         ldx     #$09                    ; start scanning from weapon slot 9
         lda     frame_counter
@@ -4580,13 +4580,13 @@ weapon_coll_check_slot:  lda     ent_flags,x
         and     #$01
         beq     weapon_coll_next_slot
         clc
-        ldy     $0590,x
+        ldy     ent_weapon_type,x
         lda     weapon_range_offset_tbl,y
         adc     jump_ptr
         tay
         sec
         lda     $2E
-        sbc     $06E0,x
+        sbc     ent_screen_x,x
         bcs     weapon_coll_check_range_x
         eor     #$FF
         adc     #$01
@@ -5611,13 +5611,13 @@ spawn_entity_init:  jsr     entity_init_from_type
         ora     ent_spawn_flags,y
         sta     ent_spawn_flags,y
         lda     ent_x_sub,x
-        sta     $0490,y
+        sta     ent_x_spawn_sub,y
         lda     ent_x_px,x
         sta     ent_x_spawn_px,y
         lda     ent_x_screen,x
         sta     ent_x_spawn_scr,y
         lda     ent_y_sub,x
-        sta     $04D0,y
+        sta     ent_y_spawn_sub,y
         lda     ent_y_px,x
         sta     ent_y_spawn_px,y
         clc
@@ -5722,7 +5722,7 @@ calc_vel_done:  rts
 ; =============================================================================
 ; item_drop_rng — Random item drop on enemy death ($F25A)
 ; =============================================================================
-item_drop_rng:  lda     $B1             ; check boss state (no drops during boss)
+item_drop_rng:  lda     boss_phase             ; check boss state (no drops during boss)
         beq     item_drop_calc
         rts
 
@@ -5769,9 +5769,9 @@ item_drop_spawn:  jsr     spawn_entity_from_parent
         lda     #$84
         sta     ent_spawn_flags,y
         lda     #$02
-        sta     $0650,y
+        sta     ent_hitbox_h_lo,y
         lda     #$01
-        sta     $04F0,y
+        sta     ent_drop_flag,y
 item_drop_failed:  rts
 
         ; Normal mode thresholds (72% total drop rate):
