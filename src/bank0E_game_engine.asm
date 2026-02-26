@@ -2534,10 +2534,10 @@ entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; $00-$07: Shrink, An
         .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA ; $40-$47: Goblin, GoblinB, GoblinCleanA, GoblinCleanB, GoblinHorn, PetitGoblin, Springer, Mole
         .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21 ; $48-$4F: MoleShotUp, MoleShotDn, MoleDespawn, CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
         .byte   $96,$D0,$5C,$69,$6D,$71,$E5,$D7 ; $50-$57: ScwormNest, Scworm, PressRetract, AppearBlkA, AppearBlkB, AppearBlkC, NeoMetallFlip, CrashWall
-        .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B ; $58-$5F: WilyBoss, QuickBoomer, (5A), BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
-        .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE ; $60-$67: BossDebris, WoodmanLeaf, WoodmanTornado, Wily4Shield, BoobeamCtrl, DragonBodyA, DragonBodyB, DragonPart
-        .byte   $2B,$FE,$32,$EF,$2B,$25,$2B,$2B ; $68-$6F: DragonBreath, GutsdozerTurret, WilyTeleport, WilyGravity, WilyMachShot, GutsdozerCannon, WilyProj, AlienBossShot
-        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1 ; $70-$77: AlienBody, WilyFinal, FlashHaz(72), FlashHaz(73), FlashProj, (75), LargeHealth, SmallHealth
+        .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B ; $58-$5F: HeatmanFire, QuickBoomer, BubbleHazard, BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
+        .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE ; $60-$67: BossDebris, WoodmanLeaf, WoodmanTornado, BossBody, BossBodyCtrl, DragonBodyA, DragonBodyB, DragonPart
+        .byte   $2B,$FE,$32,$EF,$2B,$25,$2B,$2B ; $68-$6F: DragonBreath, GutsdozerTurret, Picopico, WilyBall, WilyMachShot, BoobeamTurret, BoobeamShot, AlienBossShot
+        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1 ; $70-$77: AlienBody, BigFish, FlashHaz(72), FlashHaz(73), RedLiquid, (75), LargeHealth, SmallHealth
         .byte   $A9,$B1,$A9,$A9,$08,$08,$08,$24 ; $78-$7F: LargeWeapon, SmallWeapon, ETank, ExtraLife, (7C), (7D), (7E), (7F)
 entity_ai_ptr_hi:  .byte   $94,$94,$95,$95,$95,$96,$96,$96 ; $00-$07
         .byte   $96,$97,$97,$98,$98,$98,$98,$98 ; $08-$0F
@@ -6361,31 +6361,31 @@ stage_boss_jmp:  jmp     wily4_enemy_shared_ai
 stage_palette_entries:  .byte   $0F,$39,$18,$12,$0F,$39,$18,$01 ; stage palette entries for boss rooms
         .byte   $0F,$39,$18,$01,$0F,$39,$18,$01
         .byte   $0F,$39,$18,$01,$0F,$39,$18,$0F
-; --- wily_boss_init -- Wily Boss (type $58) — tile collision check, spawns copies with velocity pattern ---
-wily_boss_init:
+; --- heatman_fire_ai -- Heat Man fire projectile (type $58) — tile check, spread spawn with velocity table ---
+heatman_fire_ai:
         lda     $0110,x
-        bne     wily_boss_check_phase
+        bne     heatman_fire_check_phase
         lda     #$03
         sta     temp_01
         lda     #$04
         sta     temp_02
         jsr     check_horiz_tile_collision
         lda     temp_03
-        beq     wily_boss_first_phase
+        beq     heatman_fire_first_phase
         lsr     ent_flags,x
         rts
-wily_boss_first_phase:
+heatman_fire_first_phase:
         lda     temp_00
-        beq     wily_boss_physics
+        beq     heatman_fire_physics
         lda     #$04
         sta     temp_01
-wily_boss_spawn_loop:  lda     #ENTITY_WILY_BOSS
+heatman_fire_spawn_loop:  lda     #ENTITY_HEATMAN_FIRE
         jsr     spawn_entity_from_parent
-        bcs     wily_boss_setup_vel
+        bcs     heatman_fire_setup_vel
         ldx     temp_01
-        lda     wily_boss_vel_table,x
+        lda     heatman_fire_vel_table,x
         sta     $0670,y
-        lda     wily_boss_vel_hi_table,x
+        lda     heatman_fire_vel_hi_table,x
         sta     $0650,y
         lda     #$01
         sta     $0120,y
@@ -6393,8 +6393,8 @@ wily_boss_spawn_loop:  lda     #ENTITY_WILY_BOSS
         sta     $04F0,y
         ldx     current_entity_slot
         dec     temp_01
-        bne     wily_boss_spawn_loop
-wily_boss_setup_vel:  lda     #$81
+        bne     heatman_fire_spawn_loop
+heatman_fire_setup_vel:  lda     #$81
         sta     ent_flags,x
         lda     #$00
         sta     ent_y_vel_sub,x
@@ -6404,12 +6404,12 @@ wily_boss_setup_vel:  lda     #$81
         lda     #$1F
         sta     ent_state,x
         inc     $0110,x
-wily_boss_check_phase:
+heatman_fire_check_phase:
         lda     $0110,x
         cmp     #$01
-        bne     wily_boss_timer_check
+        bne     heatman_fire_timer_check
         dec     ent_state,x
-        bne     wily_boss_physics
+        bne     heatman_fire_physics
         clc
         lda     ent_y_vel_sub,x
         eor     #$FF
@@ -6422,17 +6422,17 @@ wily_boss_check_phase:
         inc     $0110,x
         lda     #$1F
         sta     ent_state,x
-        bne     wily_boss_physics
-wily_boss_timer_check:  dec     ent_state,x
-        bne     wily_boss_physics
+        bne     heatman_fire_physics
+heatman_fire_timer_check:  dec     ent_state,x
+        bne     heatman_fire_physics
         lsr     ent_flags,x
         rts
 
-wily_boss_physics:  jsr     apply_entity_physics
+heatman_fire_physics:  jsr     apply_entity_physics
         rts
 
-wily_boss_vel_table:  .byte   $00,$41,$82,$C4,$06 ; Wily boss velocity table
-wily_boss_vel_hi_table:  .byte   $00,$00,$00,$00,$01
+heatman_fire_vel_table:  .byte   $00,$41,$82,$C4,$06 ; Wily boss velocity table
+heatman_fire_vel_hi_table:  .byte   $00,$00,$00,$00,$01
 ; --- quick_boomer_ai -- Quick Boomerang (type $59) — delayed fall: hover, pause, then accelerate toward player ---
 quick_boomer_ai:
         lda     $0110,x
@@ -6610,11 +6610,11 @@ wily_gravity_accel:  clc
         jsr     apply_entity_physics
         rts
 
-; --- wily4_shield_ai -- Wily 4 shield (type $63) — stage check, hitbox setup, track parent Y position ---
-wily4_shield_ai:
+; --- boss_body_ai -- Boss body segment (type $63) — stage-dependent hitbox, parent tracking ---
+boss_body_ai:
         lda     current_stage
         cmp     #WILY_STAGE_START
-        beq     wily4_shield_hitbox_small
+        beq     boss_body_hitbox_small
         lda     #$58
         sta     $0150,x
         sec
@@ -6622,9 +6622,9 @@ wily4_shield_ai:
         sbc     #$18
         sta     $0160,x
         lda     $AA
-        bne     wily4_shield_physics
+        bne     boss_body_physics
         jmp     wily4_enemy_shared_ai
-wily4_shield_hitbox_small:
+boss_body_hitbox_small:
         lda     #$10
         sta     $0150,x
         sec
@@ -6632,14 +6632,14 @@ wily4_shield_hitbox_small:
         sbc     #$08
         sta     $0160,x
         lda     $AA
-        bne     wily4_shield_physics
+        bne     boss_body_physics
         jsr     apply_entity_physics
-        bcc     wily4_shield_rts
+        bcc     boss_body_rts
         lda     #$00
         sta     $0150,x
-wily4_shield_rts:  rts
+boss_body_rts:  rts
 
-wily4_shield_physics:  jsr     apply_entity_physics_alt
+boss_body_physics:  jsr     apply_entity_physics_alt
         rts
 
 ; --- wily4_timer_check -- Boobeam Trap controller (type $64) — spawns shield turrets, phase management ---
@@ -6682,7 +6682,7 @@ wily4_palette_loop:  sta     palette_ram,x
         inc     ent_state,x
         lda     #$18
         sta     $0110,x
-        lda     #ENTITY_WILY4_SHIELD
+        lda     #ENTITY_BOSS_BODY
         sta     temp_00
         ldy     #$0F
 wily4_entity_init_loop:  jsr     find_entity_scan ; find unused entity slot
@@ -6708,7 +6708,7 @@ wily4_boss_active:  lda     #$01
         bne     wily4_boss_rts
         lda     #$40
         sta     $0110,x
-        lda     #ENTITY_WILY4_SHIELD
+        lda     #ENTITY_BOSS_BODY
         jsr     spawn_entity_from_parent
         lda     #$01
         sta     $0610,y
@@ -6726,7 +6726,7 @@ wily4_boss_phase_2:  dec     $0110,x
         bmi     wily4_boss_despawn_all
         lda     wily4_y_pos_table,y
         sta     temp_02
-        lda     #ENTITY_WILY4_SHIELD
+        lda     #ENTITY_BOSS_BODY
         jsr     spawn_entity_from_parent
         lda     temp_02
         sta     ent_y_spawn_px,y
@@ -6735,7 +6735,7 @@ wily4_boss_phase_2:  dec     $0110,x
         inc     ent_hp,x
 wily4_boss_rts:  rts
 
-wily4_boss_despawn_all:  lda     #ENTITY_WILY4_SHIELD
+wily4_boss_despawn_all:  lda     #ENTITY_BOSS_BODY
         sta     temp_00
         ldy     #$0F
 wily4_despawn_loop:  jsr     find_entity_scan
@@ -6847,19 +6847,19 @@ wily_capsule_stop_vel:
 ; =============================================================================
 wily_capsule_jmp_shared:  jmp     wily4_shared_velocity
 
-; --- wily_teleport_phase_check -- Wily teleport (type $6A) — multi-phase teleport + velocity targeting ---
-wily_teleport_phase_check:
+; --- picopico_phase_check -- Picopico-kun (type $6A) — multi-phase movement + velocity targeting ---
+picopico_phase_check:
         lda     ent_anim_id,x
-        bne     wily_teleport_ai
+        bne     picopico_main_ai
         sta     ent_anim_frame,x
         dec     $0110,x
-        bne     wily_teleport_apply
+        bne     picopico_apply
         lda     ent_flags,x
         and     #$40
-        bne     wily_teleport_adjust
+        bne     picopico_adjust
         lsr     ent_flags,x
         rts
-wily_teleport_adjust:
+picopico_adjust:
         clc
         lda     ent_x_px,x
         adc     #$08
@@ -6869,36 +6869,36 @@ wily_teleport_adjust:
         sta     $0160,x
         lda     #$0F
         sta     $0110,x
-        bne     wily_teleport_ai
-wily_teleport_apply:
+        bne     picopico_main_ai
+picopico_apply:
         jsr     apply_entity_physics
         rts
 
-wily_teleport_ai:  lda     $0160,x
-        bne     wily_teleport_stop_vel
+picopico_main_ai:  lda     $0160,x
+        bne     picopico_stop_vel
         dec     $0110,x
-        beq     wily_teleport_pause
+        beq     picopico_pause
         lda     ent_x_px,x
         cmp     #$30
-        bcc     wily_teleport_pause
+        bcc     picopico_pause
         cmp     #$D0
-        bcs     wily_teleport_pause
+        bcs     picopico_pause
         lda     ent_y_px,x
         cmp     #$30
-        bcc     wily_teleport_pause
+        bcc     picopico_pause
         cmp     #$C0
-        bcc     wily_teleport_check_anim
-wily_teleport_pause:  lda     #$01
+        bcc     picopico_anim_check
+picopico_pause:  lda     #$01
         sta     $0160,x
         lda     #$3E
         sta     $0110,x
-wily_teleport_stop_vel:  lda     #$00
+picopico_stop_vel:  lda     #$00
         sta     ent_x_vel,x
         sta     ent_x_vel_sub,x
         sta     ent_y_vel_sub,x
         sta     ent_y_vel,x
         dec     $0110,x
-        bne     wily_teleport_check_anim
+        bne     picopico_anim_check
         lda     #$83
         sta     ent_flags,x
         lda     #$01
@@ -6906,31 +6906,31 @@ wily_teleport_stop_vel:  lda     #$00
         lda     #$00
         sta     $0160,x
         ldy     ent_state,x
-        lda     wily_teleport_timer_table,y
+        lda     picopico_timer_table,y
         sta     $0110,x
-        lda     wily_teleport_target_lo,y
+        lda     picopico_target_lo,y
         sta     jump_ptr
-        lda     wily_teleport_target_hi,y
+        lda     picopico_target_hi,y
         sta     jump_ptr_hi
         jsr     calc_entity_velocity
-wily_teleport_check_anim:  lda     ent_anim_id,x
+picopico_anim_check:  lda     ent_anim_id,x
         cmp     #$06
-        bne     wily_teleport_set_anim
+        bne     picopico_set_anim
         lda     #$04
         sta     ent_anim_id,x
-wily_teleport_set_anim:  jsr     apply_entity_physics
-        bcc     wily_teleport_rts
+picopico_set_anim:  jsr     apply_entity_physics
+        bcc     picopico_rts2
         sec
         lda     $06C1
         sbc     #$02
         sta     $06C1
-wily_teleport_rts:  rts
+picopico_rts2:  rts
 
-wily_teleport_timer_table:  .byte   $3E,$1F,$1F,$1F ; Wily teleport timing table
-wily_teleport_target_lo:  .byte   $00,$68,$00,$80
-wily_teleport_target_hi:  .byte   $01,$01,$02,$02
-; --- wily_teleport_gravity -- Wily teleport: gravity apply or vert check ($BAEF) ---
-wily_teleport_gravity:
+picopico_timer_table:  .byte   $3E,$1F,$1F,$1F ; Picopico-kun timing table
+picopico_target_lo:  .byte   $00,$68,$00,$80
+picopico_target_hi:  .byte   $01,$01,$02,$02
+; --- picopico_gravity -- Picopico-kun: gravity apply or vert check ($BAEF) ---
+picopico_gravity:
         lda     $B1
         cmp     #$04
         bcs     wily_final_vert_check
@@ -6942,9 +6942,9 @@ wily_teleport_gravity:
         adc     #$00
         sta     ent_y_vel,x
 ; =============================================================================
-; wily_final_physics -- Wily Final Boss — gravity, movement, and multi-phase AI ($BB06)
+; big_fish_ai -- Big Fish (type $71) — simple physics, jumps from pit ($BB06)
 ; =============================================================================
-wily_final_physics:  jsr     apply_entity_physics
+big_fish_ai:  jsr     apply_entity_physics
         rts
 
 wily_final_vert_check:
@@ -6954,12 +6954,12 @@ wily_final_vert_check:
         sta     temp_02
         jsr     check_vert_tile_collision
         lda     temp_00
-        beq     wily_final_physics
+        beq     big_fish_ai
         lda     #$04
         sta     ent_y_vel,x
         lda     #$78
         sta     ent_y_vel_sub,x
-        bne     wily_final_physics
+        bne     big_fish_ai
         sec
         lda     ent_x_vel_sub,x
         sbc     #$01
@@ -6978,12 +6978,12 @@ wily_final_vert_check:
         bne     wily_final_run_physics
         lda     #$04
         bne     wily_final_set_state
-; --- wily_final_spawn_projectile -- Wily final boss projectile spawn — resets velocity, spawns ENTITY_WILY_PROJ ---
+; --- wily_final_spawn_projectile -- Wily final boss projectile spawn — resets velocity, spawns ENTITY_BOOBEAM_SHOT ---
 wily_final_spawn_projectile:  lda     #$77
         sta     ent_x_vel_sub,x
         lda     #$01
         sta     ent_x_vel,x
-        lda     #ENTITY_WILY_PROJ
+        lda     #ENTITY_BOOBEAM_SHOT
         ldx     #$01
         jsr     spawn_entity_from_parent
         bcs     wily_final_check_state
@@ -7091,16 +7091,16 @@ wily_final_timer_table:  .byte   $1F,$2E,$7D ; Wily final boss timer table (3 en
 flash_hazard_ai:
         lda     ent_state,x
         cmp     #$3E
-wily_final_bank_table:                  ; also read as data by pickup_ai_check (LDA $BC35,y)
-        bne     wily_final_inc_timer
+flash_hazard_bank_table:                  ; also read as data by pickup_ai_check (LDA $BC35,y)
+        bne     flash_hazard_inc_timer
         lda     ent_anim_id,x
         cmp     #$05
-        bne     wily_final_check_anim
+        bne     flash_hazard_check_anim
         lda     ent_anim_frame,x
-        bne     wily_final_check_anim
-        lda     #ENTITY_FLASH_PROJ
+        bne     flash_hazard_check_anim
+        lda     #ENTITY_RED_LIQUID
         jsr     spawn_entity_from_parent
-        bcs     wily_final_clear_timer
+        bcs     flash_hazard_clear_timer
         lda     ent_type,x
         sta     $04F0,y
         clc
@@ -7110,17 +7110,17 @@ wily_final_bank_table:                  ; also read as data by pickup_ai_check (
         lda     #$FF
         sta     $0650,y
         sta     $0670,y
-wily_final_clear_timer:
+flash_hazard_clear_timer:
         lda     #$00
         sta     ent_state,x
-wily_final_inc_timer:
+flash_hazard_inc_timer:
         inc     ent_state,x
         lda     ent_anim_id,x
         cmp     #$02
-        bne     wily_final_check_anim
+        bne     flash_hazard_check_anim
         lda     #$00
         sta     ent_anim_id,x
-wily_final_check_anim:  jsr     apply_entity_physics_alt
+flash_hazard_check_anim:  jsr     apply_entity_physics_alt
         rts
 
 ; --- pickup_ai_check -- pickup/item physics init (ptr table: type $74) — anim check, tile collision ---
@@ -7140,7 +7140,7 @@ pickup_ai_init:
         lda     temp_00
         beq     wily_final_check_physics
         ldy     ent_state,x
-        lda     wily_final_bank_table,y
+        lda     flash_hazard_bank_table,y
         jsr     bank_switch_enqueue
         inc     ent_anim_id,x
         rts

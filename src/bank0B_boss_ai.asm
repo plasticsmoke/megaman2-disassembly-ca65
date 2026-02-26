@@ -177,7 +177,7 @@ enemy_state_transition:  .byte   $0F,$0F,$0B,$05,$09,$07,$05,$03
 enemy_spawn_sound_ids:  .byte   $51,$67,$6D
         adc     ($55,x)
         .byte   $5C,$64,$6A
-        lda     #ENTITY_WILY_BOSS
+        lda     #ENTITY_HEATMAN_FIRE
         jsr     find_entity_by_type
         bcs     *+12
         lda     $06A1
@@ -217,7 +217,7 @@ heatman_spawn_projectile_loop:  ldx     temp_01
         sta     $0D
         jsr     divide_16bit            ; divide for velocity ratio
         ldx     #$01
-        lda     #ENTITY_WILY_BOSS
+        lda     #ENTITY_HEATMAN_FIRE
         jsr     spawn_entity_from_boss
         ldx     temp_01
         lda     heatman_proj_hitbox_y,x
@@ -2102,7 +2102,7 @@ picopico_phase_rts:  rts
         bne     *-6
         lda     #$1F
         sta     $04E1
-        lda     #ENTITY_WILY_TELEPORT
+        lda     #ENTITY_PICOPICO
         jsr     find_entity_by_type
         bcc     *-18
         ldx     $B2
@@ -2430,7 +2430,7 @@ gutsdozer_jmp_movement:  jsr     dragon_apply_movement
         rts
 
 gutsdozer_spawn_screen_table:  .byte   $D7,$C7,$A7,$8C
-gutsdozer_turret_type_table:  .byte   ENTITY_GUTSDOZER_TURRET,$00,ENTITY_WILY4_SHIELD,ENTITY_DRAGON_PART
+gutsdozer_turret_type_table:  .byte   ENTITY_GUTSDOZER_TURRET,$00,ENTITY_BOSS_BODY,ENTITY_DRAGON_PART
 gutsdozer_turret_y_table:  .byte   $7F,$00,$A8,$68
 gutsdozer_turret_ai_table:  .byte   $09,$00,$14,$06
         lda     camera_x_offset
@@ -2603,26 +2603,26 @@ gutsdozer_ai_table_hi:  .byte   $93,$94,$95,$95,$95,$95
 
 
 ; =============================================================================
-; Boss AI: Guts Dozer — part spawning and position tables ($968B)
+; Boss AI: Boobeam Trap — turret spawning and position tables ($968B)
 ; =============================================================================
-gutsdozer_spawn_part_loop:  lda     #ENTITY_GUTSDOZER_CANNON
+boobeam_spawn_turret_loop:  lda     #ENTITY_BOOBEAM_TURRET
         ldx     #$01
         jsr     spawn_entity_from_boss
         ldx     temp_02
-        lda     gutsdozer_part_x_table,x
+        lda     boobeam_turret_x_table,x
         sta     ent_x_spawn_px,y
-        lda     gutsdozer_part_y_table,x
+        lda     boobeam_turret_y_table,x
         sta     ent_y_spawn_px,y
-        lda     gutsdozer_part_flags_table,x
+        lda     boobeam_turret_flags_table,x
         sta     ent_spawn_flags,y
         dec     temp_02
-        bpl     gutsdozer_spawn_part_loop
+        bpl     boobeam_spawn_turret_loop
         inc     $B1
         rts
 
-gutsdozer_part_x_table:  .byte   $14,$44,$AC,$EC,$EC
-gutsdozer_part_y_table:  .byte   $60,$30,$40,$70,$B0
-gutsdozer_part_flags_table:  .byte   $C3,$C3,$83,$83,$83,$7C,$57,$96
+boobeam_turret_x_table:  .byte   $14,$44,$AC,$EC,$EC
+boobeam_turret_y_table:  .byte   $60,$30,$40,$70,$B0
+boobeam_turret_flags_table:  .byte   $C3,$C3,$83,$83,$83,$7C,$57,$96
         .byte   $93
         dex
         lda     $9B1C,x
@@ -2827,7 +2827,7 @@ wily_machine_apply_facing:  sta     $0421
         sta     $0A
         sta     $0C
         jsr     divide_16bit            ; divide for velocity ratio
-        lda     #ENTITY_WILY_GRAVITY
+        lda     #ENTITY_WILY_BALL
         ldx     #$01
         jsr     spawn_entity_from_boss
         bcs     wily_machine_store_facing

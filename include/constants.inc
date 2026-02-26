@@ -171,10 +171,10 @@ ENTITY_DRAGON_BODY_B = $66      ; Mecha Dragon body part B
 ENTITY_DRAGON_PART  = $67       ; Mecha Dragon body/platform part (reused in Guts-Dozer)
 ENTITY_DRAGON_BREATH = $68      ; Mecha Dragon fire breath projectile
 ENTITY_GUTSDOZER_TURRET = $69   ; Guts-Dozer oscillating turret
-ENTITY_WILY_TELEPORT = $6A      ; Wily 5 teleport boss entity
-ENTITY_WILY_GRAVITY = $6B       ; Wily Machine gravity projectile
+ENTITY_PICOPICO     = $6A       ; Picopico-kun block halves (Wily 2)
+ENTITY_WILY_BALL    = $6B       ; Wily Machine bouncing ball projectile
 ENTITY_WILY_MACHINE_SHOT = $6C  ; Wily Machine aimed shot
-ENTITY_GUTSDOZER_CANNON = $6D   ; Guts-Dozer cannon body part
+ENTITY_BOOBEAM_TURRET = $6D     ; Boobeam Trap turret (5x in Wily 4)
 ENTITY_ALIEN_BOSS_SHOT = $6F    ; Alien boss phase projectile
 ; Pickups
 ENTITY_LARGE_HEALTH = $76       ; Large health pickup
@@ -193,15 +193,15 @@ ENTITY_CRASH_WALL   = $57       ; Destructible wall (Crash Bomber)
 ENTITY_APPEAR_BLK_A = $53       ; Heat Man — Appear Block / Yoku Block (timer $7D = 125 frames)
 ENTITY_APPEAR_BLK_B = $54       ; Heat Man — Appear Block / Yoku Block (timer $BB = 187 frames)
 ENTITY_APPEAR_BLK_C = $55       ; Heat Man — Appear Block / Yoku Block (timer $FA = 250 frames)
-; Wily boss entities (code-identified, not yet Mesen-verified)
-ENTITY_WILY_BOSS    = $58       ; Wily boss — multi-phase, spawns copies with velocity pattern
+; Wily boss entities (Mesen-verified)
+ENTITY_HEATMAN_FIRE = $58       ; Heat Man fire projectile (3x during boss fight)
 ENTITY_BOSS_DEBRIS  = $60       ; Boss death explosion parts (fortress_spawn_entity_loop)
-ENTITY_WILY4_SHIELD = $63       ; Wily 4 — Boobeam turret shield body (spawned by $64)
-ENTITY_BOOBEAM_CTRL = $64       ; Wily 4 — Boobeam Trap controller (spawns shield turrets)
-ENTITY_WILY_PROJ    = $6E       ; Wily Machine projectile (spawned by $6D cannon)
+ENTITY_BOSS_BODY    = $63       ; Boss body segment (Wily 1 platforms, Wily 3 Guts-Dozer body)
+ENTITY_BOSS_BODY_CTRL = $64     ; Boss body controller (Wily 1 platform ctrl, multi-stage reuse)
+ENTITY_BOOBEAM_SHOT = $6E       ; Boobeam turret shot (Wily 4)
 ENTITY_ALIEN_BODY   = $70       ; Alien hologram body segments (13 parts, spawned on death)
-ENTITY_WILY_FINAL   = $71       ; Wily final multi-phase boss AI
-ENTITY_FLASH_PROJ   = $74       ; Flash hazard projectile (spawned by $72/$73)
+ENTITY_BIG_FISH     = $71       ; Big Fish (Wily 3 gray fish, jumps from pit, 10 dmg)
+ENTITY_RED_LIQUID   = $74       ; Red liquid drip (Wily 6, spawned by $72/$73)
 
 ; ─── Fixed bank entry points ─────────────────────────────────────────────────
 ; These are called by all banks via the fixed bank
