@@ -4749,7 +4749,7 @@ weapon_damage_killed_alt:  lda     #$00
         lda     ent_flags,x
         and     #$FE
         sta     ent_flags,x
-        lda     #ENTITY_KAMINARI_CHILD
+        lda     #ENTITY_KAMINARI_CLOUD
         sta     ent_type,x
         lda     #$00
         sta     ent_anim_id,x

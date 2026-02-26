@@ -2530,9 +2530,9 @@ entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; $00-$07: Shrink, An
         .byte   $7E,$85,$A6,$C2,$2B,$5A,$AB,$B8 ; $20-$27: KukkuDesp, TellySpawn, Telly, Changkey, ChangkeyProj, Blackout, LightRestore, BlackoutEnd
         .byte   $C5,$2A,$F1,$0D,$2E,$D7,$D7,$D3 ; $28-$2F: BlackoutRe, Gear, Pierrobot, FlyBoy(2B), FlyBoy, CrashWallVar, FrienderFire, BossDoor
         .byte   $F2,$EA,$C3,$EC,$4E,$2B,$89,$A4 ; $30-$37: Press, Blocky, BlockyPh2, MechaFire, NeoMetall, GenericProj, Matasaburo, PipiSpawn
-        .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B ; $38-$3F: Pipi, PipiAlt, PipiEgg, EggHatch, Copipi, KaminariChild, KaminariGoro, KaminariBolt
+        .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B ; $38-$3F: Pipi, PipiAlt, PipiEgg, EggHatch, Copipi, KaminariCloud, KaminariGoro, KaminariBolt
         .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA ; $40-$47: Goblin, GoblinB, GoblinCleanA, GoblinCleanB, GoblinHorn, PetitGoblin, Springer, Mole
-        .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21 ; $48-$4F: JoeBulletB, JoeBulletA, Mole(4A), CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
+        .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21 ; $48-$4F: MoleShotUp, MoleShotDn, MoleDespawn, CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
         .byte   $96,$D0,$5C,$69,$6D,$71,$E5,$D7 ; $50-$57: ScwormNest, Scworm, PressRetract, AppearBlkA, AppearBlkB, AppearBlkC, NeoMetallFlip, CrashWall
         .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B ; $58-$5F: WilyBoss, QuickBoomer, (5A), BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
         .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE ; $60-$67: BossDebris, WoodmanLeaf, WoodmanTornado, Wily4Shield, BoobeamCtrl, DragonBodyA, DragonBodyB, DragonPart
@@ -5329,7 +5329,8 @@ boss_explode_apply_physics:
         jsr     apply_entity_physics
         rts
 
-kaminari_child_ai:
+; --- kaminari_cloud_ai -- Kaminari Goro cloud/head (type $3D) — rides body, fires bolt every 157 frames ---
+kaminari_cloud_ai:
         ldy     $0110,x
         lda     ent_flags,y
         bpl     multi_boss_deactivate
@@ -5377,7 +5378,7 @@ kaminari_goro_ai:
         lda     ent_x_vel_sub,x
         ora     ent_y_vel_sub,x
         bne     circular_shot_timer_check
-        lda     #ENTITY_KAMINARI_CHILD
+        lda     #ENTITY_KAMINARI_CLOUD
         jsr     spawn_entity_from_parent
         bcs     circular_shot_timer_check
         txa
@@ -5756,9 +5757,9 @@ scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
         sta     ent_state,x
         lda     #$06
         sta     temp_01
-        lda     #ENTITY_JOE_BULLET_B
+        lda     #ENTITY_MOLE_SHOT_UP
         jsr     find_entity_count_check
-        lda     #ENTITY_JOE_BULLET_A
+        lda     #ENTITY_MOLE_SHOT_DN
         jsr     find_entity_count_check
         bcs     mole_done
         lda     ent_x_vel,x
@@ -5769,7 +5770,7 @@ scworm_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
 
 ; =============================================================================
 ; mole_spawn_shot -- Enemy AI: Mole controller (type $47) — spawn shot children ($B137)
-; Spawns entities $49/$48 (Mole projectiles) from mole_shot_type_table.
+; Spawns MOLE_SHOT_DN/$49 and MOLE_SHOT_UP/$48 in pairs from mole_shot_type_table.
 ; =============================================================================
 mole_spawn_shot:  ldy     temp_01
         lda     mole_shot_type_table,y
@@ -5799,7 +5800,7 @@ mole_done:  ldx     current_entity_slot
         dec     ent_state,x
         rts
 
-mole_shot_type_table:  .byte   ENTITY_JOE_BULLET_A,ENTITY_JOE_BULLET_B,ENTITY_JOE_BULLET_A,ENTITY_JOE_BULLET_B,ENTITY_JOE_BULLET_A,ENTITY_JOE_BULLET_B
+mole_shot_type_table:  .byte   ENTITY_MOLE_SHOT_DN,ENTITY_MOLE_SHOT_UP,ENTITY_MOLE_SHOT_DN,ENTITY_MOLE_SHOT_UP,ENTITY_MOLE_SHOT_DN,ENTITY_MOLE_SHOT_UP
 mole_shot_x_offset:  .byte   $18,$58,$50,$20,$28,$60 ; X offsets for Mole shot spawn
 
 mole_shot_y_table:  .byte   $10,$D0,$10,$D0,$10,$D0 ; Mole shot Y-position lookup table
@@ -5859,7 +5860,7 @@ sniper_joe_vel_fwd:  .byte   $41
 sniper_joe_vel_rev:  .byte   $E5
 sniper_joe_vel_hi_fwd:  .byte   $00
 sniper_joe_vel_hi_rev:  .byte   $00
-        .byte   $BF,$1B,$FF,$FF   ; unknown data bytes
+        .byte   $BF,$1B,$FF,$FF   ; type $49 velocity: fwd=$FFBF rev=$FF1B (downward)
 mole_4a_ai:
         lda     #$47
         sta     temp_00

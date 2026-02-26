@@ -139,13 +139,15 @@ ENTITY_GEAR         = $29       ; Metal Man — spinning cog platform
 ENTITY_PIERROBOT    = $2A       ; Metal Man — rides gear (child)
 ENTITY_PRESS        = $30       ; Metal/Air Man — ceiling crusher (descending)
 ENTITY_PRESS_RETRACT = $52      ; Press retracting state
-ENTITY_KAMINARI_GORO = $3E      ; Air Man — lightning robot (spawn table)
-ENTITY_KAMINARI_CHILD = $3D     ; Kaminari Goro child (role TBD)
+ENTITY_KAMINARI_GORO = $3E      ; Air Man — lightning robot body (circular movement)
+ENTITY_KAMINARI_CLOUD = $3D     ; Kaminari Goro cloud/head (rides body, fires bolt every 157 frames)
 ENTITY_KAMINARI_BOLT = $3F      ; Kaminari Goro lightning bolt
 ENTITY_GOBLIN       = $40       ; Goblin body A — Air Man screens $04,$06,$10 (US: Air Tikki)
 ENTITY_GOBLIN_B     = $41       ; Goblin body B — Air Man screens $05,$06,$11
 ENTITY_MOLE         = $47       ; Air/Metal Man — Mole controller (spawns copies + $48/$49 shots)
-; Mole children: $48/$49 (shared with Sniper Joe bullets), $4A — roles TBD
+ENTITY_MOLE_SHOT_UP = $48       ; Mole vertical shot (upward) — tile-bounce, timer-reverse
+ENTITY_MOLE_SHOT_DN = $49       ; Mole vertical shot (downward) — tile-bounce, timer-reverse
+ENTITY_MOLE_DESPAWN = $4A       ; Mole despawner (destroys all type $47 on screen transition)
 ; Boss projectiles
 ENTITY_METAL_BLADE  = $15       ; Metal Man blade projectile
 ENTITY_QUICK_BOOM   = $18       ; Quick Man boomerang projectile
@@ -155,14 +157,13 @@ ENTITY_ATOMIC_FIRE  = $1B       ; Heat Man fire projectile
 ENTITY_MECHA_FIRE   = $33       ; Mecha Dragon fireball
 ENTITY_GOBLIN_HORN  = $44       ; Goblin horn (indestructible, contact dmg)
 ENTITY_PETIT_GOBLIN = $45       ; Petit Goblin (1 HP, max 3, spawned by Goblin) (US: Gremlin)
-ENTITY_JOE_BULLET_A = $49       ; Sniper Joe bullet (type A)
-ENTITY_JOE_BULLET_B = $48       ; Sniper Joe bullet (type B)
+ENTITY_BUBBLE_HAZARD = $5A      ; Bubble Man static bubble (NULL AI, contact damage, spawned 4x burst)
 ENTITY_BUBBLE_SHOT  = $5B       ; Bubble Man shot
 ENTITY_METALMAN_BLADE = $5C     ; Metal Man boss blade projectile
 ENTITY_AIR_TORNADO  = $5D       ; Air Man tornado (boss)
 ENTITY_CRASH_BOMB   = $5E       ; Crash Bomb
 ENTITY_CRASH_BLAST  = $5F       ; Crash Bomb blast
-ENTITY_QUICK_BOOMER = $59       ; Quick Man boomerang (boss) — AI=delayed fall, needs re-verify
+ENTITY_QUICK_BOOMER = $59       ; Quick Man boomerang (boss) — hover, then accelerate toward player
 ENTITY_WOODMAN_LEAF = $61       ; Wood Man leaf shield entity
 ENTITY_WOODMAN_TORNADO = $62    ; Wood Man tornado projectile
 ENTITY_DRAGON_BODY_A = $65      ; Mecha Dragon body part A

@@ -801,7 +801,7 @@ bubbleman_dec_shot_timer:  dec     $05A7
         sta     $05A7
         lda     #$03
         sta     $06A1
-        lda     #$5A
+        lda     #ENTITY_BUBBLE_HAZARD
         ldx     #$01
         jsr     spawn_entity_from_boss
         dec     $B2
@@ -4602,7 +4602,7 @@ air_shooter_killed:  lda     #$00
         lda     ent_flags,x
         and     #$FE
         sta     ent_flags,x
-        lda     #ENTITY_KAMINARI_CHILD
+        lda     #ENTITY_KAMINARI_CLOUD
         sta     ent_type,x
         lda     #$00
         sta     ent_anim_id,x
