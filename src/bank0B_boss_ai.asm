@@ -6,11 +6,6 @@
 ; management, and sprite handling for all enemy types.
 ; =============================================================================
 
-; da65 V2.18 - Ubuntu 2.19-1
-; Created:    2026-02-23 18:17:35
-; Input file: build/bank0B.bin
-; Page:       1
-
 
         .setcpu "6502"
 

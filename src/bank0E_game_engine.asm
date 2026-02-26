@@ -7,11 +7,6 @@
 ; cold_boot_init in the fixed bank after reset.
 ; =============================================================================
 
-; da65 V2.18 - Ubuntu 2.19-1
-; Created:    2026-02-23 18:17:35
-; Input file: build/bank0E.bin
-; Page:       1
-
 
         .setcpu "6502"
 

@@ -6,11 +6,6 @@
 ; OAM sprite management, entity update/physics, and stage transitions.
 ; =============================================================================
 
-; da65 V2.18 - Ubuntu 2.19-1
-; Created:    2026-02-23 18:17:35
-; Input file: build/bank0D.bin
-; Page:       1
-
 
         .setcpu "6502"
 
