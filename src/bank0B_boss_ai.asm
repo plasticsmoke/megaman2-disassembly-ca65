@@ -1484,7 +1484,7 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         lda     p1_new_presses
         and     #$02
         bne     @skip
-        lda     metalman_flash_timer_lo
+        lda     crashman_response_timer
         beq     crashman_setup_velocity_skip
         .byte   $CE,$A7
         ora     $D0
@@ -1494,7 +1494,7 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         sta     boss_flags
         jsr     calc_player_boss_distance
         lda     boss_flags
-        sta     metalman_flash_timer_hi
+        sta     crashman_saved_facing
         lda     #$ED
         sta     boss_y_vel_sub
         lda     #$06
