@@ -19,8 +19,6 @@
 .include "include/zeropage.inc"
 .include "include/constants.inc"
 
-addr_0508           := $0508
-addr_0917           := $0917
 ppu_addr_2020           := $2020
 ppu_addr_2220           := $2220
 ppu_addr_2820           := $2820
@@ -33,11 +31,10 @@ divide_16bit           := $C874
 metatile_render           := $C8EF
 scroll_attr_update           := $CA0B
 tile_lookup           := $CC63
-fixed_D0B0           := $D0B0
-fixed_D332           := $D332
-fixed_D3E0           := $D3E0
-fixed_D77C           := $D77C
-fixed_DA43           := $DA43
+fire_weapon_buster           := $D332
+weapon_spawn_projectile           := $D3E0
+entity_init_from_type           := $D77C
+find_empty_entity_slot           := $DA43
         jmp     boss_init
 
         lda     #$01
@@ -3321,7 +3318,7 @@ alien_part_setup_loop:  lda     alien_part_y_table,x
 
 alien_part_y_table:  .byte   $34,$34,$64,$94,$B4,$D4,$24,$44
         .byte   $54,$74,$84,$B4,$C4
-alien_part_x_flags_table:  jsr     fixed_D0B0
+alien_part_x_flags_table:  .byte   $20,$B0,$D0
         bvs     alien_facing_store
         beq     alien_part_setup_loop
         eor     (temp_01),y
@@ -3521,7 +3518,7 @@ alien_load_palette_loop:  lda     alien_stage_palette,x
         bpl     alien_load_palette_loop
         ldy     #$10
         ldx     #$0E
-        jsr     fixed_D3E0
+        jsr     weapon_spawn_projectile
         lda     #$80
         sta     $042E
         lda     #$A7
@@ -3530,7 +3527,7 @@ alien_load_palette_loop:  lda     alien_stage_palette,x
         sta     $046E
         ldy     #$11
         ldx     #$0D
-        jsr     fixed_D3E0
+        jsr     weapon_spawn_projectile
         lda     #$80
         sta     $046D
         lda     #$37
@@ -4195,10 +4192,10 @@ tile_solidity_table:  .byte   $00
 ; Spawn Entity from Boss — find free slot and initialize projectile ($A352)
 ; =============================================================================
 spawn_entity_from_boss:  pha            ; save entity type on stack
-        jsr     fixed_DA43              ; find empty entity slot
+        jsr     find_empty_entity_slot              ; find empty entity slot
         bcs     spawn_entity_fail
         pla
-spawn_entity_init_type:  jsr     fixed_D77C; initialize entity from type table
+spawn_entity_init_type:  jsr     entity_init_from_type; initialize entity from type table
         txa
         tay
         lda     $0421
@@ -4449,7 +4446,7 @@ proximity_flip_facing:  lda     ent_flags
         eor     #$40
         ora     ent_flags
         sta     ent_flags
-        jsr     fixed_D332
+        jsr     fire_weapon_buster
         inc     temp_01
 proximity_check_rts:  rts
 

@@ -2655,7 +2655,9 @@ attr_special_merge:  and     $03D4
         sty     attr_update_mode
         jmp     attr_update_done
 
+weapon_palette_copy:
         lda     current_weapon
+weapon_palette_copy_indexed:
         asl     a
         asl     a
         tax

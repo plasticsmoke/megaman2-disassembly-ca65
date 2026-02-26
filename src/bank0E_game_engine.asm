@@ -20,10 +20,6 @@
 .include "include/zeropage.inc"
 .include "include/constants.inc"
 
-zp_0F15           := $0F15
-zp_0F20           := $0F20
-addr_2020           := $2020
-addr_5060           := $5060
 bank_switch_enqueue           := $C051
 banked_entry           := $C05D
 boss_beaten_check           := $C071
@@ -1229,7 +1225,7 @@ decel_rate_table:  .byte   $80,$02,$04  ; deceleration rate per state
 max_speed_hi_table:  .byte   $00,$00,$00,$00,$00,$01,$01,$00 ; max speed high byte per state
         .byte   $00,$00,$00
 max_speed_lo_table:  .byte   $00,$00,$90,$00 ; max speed low byte per state
-        jsr     addr_5060
+        .byte   $20,$60,$50
         .byte   $80,$00,$00,$00
 
 ; =============================================================================

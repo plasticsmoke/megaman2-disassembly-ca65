@@ -19,25 +19,6 @@
 .include "include/zeropage.inc"
 .include "include/constants.inc"
 
-addr_0010           := $0010
-addr_0320           := $0320
-addr_0508           := $0508
-addr_0901           := $0901
-addr_0D20           := $0D20
-addr_0F06           := $0F06
-addr_1003           := $1003
-addr_1120           := $1120
-addr_1121           := $1121
-addr_1EA4           := $1EA4
-addr_2008           := $2008
-addr_2017           := $2017
-addr_2020           := $2020
-addr_2060           := $2060
-addr_3800           := $3800
-addr_5000           := $5000
-addr_5E10           := $5E10
-addr_72A0           := $72A0
-addr_7484           := $7484
 bank_switch_enqueue           := $C051
 banked_entry           := $C05D
 wait_for_vblank_0D           := $C0AB
@@ -51,11 +32,10 @@ divide_8bit           := $C84E
 attr_table_write           := $C8B1
 metatile_column_render           := $CA0B
 clear_oam_buffer_fixed     := $CC6C
-fixed_sprite_data_D001           := $D001
 ppu_buffer_transfer           := $D11B
 ppu_scroll_column_update           := $D1DF
-fixed_D2ED           := $D2ED
-fixed_D2EF           := $D2EF
+weapon_palette_copy           := $D2ED
+weapon_palette_copy_indexed     := $D2EF
 ending_player_render           := $D624
 ending_player_anim           := $D627
 ending_scroll_update           := $D637
@@ -1484,7 +1464,7 @@ sprite_def_data_9094:  .byte   $C0,$01
 main_stage_render:
         jsr     clear_oam_buffer_fixed
         lda     #$00
-        jsr     fixed_D2EF
+        jsr     weapon_palette_copy_indexed
         lda     $B5
         pha
         lda     camera_y_offset
@@ -1799,7 +1779,7 @@ wselect_render_col_call:  jsr     metatile_render_column
         ldy     #$90
         ldx     #$00
         jsr     metatile_render_column
-        jsr     fixed_D2ED
+        jsr     weapon_palette_copy
         jsr     wait_for_vblank_0D
         pla
         sta     column_index
@@ -2930,7 +2910,7 @@ boss_get_letter_oam:  .byte   $C0,$71
         cpy     #$70
         .byte   $C3,$20,$B8,$72,$03,$20,$B0,$72
         .byte   $03,$20,$A8,$72,$03
-        jsr     addr_72A0
+        .byte   $20,$A0,$72
         .byte   $03,$20,$98,$70,$03,$20,$98,$71
         .byte   $03,$28,$98,$70,$C3,$30,$90,$72
         .byte   $03,$30,$88,$70,$03,$30,$88,$71
@@ -2974,7 +2954,7 @@ wily_fade_palette_data:  .byte   $0F,$00,$01,$0F,$0F,$00,$0F,$0F
         ora     $0F00,y
         .byte   $0F,$10,$18,$0F,$0F,$18,$10,$0F
         .byte   $0F,$02,$1C,$0F
-        jsr     addr_1121
+        .byte   $20,$21,$11
         .byte   $0F,$20,$10,$00,$0F,$20,$26,$15
         .byte   $0F,$17,$21,$07,$0F,$16,$29,$09
         .byte   $0F,$0F,$30,$38,$0F,$0F,$28,$30
