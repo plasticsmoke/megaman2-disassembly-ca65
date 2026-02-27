@@ -5,6 +5,51 @@
 ; Cold boot entry point, hardware initialization, main game loop,
 ; and game state dispatch table. Bank $0E is switched in first by
 ; cold_boot_init in the fixed bank after reset.
+;
+; ─── Game State Machine ───────────────────────────────────────────────────
+;
+;   cold_boot_init (bank0F)
+;         │
+;         ▼
+;   hardware_init ──► main_game_loop
+;         │                 │
+;         │     ┌───────────┴───────────┐
+;         │     ▼                       ▼
+;         │  game_state=0            game_state≠0
+;         │  (in-stage)              (title/select/
+;         │     │                     password/etc.)
+;         │     ▼                       │
+;         │  stage_frame_loop           ▼
+;         │     │               banked_dispatch
+;         │     │               (bank0D/0E handlers)
+;         │     │
+;   ┌─────┴─────┴─────────────────────────────┐
+;   │         Per-Frame Pipeline               │
+;   │                                          │
+;   │  1. input_read (controllers)             │
+;   │  2. player_update (movement/state)       │
+;   │  3. entity_update_loop                   │
+;   │     ├─ apply_entity_physics              │
+;   │     ├─ entity_ai_dispatch ──► AI handler │
+;   │     │   (128-entry ptr table @ $92F0)    │
+;   │     └─ check_weapon_collision            │
+;   │  4. entity_spawn_scan (activate new)     │
+;   │  5. sound_engine_update                  │
+;   │  6. render_all_sprites → OAM buffer      │
+;   │  7. wait_for_vblank → NMI fires          │
+;   └──────────────────────────────────────────┘
+;
+; ─── Entity AI Dispatch ───────────────────────────────────────────────────
+;
+;   entity_ai_dispatch (per entity slot $10-$1F):
+;     1. Load entity type from ent_type,x
+;     2. Index into 3 parallel tables at $92F0:
+;        - ptr_lo[type], ptr_hi[type], bank[type]
+;     3. game_mode ($AA) selects dispatch mode:
+;        - Normal (0/4): call ptr in bank $0E (bank field ignored)
+;        - Special (≠0,≠4): bank=0 → same; bank≠0 → entity_special_ai_ptr
+;     4. JSR to AI handler, which updates entity state
+;
 ; =============================================================================
 
         .setcpu "6502"
@@ -239,35 +284,45 @@ blink_sprite_store:  tya
         jmp     wily_game_loop
 
 ; =============================================================================
-; main_game_loop -- Main Game Loop — per-frame update for normal stages ($8171)
+; main_game_loop — Per-frame update pipeline for normal stages ($8171)
 ; =============================================================================
-main_game_loop:  lda     $AD
-        beq     main_loop_check_start   ; skip item handler if no item
-        jsr     item_collection_handler
-main_loop_check_start:  lda     p1_new_presses
-        and     #$08
-        beq     main_loop_update_entities ; START not pressed
-        jsr     palette_anim_run
-main_loop_update_entities:  jsr     build_active_list ; scan entities within screen range
-        jsr     entity_update_dispatch  ; run player state machine
-        jsr     update_entity_positions ; move all entities
-        jsr     entity_spawn_scan       ; spawn/despawn by scroll
-        jsr     process_sound_and_bosses ; sound engine + boss check
-        jsr     entity_ai_dispatch      ; run enemy AI for all entities
-        jsr     render_all_sprites      ; build OAM buffer
+; Frame order: Input → Player → Physics → Spawn → Sound → AI → Render → VBlank
+; AI runs AFTER physics so handlers see updated positions. Rendering uses
+; final positions. Spawning before AI ensures new entities get processed.
+; =============================================================================
+main_game_loop:
+        lda     $AD
+        beq     main_loop_check_start
+        jsr     item_collection_handler ; process pending item pickup
+main_loop_check_start:
+        lda     p1_new_presses
+        and     #$08                    ; START pressed?
+        beq     main_loop_update_entities
+        jsr     palette_anim_run        ; pause palette fade effect
+main_loop_update_entities:
+        jsr     build_active_list       ; 1. scan entities within screen range
+        jsr     entity_update_dispatch  ; 2. player input + state machine
+        jsr     update_entity_positions ; 3. apply velocity → position for all
+        jsr     entity_spawn_scan       ; 4. spawn/despawn at scroll boundaries
+        jsr     process_sound_and_bosses ; 5. sound engine + boss defeat check
+        jsr     entity_ai_dispatch      ; 6. run per-entity AI handlers
+        jsr     render_all_sprites      ; 7. build OAM sprite buffer
         lda     transition_type
         beq     main_loop_check_scroll
-        jsr     check_screen_transition
-main_loop_check_scroll:  lda     $FB
+        jsr     check_screen_transition ; handle room/boss door transitions
+main_loop_check_scroll:
+        lda     $FB                     ; frame skip throttle (performance)
         beq     main_loop_wait_frame
         inc     frame_skip_hi
         cmp     frame_skip_hi
         beq     main_loop_frame_skip
         bcs     main_loop_wait_frame
-main_loop_frame_skip:  jsr     wait_one_rendering_frame
+main_loop_frame_skip:
+        jsr     wait_one_rendering_frame
         lda     #$00
         sta     frame_skip_hi
-main_loop_wait_frame:  jsr     wait_for_vblank ; wait for NMI
+main_loop_wait_frame:
+        jsr     wait_for_vblank
         jmp     main_game_loop
 
         .byte   $10,$10,$10,$15,$15,$10
@@ -433,9 +488,11 @@ item_collection_handler:  sec
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
+; ─── Refill player HP (large pickup) ───
 health_refill_large:
         lda     #$0A              ; large pickup: 10 ticks
         bne     health_refill_set ; always branch
+; ─── Refill player HP (small pickup) ───
 health_refill_small:
         lda     #$02              ; small pickup: 2 ticks
 health_refill_set:
@@ -465,9 +522,11 @@ health_refill_done_jmp:  jmp     refill_complete
 
 health_refill_full_rts:  rts
 
+; ─── Refill weapon energy (large pickup) ───
 weapon_refill_large:
         lda     #$0A              ; large pickup: 10 ticks
         bne     weapon_refill_set ; always branch
+; ─── Refill weapon energy (small pickup) ───
 weapon_refill_small:
         lda     #$02              ; small pickup: 2 ticks
 weapon_refill_set:
@@ -496,6 +555,7 @@ weapon_refill_render:  jsr     render_all_sprites
         jsr     wait_for_vblank
         jmp     weapon_refill_loop
 
+; ─── Finish HP/weapon refill, restore game state ───
 refill_complete:  lda     #$00
         sta     general_counter
         sta     game_mode
@@ -504,6 +564,7 @@ refill_complete:  lda     #$00
         jsr     weapon_set_base_type
 refill_exit:  rts
 
+; ─── Collect E-Tank pickup ───
 etank_pickup:
         lda     current_etanks               ; current E-tank count
         cmp     #$04              ; max = 4
@@ -514,6 +575,7 @@ etank_pickup_done:
         jsr     bank_switch_enqueue
         rts
 
+; ─── Collect extra life pickup ───
 extra_life_pickup:
         lda     current_lives               ; current lives count
         cmp     #$63              ; max = 99
@@ -560,6 +622,7 @@ wily_door_transition:  jsr     set_palette_colors
 wily_door_bank_table:  rts
 
         .byte   $06,$04,$0D,$07,$11,$09,$04,$10
+; ─── Play Wily teleport animation ───
 wily_teleport_sequence:  lda     #$30
         jsr     bank_switch_enqueue
         lda     #$0B
@@ -578,6 +641,7 @@ wily_teleport_done:  lda     #$00
         jsr     render_all_sprites
         rts
 
+; ─── Reset player flags and weapon state ───
 reset_player_state:  lda     #$C0
         sta     ent_flags
         lda     #$00
@@ -586,6 +650,7 @@ reset_player_state:  lda     #$C0
         jsr     weapon_set_base_type
         rts
 
+; ─── Wait for screen fade transition ───
 wait_screen_fade:  jsr     scroll_column_render
         jsr     wait_for_vblank
         lda     general_counter
@@ -593,6 +658,7 @@ wait_screen_fade:  jsr     scroll_column_render
         bne     wait_screen_fade
         rts
 
+; ─── Mark Wily gate boss as beaten ───
 wily_gate_mark_beaten:
         jsr     wily_teleport_sequence
         ldx     boss_id
@@ -638,6 +704,7 @@ wily_set_palette:
         jsr     wily_spawn_gate_entities
         rts
 
+; ─── Write palette colors from data table ───
 set_palette_colors:  ldy     #$02
 set_palette_loop:  lda     palette_color_data,x
         sta     palette_ram + $09,y
@@ -728,6 +795,7 @@ entity_dispatch_setup:  lda     #$00
 player_state_rts:  rts
 
         rts
+; ─── Player state: post-teleport gun update ───
 player_state_gun_update:
         lda     ent_flags             ; player entity flags
         and     #$40              ; check flip bit
@@ -909,6 +977,7 @@ player_ladder_state_jump:  lda     #$04
         sta     game_substate
 player_ladder_state_exit:  jmp     player_state_common_exit
 
+; ─── Player state: ladder idle input check ───
 player_state_ladder_idle:  lda     #$09
         sta     game_substate
         lda     controller_1
@@ -993,6 +1062,7 @@ player_ladder_clear_vel:  lda     #$00
 player_ladder_exit:  jsr     weapon_set_base_type
         rts
 
+; ─── Player state: fire weapon while on ladder ───
 player_ladder_fire_weapon:  jsr     player_update_facing
         jsr     fire_weapon_dispatch
         bcc     player_ladder_fire_done
@@ -1000,6 +1070,7 @@ player_ladder_fire_weapon:  jsr     player_update_facing
 
 player_ladder_fire_done:  jmp     player_ladder_clear_vel
 
+; ─── Player state: clear ladder climb animation ───
 player_ladder_clear_anim:
         lda     ent_anim_id             ; animation state
         cmp     #$03
@@ -1333,6 +1404,7 @@ player_scroll_left:  jsr     scroll_left_handler
         jsr     player_ground_collision
         rts
 
+; ─── Check tiles ahead of player for solids ───
 player_check_tile_ahead:  lda     #$02
         sta     temp_01
 tile_check_loop:  ldx     temp_01
@@ -1505,18 +1577,28 @@ ground_store_dir:  ora     $35
 ground_collision_rts:  rts
 
 ; =============================================================================
-; player_vertical_physics -- Player Vertical Physics — gravity, fall limit, ceiling snap ($8B83)
+; player_vertical_physics — Gravity, floor/ceiling collision, terminal velocity ($8B83)
 ; =============================================================================
-player_vertical_physics:  lda     ent_y_px
+; Applies Y velocity to player position, checks for floor landing (falling)
+; or ceiling hit (rising), snaps to 16px grid on collision, and clamps
+; fall speed to terminal velocity ($F4).
+;
+; Y velocity convention: positive = rising, negative = falling (NES Y inverted).
+; Gravity subtracts from velocity each frame, eventually making it negative.
+; =============================================================================
+player_vertical_physics:
+        lda     ent_y_px                ; save previous Y for delta calculation
         sta     current_ent_x
         lda     ent_y_sub
         sta     offscreen_flag
+; --- Apply velocity to position (16-bit subtraction) ---
         lda     #$00
         sta     temp_00
-        lda     ent_y_vel
+        lda     ent_y_vel               ; sign-extend velocity for page math
         bpl     player_apply_gravity
-        dec     temp_00
-player_apply_gravity:  sec
+        dec     temp_00                 ; negative velocity → temp_00 = $FF
+player_apply_gravity:
+        sec
         lda     ent_y_sub
         sbc     ent_y_vel_sub
         sta     ent_y_sub
@@ -1524,67 +1606,78 @@ player_apply_gravity:  sec
         sbc     ent_y_vel
         sta     ent_y_px
         tax
-        lda     boss_fight_flag
+        lda     boss_fight_flag         ; extend subtraction to page byte
         sbc     temp_00
         sta     boss_fight_flag
+; --- Bounds checking: death triggers ---
         cpx     #$04
         bcs     player_check_fall_limit
-        lda     game_substate
+        lda     game_substate           ; Y < $04: scrolled off top
         cmp     #$09
         beq     player_set_scroll_trigger
         cmp     #$0A
         bne     player_gravity_falling
-player_set_scroll_trigger:  lda     #$01
+player_set_scroll_trigger:
+        lda     #$01                    ; trigger vertical room transition
         sta     transition_type
         bne     player_gravity_falling
-player_check_fall_limit:  cpx     #$E8
+player_check_fall_limit:
+        cpx     #$E8                    ; Y >= $E8: fell off bottom
         bcc     player_gravity_falling
         lda     boss_fight_flag
-        bmi     player_gravity_falling
-        lda     #$03
+        bmi     player_gravity_falling  ; ignore during boss fights
+        lda     #$03                    ; trigger death transition
         sta     transition_type
-player_gravity_falling:  lda     ent_y_vel
-        bmi     player_gravity_rising
+; --- Falling branch: check floor collision 12px below player ---
+player_gravity_falling:
+        lda     ent_y_vel
+        bmi     player_gravity_rising   ; negative = moving upward
         sec
         lda     ent_y_px
-        sbc     #$0C
+        sbc     #$0C                    ; scan 12px below feet
         sta     temp_0A
         lda     boss_fight_flag
         sbc     #$00
         sta     temp_0B
         jsr     player_floor_tile_check
         lda     temp_00
-        beq     player_apply_gravity_sub
+        beq     player_apply_gravity_sub ; no solid tile → keep falling
+; --- Floor hit: snap Y to 16px grid boundary ---
         lda     #$00
         sta     ent_y_sub
         lda     temp_0A
-        and     #$0F
-        eor     #$0F
+        and     #$0F                    ; pixel position within 16px block
+        eor     #$0F                    ; invert → distance to next boundary
         sec
-        adc     ent_y_px
+        adc     ent_y_px                ; snap upward to grid
         sta     ent_y_px
-player_gravity_stop:  lda     #$00
+player_gravity_stop:
+        lda     #$00                    ; zero velocity on collision
         sta     ent_y_vel_sub
         sta     ent_y_vel
-player_apply_gravity_sub:  sec
+; --- Apply gravity: velocity -= gravity_constant ---
+player_apply_gravity_sub:
+        sec
         lda     ent_y_vel_sub
         sbc     gravity_sub_lo
         sta     ent_y_vel_sub
         lda     ent_y_vel
         sbc     gravity_sub_hi
         sta     ent_y_vel
-        bpl     player_gravity_rts
-        cmp     #$F4
-        bcs     player_gravity_rts
-        lda     #$00
+        bpl     player_gravity_rts      ; still rising → no clamp
+        cmp     #$F4                    ; terminal velocity = $F4
+        bcs     player_gravity_rts      ; not exceeded → return
+        lda     #$00                    ; clamp to terminal velocity
         sta     ent_y_vel_sub
         lda     #$F4
         sta     ent_y_vel
 player_gravity_rts:  rts
 
-player_gravity_rising:  clc
+; --- Rising branch: check ceiling collision 12px above player ---
+player_gravity_rising:
+        clc
         lda     ent_y_px
-        adc     #$0C
+        adc     #$0C                    ; scan 12px above head
         sta     temp_0A
         lda     boss_fight_flag
         adc     #$00
@@ -1592,26 +1685,29 @@ player_gravity_rising:  clc
         jsr     player_floor_tile_check
         jsr     check_platform_collision
         lda     temp_00
-        bne     player_ceiling_snap
-        bcs     player_ceiling_set_flag
+        bne     player_ceiling_snap     ; solid tile → snap to ceiling
+        bcs     player_ceiling_set_flag ; platform collision
         bcc     player_apply_gravity_sub
-player_ceiling_snap:  lda     #$00
+; --- Ceiling hit: snap Y to 16px grid, zero velocity ---
+player_ceiling_snap:
+        lda     #$00
         sta     ent_y_sub
         lda     ent_y_px
         pha
         lda     temp_0A
-        and     #$0F
+        and     #$0F                    ; distance within 16px block
         sta     ent_y_px
         pla
         sec
-        sbc     ent_y_px
+        sbc     ent_y_px                ; snap downward to grid
         sta     ent_y_px
         lda     boss_fight_flag
         sbc     #$00
         sta     boss_fight_flag
         jmp     player_gravity_stop
 
-player_ceiling_set_flag:  lda     #$01
+player_ceiling_set_flag:
+        lda     #$01
         sta     temp_00
         rts
 
@@ -2274,6 +2370,7 @@ transition_scroll_render:  jsr     render_all_sprites
         sty     scroll_x                ; Y=0: pin scroll_x to 0 at destination
         rts
 
+; ─── Load stage transition palette colors ───
 transition_load_palette:  ldx     current_stage
         cpx     #$03
         bne     transition_palette_check
@@ -2373,6 +2470,7 @@ vert_scroll_finish:  lda     #$00
         jsr     render_all_sprites
         rts
 
+; ─── Sync Item-1 entity with player position ───
 vert_scroll_update_entity:  lda     ent_x_px ; sync Item-1 entity position with player
         sta     ent_x_px + $02
         lda     ent_x_screen
@@ -2425,47 +2523,68 @@ reset_entity_clear_spawn:  lda     #$FF
         rts
 
 ; =============================================================================
-; entity_ai_dispatch -- Entity AI Dispatch — iterate entities, call AI via pointer table ($925B)
+; entity_ai_dispatch — Run AI handlers for all enemy entities ($925B)
 ; =============================================================================
-entity_ai_dispatch:  sec
+; Iterates enemy slots $10-$1F. For each active entity, loads its AI handler
+; address from the 128-entry pointer table and executes via indirect jump.
+;
+; Two dispatch modes controlled by game_mode ($AA):
+;   Normal (game_mode=0 or 4): all AI in bank $0E, bank field ignored
+;   Special (game_mode≠0,≠4): checks entity_ai_bank_table per type
+;     bank=0 → use bank $0E pointers (same as normal)
+;     bank≠0 → use entity_special_ai_ptr in bank $0F
+;
+; Return mechanism: pushes a return stub address ($9299 or $92E7) onto
+; the stack, then JMP (jump_ptr). The AI handler's RTS returns to the
+; stub, which advances to the next entity slot.
+; =============================================================================
+entity_ai_dispatch:
+        sec
         lda     ent_x_px
         sbc     scroll_x
-        sta     player_screen_x
+        sta     player_screen_x         ; player X relative to scroll
         lda     game_mode
         beq     entity_ai_normal_loop
-        cmp     #$04
+        cmp     #$04                    ; game_mode=4 also uses normal path
         bne     entity_ai_special_loop
-entity_ai_normal_loop:  ldx     #$10    ; entity slot 16 = first enemy slot
+; --- Normal dispatch: iterate slots $10-$1F, call AI from bank $0E ---
+entity_ai_normal_loop:
+        ldx     #$10                    ; first enemy slot
         stx     current_entity_slot
-entity_ai_normal_step:  lda     ent_flags,x ; check entity active flag (bit 7)
-        bpl     entity_ai_next_normal
+entity_ai_normal_step:
+        lda     ent_flags,x
+        bpl     entity_ai_next_normal   ; bit 7 clear = inactive, skip
         sec
-        lda     ent_x_px,x
+        lda     ent_x_px,x             ; compute entity screen-relative X
         sbc     scroll_x
         sta     current_ent_x
         lda     ent_x_screen,x
         sbc     nametable_select
-        sta     offscreen_flag
+        sta     offscreen_flag          ; nonzero = offscreen
         ldy     ent_type,x
-        lda     entity_ai_ptr_lo,y
+        lda     entity_ai_ptr_lo,y      ; load AI handler address
         sta     jump_ptr
         lda     entity_ai_ptr_hi,y
         sta     jump_ptr_hi
-        lda     #$92
+        lda     #$92                    ; push return stub address ($9299)
         pha
         lda     #$98
         pha
-        jmp     (jump_ptr)
+        jmp     (jump_ptr)              ; AI handler RTS returns here
 
-entity_ai_next_normal:  inc     current_entity_slot
+entity_ai_next_normal:
+        inc     current_entity_slot
         ldx     current_entity_slot
-        cpx     #$20
+        cpx     #$20                    ; slot $20 = past last enemy slot
         bne     entity_ai_normal_step
         rts
 
-entity_ai_special_loop:  ldx     #$10
+; --- Special dispatch: checks bank table for alternate AI handlers ---
+entity_ai_special_loop:
+        ldx     #$10
         stx     current_entity_slot
-entity_ai_special_step:  lda     ent_flags,x ; check entity active flag
+entity_ai_special_step:
+        lda     ent_flags,x
         bpl     entity_ai_next_special
         sec
         lda     ent_x_px,x
@@ -2474,29 +2593,31 @@ entity_ai_special_step:  lda     ent_flags,x ; check entity active flag
         lda     ent_x_screen,x
         sbc     nametable_select
         sta     offscreen_flag
-        lda     #$92
+        lda     #$92                    ; push return stub ($92E7 for special)
         pha
         lda     #$E6
         pha
         ldy     ent_type,x
-        lda     entity_ai_bank_table,y
+        lda     entity_ai_bank_table,y  ; 0 = normal bank $0E, else = special
         bne     entity_ai_special_indirect
-        ldy     ent_type,x
+        ldy     ent_type,x              ; bank=0: use normal AI pointers
         lda     entity_ai_ptr_lo,y
         sta     jump_ptr
         lda     entity_ai_ptr_hi,y
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-entity_ai_special_indirect:  tay
-        dey
+entity_ai_special_indirect:
+        tay                             ; bank≠0: use alternate AI table
+        dey                             ; bank-1 as index
         lda     entity_special_ai_ptr_lo,y
         sta     jump_ptr
         lda     entity_special_ai_ptr_hi,y
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-entity_ai_next_special:  inc     current_entity_slot
+entity_ai_next_special:
+        inc     current_entity_slot
         ldx     current_entity_slot
         cpx     #$20
         bne     entity_ai_special_step
@@ -2783,6 +2904,7 @@ m445_apply_physics:
 
 m445_x_speed_table:  .byte   $17,$5E,$AD,$E3,$E3,$AD,$5E,$17 ; M-445 X speed per animation frame
 m445_y_speed_table:  .byte   $F5,$E3,$AD,$5E,$5E,$AD,$E3,$F5 ; M-445 Y speed per animation frame
+; ─── deactivate all children of given type ───
 enemy_destroy_setup:
         lda     #$03
         sta     temp_00
@@ -2936,10 +3058,12 @@ claw_var_apply_physics:  jsr     apply_entity_physics
 ; tanishi_ai -- Enemy AI: Tanishi (type $0A) — snail, spawns bare form on hit ($9776)
 ; Mislabeled by annotation scripts as "Shotman". Actually type $0A (Tanishi).
 ; =============================================================================
+; ─── stage transition: destroy all spawned entities ───
 stage_trans_ai:
         lda     #$07
         sta     temp_00
         jmp     enemy_destroy_scan
+; ─── Tanishi AI: walk, shell shed on damage ───
 tanishi_ai_main:
         lda     ent_state,x
         bne     tanishi_state_check
@@ -3074,6 +3198,7 @@ kerog_apply_physics:  jsr     entity_face_player
 
 kerog_child_vel_x_sub:  .byte   $15,$8D,$A2 ; Petit Kerog X velocity table
 kerog_child_vel_x_hi:  .byte   $04,$02,$01
+; ─── Petit Kerog AI: hop, wall bounce, face player ───
 kerog_child_collision_check:
         lda     #$00
         sta     ent_anim_frame,x
@@ -3276,6 +3401,7 @@ atomic_fire_update:  dec     ent_state,x
         jsr     apply_simple_physics
         rts
 
+; ─── Anko sub-part: set palette and despawn ───
 anko_11_ai:
         ldy     #$02
         jsr     boss_set_palette
@@ -3283,6 +3409,7 @@ anko_11_ai:
         sta     ent_despawn,x
         lsr     ent_flags,x
         rts
+; ─── Rail Platform AI: follow waypoint path ───
 rail_platform_ai:
         lda     #$14
         sta     ent_plat_height,x
@@ -3443,6 +3570,7 @@ metalman_hitbox_rts:  sec
         sta     ent_plat_y,x
         rts
 
+; ─── Metal Man AI: spawn blades from pattern table ───
 laser_beam_ai:
         sec
         lda     ent_x_screen,x
@@ -3764,6 +3892,7 @@ quickman_state_table:  jsr     apply_entity_physics
         rts
 
 quickman_anim_threshold:  .byte   $00,$02,$00,$00,$00             ; Quickman animation speed thresholds
+; ─── Heat Man boss AI: palette, fire pattern, charge ───
 air_tornado_proj_ai:
         ldy     #$02
         lda     ent_hp,x
@@ -3939,6 +4068,7 @@ airman_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics_alt
         rts
 
+; ─── Atomic Fire projectile: gravity acceleration ───
 atomic_fire_ai:
         clc
         lda     ent_y_vel_sub,x
@@ -3949,6 +4079,7 @@ atomic_fire_ai:
         sta     ent_y_vel,x
         jsr     apply_entity_physics
         rts
+; ─── Friender AI: Air Man landing height lookup ───
 friender_ai:
         sec
         lda     ent_x_screen,x
@@ -4247,6 +4378,7 @@ kukku_spawner_set_timer:  lda     #$1F
 kukku_spawner_dec_timer:  dec     ent_state,x
         rts
 
+; ─── Kukku body AI: bounce, tile collision ───
 kukku_body_ai:
         lda     #$08
         sta     temp_01
@@ -4303,6 +4435,7 @@ boss_telly_dec_timer:
         jsr     apply_entity_physics_alt
         rts
 
+; ─── Telly AI: home toward player position ───
 telly_ai:
         lda     ent_state,x
         bne     boss_spawn_dec_timer
@@ -4388,6 +4521,7 @@ boss_check_physics:  jsr     apply_entity_physics_alt
 boss_misc_rts:  rts
 
 boss_random_timer_table:  .byte   $12,$1F,$1F,$3D             ; random timer values for boss AI
+; ─── Blackout trigger AI: darken palette, spawn Changkey ───
 blackout_trigger_ai:
         lda     palette_ram + $01
         cmp     #$0F
@@ -4445,6 +4579,7 @@ boss_palette_flash_dec:  dec     ent_state,x
         eor     #$03
         jmp     boss_palette_flash
 
+; ─── Blackout restore AI: fade palette back to normal ───
 blackout_restore_ai:
         lda     ent_state,x
         bne     boss_palette_flash_dec
@@ -4561,6 +4696,7 @@ wily_capsule_physics:  jsr     apply_entity_physics
         sta     ent_hitbox_h_lo,y
 wily_capsule_rts:  rts
 
+; ─── Pierrobot AI: ride gear platform, stop on hit ───
 pierrobot_ai:
         jsr     apply_entity_physics
         bcc     pierrobot_ai_rts
@@ -4595,6 +4731,7 @@ wily_capsule_dec_timer:
         jsr     apply_entity_physics_alt
         rts
 
+; ─── Fly Boy AI: dive toward player, bounce off floor ───
 fly_boy_ai:
         lda     ent_parent_slot,x
         bne     angler_phase_check
@@ -4668,6 +4805,7 @@ angler_dec_timer:  dec     ent_state,x
 angler_physics:  jsr     apply_entity_physics
         rts
 
+; ─── Appear Block timer init: long/short variants ───
 entity_init_timer_long:
         lda     #$08
         bne     entity_store_timer
@@ -4684,6 +4822,7 @@ entity_store_timer:
         jsr     apply_simple_physics
         rts
 
+; ─── Press AI: descend on player proximity, retract ───
 press_ai:
         lda     ent_parent_slot,x
         bne     mecha_dragon_tile_check
@@ -5064,6 +5203,7 @@ picopico_shot_vel_y_sub:  .byte   $25,$00,$DB ; Picopico shot Y velocity (sub-pi
 picopico_shot_vel_y_hi:  .byte   $01,$00,$FE
 picopico_shot_vel_x_sub:  .byte   $A3,$00,$A3 ; Picopico shot X velocity (sub-pixel)
 picopico_shot_vel_x_hi:  .byte   $01,$02,$01
+; ─── Picopico-kun Wily 3 alternate AI entry ───
 picopico_wily3_entry:
         lda     ent_state,x
         bne     buebeam_collision
@@ -5169,6 +5309,7 @@ boobeam_dec_timer:  ldx     current_entity_slot
 
 boobeam_x_offset_table:  .byte   $F8,$08 ; Boobeam turret X offset per slot
 boobeam_dir_flags_table:  .byte   $83,$C3 ; Boobeam shot direction flags
+; ─── Deactivate entity via flag shift ───
 entity_shift_flags:
         lsr     ent_flags,x
         rts
@@ -5237,6 +5378,7 @@ pipi_despawn_ai:
         sta     temp_00
         jmp     enemy_destroy_scan
 
+; ─── Pipi egg AI: fall until grounded, then hatch ───
 pipi_egg_ai:
         lda     ent_flags,x
         and     #$04
@@ -5296,6 +5438,7 @@ boss_explode_vel_x_sub:  .byte   $6A,$F0,$A8,$6A,$7B,$00,$9E,$E6 ; explosion X v
 boss_explode_vel_x_hi:  .byte   $01,$01,$01,$01,$00,$00,$00,$01
 boss_explode_timer_table:  .byte   $0B,$21,$1C,$0B,$21,$10,$19,$19
 
+; ─── Copipi AI: delayed velocity burst ───
 copipi_ai:
         lda     ent_parent_slot,x
         bne     boss_explode_apply_physics
@@ -5407,6 +5550,7 @@ circular_vel_x_sub_table:  .byte   $8B,$79,$5C,$32,$00,$32,$5C,$79 ; circular sh
         .byte   $8B,$79,$5C,$32,$00,$32,$5C,$79
 circular_flags_table:  .byte   $80,$80,$80,$80,$C0,$C0,$C0,$C0 ; circular shot direction flags
         .byte   $C0,$C0,$C0,$C0,$80,$80,$80,$80
+; ─── Goblin AI: palette cycle, hover, spawn horns ───
 goblin_ai_init:
         jsr     entity_face_player
         sec
@@ -5529,6 +5673,7 @@ goblin_inc_timer:  inc     ent_state,x
         jsr     apply_entity_physics_alt
         rts
 
+; ─── Write 4-byte Goblin palette to RAM ───
 goblin_set_palette:  lda     #$03
         sta     temp_02
 goblin_palette_copy_loop:  lda     goblin_palette_data,y
@@ -5596,6 +5741,7 @@ turret_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics
         rts
 
+; ─── Petit Goblin AI: drop then fly at player ───
 petit_goblin_ai:
         lda     ent_parent_slot,x
         cmp     #$02
@@ -5843,10 +5989,12 @@ sniper_joe_vel_rev:  .byte   $E5
 sniper_joe_vel_hi_fwd:  .byte   $00
 sniper_joe_vel_hi_rev:  .byte   $00
         .byte   $BF,$1B,$FF,$FF   ; type $49 velocity: fwd=$FFBF rev=$FF1B (downward)
+; ─── Mole despawner: destroy all Mole controllers ───
 mole_4a_ai:
         lda     #$47
         sta     temp_00
         jmp     enemy_destroy_scan
+; ─── Crazy Cannon AI: timed multi-shot burst ───
 crazy_cannon_ai:
         lda     ent_parent_slot,x
         beq     sniper_joe_boss_proj_init
@@ -5896,6 +6044,7 @@ boss_proj_mgr_dec_timer:  dec     ent_state,x
 boss_proj_mgr_physics:  jsr     apply_entity_physics_alt
         rts
 
+; ─── Fire projectile with RNG-based angle ───
 boss_proj_mgr_fire:  ldx     temp_01
         lda     rng_seed
         and     boss_fire_rng_mask,x
@@ -5951,6 +6100,7 @@ boss_fire_y_offset:  .byte   $0C
 boss_fire_x_offset:  .byte   $0C
 boss_fire_x_offset_hi:  .byte   $00,$F4,$FF,$1F,$60,$18,$D4,$02
         .byte   $00,$08,$00,$F8,$FF  ; unknown data padding
+; ─── Sniper Armor AI: jump, land, shoot, spawn Joe ───
 sniper_armor_ai:
         lda     ent_parent_slot,x
         bne     multi_boss_state_check
@@ -6166,6 +6316,7 @@ scworm_nest_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics_alt
         rts
 
+; ─── Scworm worm AI: jump toward player, wall bounce ───
 scworm_worm_ai:
         lda     ent_parent_slot,x
         bne     scworm_worm_dispatch
@@ -6235,6 +6386,7 @@ scworm_worm_wall_timer:  lda     ent_state,x
 scworm_worm_wall_physics:  jsr     apply_entity_physics_alt
         rts
 
+; ─── Press retract AI: count down then deactivate ───
 press_retract_ai:
         dec     ent_state,x
         beq     wily_gravity_deactivate
@@ -6244,6 +6396,7 @@ wily_gravity_deactivate:
         lsr     ent_flags,x
         rts
 
+; ─── Appear Block AI: timed blink with 3 timer variants ───
 appear_block_a_ai:
         lda     #$7D
         bne     despawn_timer_store
@@ -6299,6 +6452,7 @@ despawn_timer_dec:  dec     ent_plat_y,x
         jsr     apply_entity_physics_alt
         rts
 
+; ─── Neo Metall flip AI: stage palette swap trigger ───
 neo_metall_flip_ai:
         lda     current_stage
         cmp     #$0C
@@ -6736,6 +6890,7 @@ wily4_despawn_done:  ldx     current_entity_slot
 
 wily4_timer_table:  .byte   $40,$01,$20,$28,$FF ; Wily stage 4 spawn timer table
 wily4_y_pos_table:  .byte   $98,$98,$48,$78 ; Wily stage 4 Y position table
+; ─── Wily boss shared AI: copy boss velocity to entity ───
 wily4_enemy_shared_ai:  lda     boss_y_vel
         sta     ent_y_vel,x
         lda     boss_y_vel_sub

@@ -27,6 +27,30 @@
 ; Mapper: MMC1 (mode 3: $C000-$FFFF fixed, $8000-$BFFF switchable)
 ; PRG layout: 16 × 16KB banks ($00-$0F), bank $0F always present
 ;
+; --- NMI / PPU Update Pipeline ---
+;   NMI handler
+;    ├── OAM DMA ($0200 → PPU)
+;    ├── ppu_buffer_transfer (queued writes)
+;    ├── upload_palette (palette RAM → PPU)
+;    ├── ppu_scroll_column_update (tile column → nametable)
+;    ├── ppu_attribute_update (attribute merge/fill)
+;    ├── Scroll register setup (camera offset subtraction, nametable XOR)
+;    ├── RNG update (ent_x_sub XOR seed + frame)
+;    └── Bank callback processing
+;
+; --- Entity Collision Pipeline ---
+;   apply_entity_physics_alt (called by AI handlers)
+;    ├── check_player_collision → contact damage / item pickup
+;    ├── check_weapon_collision → weapon handler dispatch
+;    │    └── On kill: item_drop_rng → convert to DEATH_EXPLODE
+;    └── Offscreen check → despawn
+;
+; --- Weapon Fire Pipeline ---
+;   weapon_dispatch (per weapon type)
+;    ├── Ammo check + deduction
+;    ├── fire_find_slot_loop (scan slots 2-$0E)
+;    └── weapon_spawn_projectile (type, position, velocity from tables)
+;
 ; =============================================================================
 ; KEY MEMORY MAP
 ; =============================================================================
@@ -230,6 +254,7 @@ bank_switch_queue_done:  lda     #$00   ; Queue empty — restore original bank
         lda     bank_switch_backup
         jmp     bank_switch
 
+; ─── Enqueue a bank switch request ───
 bank_switch_enqueue:  ldy     $66       ; Enqueue a bank switch request (A = bank number)
         cpy     #$10
         bcs     bank_switch_enqueue_rts
@@ -576,7 +601,7 @@ nametable_column_upload:  lda     #$09  ; switch to bank $09 (scroll data)
         ora     #$20
         sta     col_update_addr_lo
 nametable_col_copy_inner:  ldy     #$20
-nametable_col_copy_byte:  lda     ($FE),y
+nametable_col_copy_byte:  lda     (general_ptr_lo),y
         sta     col_update_tiles,y
         dey
         bpl     nametable_col_copy_byte
@@ -739,7 +764,7 @@ palette_anim_done:  rts
         inc     temp_0B
 @skip:
         ldy     #$00
-        lda     ($0A),y
+        lda     (temp_0A),y
         sta     temp_00
         lda     #$00
         sta     PPUADDR
@@ -752,13 +777,13 @@ palette_anim_done:  rts
 ; chr_upload_entry — Upload CHR tile data from stage banks to CHR-RAM ($C487)
 ; =============================================================================
 chr_upload_entry:  ldy     temp_01
-        lda     ($0A),y
+        lda     (temp_0A),y
         sta     jump_ptr_hi
         iny
-        lda     ($0A),y
+        lda     (temp_0A),y
         sta     temp_02
         iny
-        lda     ($0A),y
+        lda     (temp_0A),y
         iny
         sty     temp_01
         jsr     bank_switch
@@ -778,7 +803,7 @@ chr_upload_byte_loop:  lda     (jump_ptr),y ; read CHR byte from bank
         inc     temp_0B
         inc     temp_0B
         ldy     #$61
-chr_upload_palette_copy:  lda     ($0A),y
+chr_upload_palette_copy:  lda     (temp_0A),y
         sta     palette_anim_target,y
         dey
         bpl     chr_upload_palette_copy
@@ -1029,6 +1054,7 @@ chr_bank_page_count_tbl:  .byte   $10,$10,$10,$10,$08,$08,$10,$0E
         ora     (temp_01,x)
         ora     (temp_01,x)
         .byte   $02
+; ─── Copy column data to PPU update buffer ───
 column_copy_to_buffer:  jsr     bank_switch
         ldy     #$1F
 column_copy_loop:  lda     (jump_ptr),y
@@ -1061,7 +1087,7 @@ column_copy_from_ram:  lda     $9CD0,x
         lda     #$09
         jsr     bank_switch
         ldy     #$1F
-column_copy_from_ptr:  lda     ($FE),y
+column_copy_from_ptr:  lda     (general_ptr_lo),y
         sta     col_update_tiles,y
         dey
         bpl     column_copy_from_ptr
@@ -1124,6 +1150,7 @@ column_copy_from_bank:  lda     (jump_ptr),y
         sta     ent_y_px
         lda     #ENTITY_AIR_TORNADO2
         sta     ent_type
+; ─── Scroll boss into view on screen ───
 boss_entrance_scroll:  lda     current_stage
         and     #$07
         jsr     bank_switch
@@ -1160,6 +1187,7 @@ boss_entrance_done:  lda     #$30
         jsr     banked_entry
         lda     #$0E
         jsr     bank_switch
+; ─── Run one boss fight frame ───
 boss_fight_frame:  lda     #$00
         sta     controller_1
         sta     p1_new_presses
@@ -1211,38 +1239,52 @@ div8_next:  dey
         rts
 
 ; =============================================================================
-; divide_16bit — 16-bit unsigned division: $0A:$0B / $0C:$0D -> $0E:$0F ($C874)
+; divide_16bit — 16-bit binary long division ($C874)
 ; =============================================================================
-divide_16bit:  lda     #$00
-        sta     temp_11
-        sta     temp_10
-        lda     temp_0B
+; Input:  temp_0A:temp_0B = dividend (lo:hi)
+;         temp_0C:temp_0D = divisor (lo:hi)
+; Output: temp_0E:temp_0F = quotient (lo:hi)
+;         temp_0B:temp_11 = remainder
+;
+; Algorithm: shift-and-subtract (restoring division). Processes 16 bits,
+; shifting dividend left into remainder, subtracting divisor, and
+; setting quotient bit if subtraction succeeds (no borrow).
+; Returns 0 if any operand is 0.
+; =============================================================================
+divide_16bit:
+        lda     #$00
+        sta     temp_11                 ; clear remainder (hi)
+        sta     temp_10                 ; clear quotient accumulator
+        lda     temp_0B                 ; check for zero operands
         ora     temp_0A
         ora     temp_0D
         ora     temp_0C
         bne     div16_setup
-        sta     temp_0F
+        sta     temp_0F                 ; both zero → return 0
         sta     temp_0E
         rts
 
-div16_setup:  ldy     #$10              ; 16 bits to process
-div16_loop:  asl     $10
-        rol     temp_0A
+div16_setup:
+        ldy     #$10                    ; 16 iterations (one per bit)
+div16_loop:
+        asl     $10                     ; shift quotient left (make room for new bit)
+        rol     temp_0A                 ; shift dividend left into remainder
         rol     temp_0B
         rol     temp_11
-        sec
+        sec                             ; trial subtraction: remainder - divisor
         lda     temp_0B
         sbc     temp_0C
         tax
         lda     temp_11
         sbc     temp_0D
-        bcc     div16_next
-        stx     jump_ptr_hi
+        bcc     div16_next              ; borrow = divisor doesn't fit
+        stx     jump_ptr_hi             ; no borrow: keep subtraction result
         sta     temp_11
-        inc     temp_10
-div16_next:  dey
+        inc     temp_10                 ; set quotient bit (bit 0)
+div16_next:
+        dey
         bne     div16_loop
-        lda     temp_0A
+        lda     temp_0A                 ; move quotient to output
         sta     temp_0F
         lda     temp_10
         sta     temp_0E
@@ -1354,6 +1396,7 @@ attr_calc_mask:  pla
         rts
 
 attr_mask_table:  .byte   $03,$0C,$30,$C0
+; ─── Copy metatile column from stage bank ───
 column_data_copy:  lda     current_stage
         and     #$07
         jsr     bank_switch
@@ -1384,7 +1427,7 @@ metatile_render_loop:  clc
         pha
         adc     metatile_offset_table,y
         tax
-        lda     ($0A),y
+        lda     (temp_0A),y
         asl     a
         asl     a
         clc
@@ -1535,7 +1578,7 @@ metatile_attr_loop:  ldy     temp_00
         iny
 metatile_attr_count:  lda     #$02
         sta     temp_02
-metatile_attr_inner:  lda     ($0A),y
+metatile_attr_inner:  lda     (temp_0A),y
         asl     a
         asl     a
         clc
@@ -1631,6 +1674,7 @@ scroll_col_copy_loop:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
+; ─── Load sprite palette for scroll column ───
 scroll_col_load_palette:  ldy     $B42C,x
         lda     $B46C,y
         sta     palette_sprite + $09
@@ -1646,6 +1690,7 @@ scroll_col_load_palette:  ldy     $B42C,x
         sta     palette_sprite + $0F
         rts
 
+; ─── Build list of active entity slots ───
         ldx     #$0F
         ldy     #$00
 build_active_entity_list:  lda     ent_spawn_flags,x
@@ -1679,84 +1724,113 @@ cached_tile_scan_loop:  dey
         rts
 
 ; =============================================================================
-; lookup_tile_from_map — Look up tile collision type from stage metatile map ($CBC3)
+; lookup_tile_from_map — Convert pixel position to collision type ($CBC3)
+; =============================================================================
+; Input:  jump_ptr/jump_ptr_hi = X pixel / screen number
+;         temp_0A/temp_0B = Y pixel / Y screen offset (0=same, neg=above, pos=below)
+; Output: temp_00 = collision type (0=empty, 1=solid, 2-7=stage-specific)
+;
+; Algorithm:
+;   1. Bounds-check Y screen offset
+;   2. Compute 6-bit metatile map index: col*8 + row (column-major)
+;      col = X_pixel >> 5 (bits 7-5 → 0-7), row = Y_pixel >> 5 (bits 7-5 → 0-7)
+;   3. Build pointer to screen's metatile map from screen number
+;   4. Load metatile ID, compute metatile data address ($2000 + ID*4)
+;   5. Select quadrant (2×2 tile within metatile) from pixel bits 4
+;   6. Extract 2-bit collision type from bits 7-6 of quadrant byte
+;   7. Types 2-3: look up stage-specific collision via stage_collision_table
 ; =============================================================================
 lookup_tile_from_map:  lda     current_stage
-        and     #$07                    ; stage bank = stage index & 7
+        and     #$07
         jsr     bank_switch             ; switch to stage data bank
         lda     #$00
         sta     temp_00
-        lda     temp_0B
-        beq     tile_lookup_calc_index
-        bmi     tile_lookup_clear_y
-        jmp     tile_lookup_done
+        lda     temp_0B                 ; Y screen offset
+        beq     tile_lookup_calc_index  ; 0 = same screen
+        bmi     tile_lookup_clear_y     ; negative = above screen (clamp Y to 0)
+        jmp     tile_lookup_done        ; positive = below screen (out of bounds)
 
 tile_lookup_clear_y:  lda     #$00
         sta     temp_0A
-tile_lookup_calc_index:  lda     jump_ptr
+; --- Step 2: pixel → 6-bit metatile map index (column-major) ---
+; Each screen is 8×8 metatiles (32px each). Index = col*8 + row.
+tile_lookup_calc_index:
+        lda     jump_ptr                ; X pixel position
         lsr     a
         lsr     a
-        and     #$38
+        and     #$38                    ; col = X>>5, shifted to bits 5-3
         sta     temp_00
-        lda     temp_0A
-        asl     a
+        lda     temp_0A                 ; Y pixel position
+        asl     a                       ; rotate bits 7-5 down to bits 2-0
+        rol     a                       ;   via 4 left rotations (wraps through carry)
         rol     a
         rol     a
-        rol     a
-        and     #$07
-        ora     temp_00
+        and     #$07                    ; row = Y>>5, in bits 2-0
+        ora     temp_00                 ; index = col*8 | row
         sta     temp_00
+; --- Step 3: build pointer to screen's metatile map ---
+; Map pages start at $8500. Screen number selects page + offset.
+; temp_0C:temp_0D = $8500 + screen_number * 64
         lda     #$00
         sta     temp_0C
-        lda     jump_ptr_hi
-        lsr     a
+        lda     jump_ptr_hi             ; screen number
+        lsr     a                       ; bits 1-0 → temp_0C bits 7-6 (offset within page)
         ror     temp_0C
         lsr     a
         ror     temp_0C
         clc
-        adc     #$85
+        adc     #$85                    ; page = $85 + (screen >> 2)
         sta     temp_0D
+; --- Step 4: load metatile ID → compute metatile data address ---
         ldy     temp_00
-        lda     ($0C),y
+        lda     (temp_0C),y             ; metatile ID from map
         sta     temp_0C
-        lda     #$20
-        asl     temp_0C
+        lda     #$20                    ; base = $2000 (metatile definition data)
+        asl     temp_0C                 ; metatile_ID * 4 (each metatile = 4 quadrant bytes)
         rol     a
         asl     temp_0C
         rol     a
-        sta     temp_0D
+        sta     temp_0D                 ; (temp_0C:temp_0D) = $2000 + ID*4
+; --- Step 5: select quadrant within 2×2 metatile ---
+; Bit 4 of X pixel = left(0)/right(+2), bit 4 of Y pixel = top(0)/bottom(+1)
         ldy     #$00
         lda     jump_ptr
-        and     #$10
+        and     #$10                    ; X bit 4: right half of metatile?
         beq     tile_check_vert
+        iny                             ; +2 = right column
         iny
-        iny
-tile_check_vert:  lda     $0A
-        and     #$10
+tile_check_vert:  lda     temp_0A
+        and     #$10                    ; Y bit 4: bottom half of metatile?
         beq     tile_get_collision_type
-        iny
-tile_get_collision_type:  lda     ($0C),y
+        iny                             ; +1 = bottom row
+; --- Step 6: extract 2-bit collision type from bits 7-6 ---
+tile_get_collision_type:  lda     (temp_0C),y  ; quadrant byte (tile + collision)
         sta     temp_00
-        asl     temp_00
-        rol     a
-        asl     temp_00
-        rol     a
-        and     #$03
+        asl     temp_00                 ; shift bit 7 → carry
+        rol     a                       ; carry → A bit 0
+        asl     temp_00                 ; shift bit 6 → carry
+        rol     a                       ; carry → A bit 0
+        and     #$03                    ; collision type (0-3)
+; --- Step 7: map collision type to game value ---
+; Type 0 = empty, type 1 = solid (returned as-is)
+; Types 2-3 = stage-specific via table (2 entries per stage)
         sta     temp_00
-        lsr     a
+        lsr     a                       ; 0,1 → 0 (done); 2,3 → 1 (lookup)
         beq     tile_lookup_done
-        dec     temp_00
-        dec     temp_00
+        dec     temp_00                 ; type - 1
+        dec     temp_00                 ; type - 2 (table offset: 0 or 1)
         lda     current_stage
-        asl     a
-        adc     temp_00
+        asl     a                       ; stage * 2 (2 entries per stage)
+        adc     temp_00                 ; + table offset
         tax
         lda     stage_collision_table,x
         sta     temp_00
-tile_lookup_done:  lda     #$0E         ; switch back to game engine
+tile_lookup_done:  lda     #$0E
         jsr     bank_switch
         rts
 
+; Collision type mapping per stage: 2 entries each (for metatile types 2 and 3)
+; Stages: Heat, Air, Wood, Bubble, Quick, Flash, Metal, Crash, Wily1-4
 stage_collision_table:  .byte   $02,$03,$02,$03,$02,$00,$04,$03
         .byte   $00,$03,$02,$07,$05,$06,$02,$03
         .byte   $02,$00,$02,$03,$04,$03,$02,$03
@@ -1919,6 +1993,7 @@ render_special_jump_2:  lda     temp_06
         sta     temp_0C
 render_special_jump_end:  jmp     render_priority_fix
 
+; ─── Render entity in special mode ───
 render_entity_special:  ldx     current_entity_slot
         lda     ent_flags,x
         bmi     render_entity_get_sprite_ptr
@@ -1941,6 +2016,7 @@ render_entity_get_sprite_ptr:  ldy     ent_type,x
 render_entity_deactivate:  lsr     ent_flags,x
         rts
 
+; ─── Render weapon in special mode ───
 render_weapon_special:  ldx     current_entity_slot
         lda     ent_flags,x
         bmi     render_weapon_get_sprite_ptr
@@ -2058,7 +2134,7 @@ render_sprite_oam_entry:  ldx     temp_06
         lda     (jump_ptr),y
         sta     oam_buffer + $01,x
         clc
-        lda     ($0A),y
+        lda     (temp_0A),y
         adc     temp_01
         sta     oam_buffer,x
         iny
@@ -2073,12 +2149,12 @@ render_sprite_apply_flip:  eor     temp_02
         sta     oam_buffer + $02,x
         lda     temp_02
         beq     render_sprite_no_flip_x
-        lda     ($0A),y
+        lda     (temp_0A),y
         tay
         lda     banked_09_scroll_code,y
         jmp     render_sprite_write_x
 
-render_sprite_no_flip_x:  lda     ($0A),y
+render_sprite_no_flip_x:  lda     (temp_0A),y
 render_sprite_write_x:  clc
         bmi     render_sprite_neg_x
         adc     temp_00
@@ -2331,11 +2407,14 @@ nmi_set_scroll_y:
         sta     PPUCTRL                 ; Write final PPUCTRL
         sta     vblank_done             ; Set "VBLANK done" flag (nonzero = processed)
         inc     frame_counter
-nmi_tail:  lda     $68                  ; NMI exit path (also handles interrupted bank switches)
+; --- NMI exit: bank callback processing ---
+; If NMI interrupted a bank switch in progress ($68≠0), defer
+; processing; otherwise restore bank $0C and execute queued calls.
+nmi_tail:  lda     $68
         beq     nmi_restore_bank
         inc     bank_callback_pending
         bne     nmi_rng_and_exit
-nmi_restore_bank:  lda     #$0C         ; Restore bank that was active when NMI fired
+nmi_restore_bank:  lda     #$0C         ; Restore fixed bank via MMC1 serial write
         sta     mmc1_scratch
         lsr     a
         sta     mmc1_scratch
@@ -2357,12 +2436,13 @@ nmi_queue_call:  jsr     banked_entry_alt
         bne     nmi_process_queue
 nmi_queue_done:  lda     current_bank
         jsr     bank_switch
-nmi_rng_and_exit:                       ; Update RNG seed and return from interrupt
-        lda     ent_x_sub                   ; Entropy source
-        eor     rng_seed                     ; XOR with current RNG state
-        adc     frame_counter                     ; Add frame counter
-        lsr     a
-        sta     rng_seed                     ; Store new RNG value
+; --- RNG update: seed = (ent_x_sub XOR seed + frame_counter) >> 1 ---
+nmi_rng_and_exit:
+        lda     ent_x_sub               ; entity subpixel as entropy source
+        eor     rng_seed                ; mix with current state
+        adc     frame_counter           ; add frame counter for variation
+        lsr     a                       ; shift right (distribute bits)
+        sta     rng_seed
         pla                             ; Restore Y
         tay
         pla                             ; Restore X
@@ -2397,6 +2477,7 @@ read_controller_bits:  lda     JOY1,x  ; Shift in one button bit
 ; =============================================================================
 ; PPU Update Routines
 ; =============================================================================
+; ─── Upload palette RAM to PPU ───
 upload_palette:  ldy     #$3F           ; Upload 32-byte palette from $0356 to PPU $3F00
         sty     PPUADDR
         ldx     #$00
@@ -2414,6 +2495,7 @@ upload_palette_loop:  lda     palette_ram,x   ; Copy palette bytes to PPUDATA
         sta     palette_dirty
         rts
 
+; ─── Transfer PPU update buffer to VRAM ───
 ppu_buffer_transfer:  bpl     ppu_buffer_transfer_main; Transfer PPU update buffer to VRAM
         jmp     ppu_buffer_transfer_alt
 
@@ -2622,35 +2704,41 @@ attr_special_write_loop:  lda     col_update_addr_hi
         sta     PPUADDR
         lda     col_update_tiles + $10
         sta     PPUADDR
+; --- Attribute merge: combine new palette bits with existing byte ---
+; col_update_tiles+$1C = mask (bits to keep from new data)
+; Merge formula: result = (existing AND ~mask) | (new AND mask)
         lda     attr_update_mode
         bpl     attr_special_read_current
-        lda     PPUDATA
-        lda     PPUDATA
+        lda     PPUDATA                 ; dummy read (PPU latency)
+        lda     PPUDATA                 ; read existing attribute byte
         sta     temp_00
-        lda     col_update_tiles + $1C
-        eor     #$FF
+        lda     col_update_tiles + $1C  ; mask for bits to preserve
+        eor     #$FF                    ; invert: bits to keep from existing
+        lsr     a                       ; shift mask to align with attr bit pairs
         lsr     a
-        lsr     a
-        and     temp_00
+        and     temp_00                 ; keep existing bits outside mask
         asl     a
         asl     a
-        sta     col_update_tiles + $16
+        sta     col_update_tiles + $16  ; save preserved bits
         lda     temp_00
         jmp     attr_special_merge
 
-attr_special_read_current:  lda     PPUDATA
-        lda     PPUDATA
-attr_special_merge:  and     col_update_tiles + $1C
-        ora     col_update_tiles + $16
+attr_special_read_current:
+        lda     PPUDATA                 ; dummy read
+        lda     PPUDATA                 ; existing attribute byte
+attr_special_merge:
+        and     col_update_tiles + $1C  ; apply mask to select new palette bits
+        ora     col_update_tiles + $16  ; merge with preserved existing bits
         tax
-        lda     attr_update_values + 1
+        lda     attr_update_values + 1  ; write merged result to PPU
         sta     PPUADDR
         lda     col_update_tiles + $10
         sta     PPUADDR
         stx     PPUDATA
-        sty     attr_update_mode
+        sty     attr_update_mode        ; clear mode flag (Y=0)
         jmp     attr_update_done
 
+; ─── Copy weapon palette to sprite palette ───
 weapon_palette_copy:
         lda     current_weapon
 weapon_palette_copy_indexed:
@@ -2677,36 +2765,39 @@ weapon_palette_data:  .byte   $0F,$0F,$2C,$11,$0F,$0F,$28,$15 ; palette entries 
 ; =============================================================================
 ; fire_weapon_buster — Fire Mega Buster — create bullet projectile ($D332)
 ; =============================================================================
-fire_weapon_buster:  lda     #$26       ; sound effect: buster shot
-        jsr     bank_switch_enqueue     ; queue buster sound
+fire_weapon_buster:
+        lda     #$26                    ; sound: buster shot
+        jsr     bank_switch_enqueue
         lda     #$00
         sta     weapon_fire_dir
         sta     general_timer
         lda     #$02
-        sta     game_substate
-        jsr     weapon_set_base_type    ; set player animation type
+        sta     game_substate           ; player state = weapon active
+        jsr     weapon_set_base_type
         lda     #$01
         sta     ent_anim_id
-        lda     #$6F                    ; invincibility timer duration
-        sta     invincibility_timer                     ; set invincibility timer
-        lda     #$01
+        lda     #$6F
+        sta     invincibility_timer     ; i-frames on knockback
+        lda     #$01                    ; knockback velocity: Y = $01.40
         sta     ent_y_vel
         lda     #$40
         sta     ent_y_vel_sub
-        lda     #$00
+        lda     #$00                    ; X velocity = $00.90
         sta     ent_x_vel
         lda     #$90
         sta     ent_x_vel_sub
-        lsr     ent_flags + $0F
+        lsr     ent_flags + $0F         ; clear sprint flag (bit 7)
         lda     #$00
         sta     game_mode
+; --- Scan slots $0E down to $02 for first inactive weapon slot ---
         ldx     #$0E
-fire_find_slot_loop:  lda     ent_flags,x
-        bpl     fire_setup_projectile
+fire_find_slot_loop:
+        lda     ent_flags,x
+        bpl     fire_setup_projectile   ; bit 7 clear = slot available
         dex
         cpx     #$01
         bne     fire_find_slot_loop
-        rts
+        rts                             ; no free slot
 
 fire_setup_projectile:  lda     #$80    ; active flag
         sta     ent_flags,x                 ; activate projectile entity
@@ -2757,34 +2848,42 @@ weapon_base_type_tbl:  .byte   $1A,$19,$18,$00,$04,$08,$0C,$10 ; base sprite typ
         .byte   $14,$1B,$1F,$26
 
 ; =============================================================================
-; weapon_spawn_projectile — Spawn a projectile entity at player position ($D3E0)
+; weapon_spawn_projectile — Configure projectile entity from table data ($D3E0)
 ; =============================================================================
-weapon_spawn_projectile:  lda     projectile_type_tbl,y ; entity type for this weapon
+; Input: X = projectile slot, Y = projectile table index
+; Sets entity type, position (with directional X offset), velocity,
+; damage type, and clears animation/state fields.
+; =============================================================================
+weapon_spawn_projectile:
+        lda     projectile_type_tbl,y
         sta     ent_type,x
-        lda     ent_flags
+        lda     ent_flags               ; get player facing direction (bit 6)
         and     #$40
-        php
-        ora     projectile_flags_tbl,y  ; merge weapon entity flags
+        php                             ; save direction for offset branching
+        ora     projectile_flags_tbl,y
         sta     ent_flags,x
+; --- Position: apply X offset based on player facing direction ---
         plp
         bne     weapon_spawn_facing_right
-        sec
+        sec                             ; facing left: subtract X offset
         lda     ent_x_px
         sbc     projectile_x_offset_tbl,y
         sta     ent_x_px,x
         lda     ent_x_screen
-        sbc     #$00
+        sbc     #$00                    ; propagate borrow to screen byte
         sta     ent_x_screen,x
         jmp     weapon_spawn_set_y
 
-weapon_spawn_facing_right:  clc
+weapon_spawn_facing_right:
+        clc                             ; facing right: add X offset
         lda     ent_x_px
         adc     projectile_x_offset_tbl,y
         sta     ent_x_px,x
         lda     ent_x_screen
-        adc     #$00
+        adc     #$00                    ; propagate carry to screen byte
         sta     ent_x_screen,x
-weapon_spawn_set_y:  lda     ent_y_px      ; copy player Y position
+weapon_spawn_set_y:
+        lda     ent_y_px
         sta     ent_y_px,x
         lda     projectile_xvel_sub_tbl,y
         sta     ent_x_vel_sub,x
@@ -2941,6 +3040,7 @@ contact_damage_range_y_tbl:  .byte   $18
         lda     #$09
         jsr     bank_switch
         jsr     banked_09_scroll_code
+; ─── Switch to bank $0D and return ───
 switch_to_bank_0D:  lda     #$0D
         jsr     bank_switch
         rts
@@ -3096,22 +3196,32 @@ activate_check_dup:  cmp     ent_hit_count,x    ; check for duplicate spawn
         lda     $B800,y
         sta     ent_y_spawn_px,x
         lda     $B900,y
-entity_init_from_type:  sta     ent_spawn_type,x ; store enemy type ID
+; =============================================================================
+; entity_init_from_type — Initialize entity arrays from type ID ($D77C)
+; =============================================================================
+; Input: A = entity type ID ($00-$7F), X = entity slot
+; Populates flags, AI behavior, timer, hitbox dimensions from lookup tables.
+; Uses two-stage table lookup for hitboxes: type → index → lo/hi values.
+; =============================================================================
+entity_init_from_type:
+        sta     ent_spawn_type,x        ; store entity type ID
         tay
-        pha
-        lda     entity_flags_table,y    ; look up default entity flags
-        sta     ent_spawn_flags,x                 ; store entity spawn flags
-        lda     entity_ai_behavior_tbl,y ; look up AI behavior index
-        sta     ent_ai_behavior,x                 ; store entity AI behavior
-        lda     #$14                    ; default entity timer (20 frames)
+        pha                             ; save type (need it again for height)
+        lda     entity_flags_table,y    ; default entity flags per type
+        sta     ent_spawn_flags,x
+        lda     entity_ai_behavior_tbl,y ; AI behavior index per type
+        sta     ent_ai_behavior,x
+        lda     #$14                    ; default timer = 20 frames
         sta     ent_timer,x
+; --- Hitbox width: type → width_idx → lo/hi tables ---
         lda     entity_hitbox_width_idx_tbl,y
         tay
         lda     hitbox_width_lo_tbl,y
         sta     ent_hitbox_w_lo,x
         lda     hitbox_width_hi_tbl,y
         sta     ent_hitbox_w_hi,x
-        pla
+; --- Hitbox height: type → height_idx → lo/hi tables ---
+        pla                             ; restore type ID
         tay
         lda     entity_hitbox_height_idx_tbl,y
         tay
@@ -3119,6 +3229,7 @@ entity_init_from_type:  sta     ent_spawn_type,x ; store enemy type ID
         sta     ent_hitbox_h_lo,x
         lda     hitbox_height_hi_tbl,y
         sta     ent_hitbox_h_hi,x
+; --- Zero out transient fields ---
         lda     #$00
         sta     ent_misc,x
         sta     ent_anim_backup,x
@@ -3237,6 +3348,7 @@ hitbox_height_hi_tbl:  .byte   $C7,$00,$00,$FF,$5D,$FE,$98,$04
         .byte   $00,$01,$47,$08,$00,$F8,$00,$02
         .byte   $D4,$02,$00,$03,$76,$FC,$8A,$00
         .byte   $20
+; ─── Find an unused entity slot ───
 find_empty_entity_slot:  ldx     #$0F
 find_slot_loop:  lda     ent_spawn_flags,x
         bpl     find_slot_found
@@ -4356,6 +4468,7 @@ time_stopper_physics:  jsr     apply_entity_physics
         sta     ent_hitbox_width,x
 time_stopper_done:  rts
 
+; ─── Check wall collision in facing direction ───
 check_wall_collision:  lda     ent_flags,x
         and     #$40
         bne     wall_coll_facing_right
@@ -4468,6 +4581,7 @@ crash_entity_dec_timer:  dec     ent_hp,x
         rts
 
         rts
+; ─── Deactivate entity if off-screen ───
 check_entity_on_screen:  sec
         lda     ent_x_px,x
         sbc     scroll_x
@@ -4482,6 +4596,7 @@ entity_off_screen_deactivate:  lsr     ent_flags,x
         sec
         rts
 
+; ─── Spawn weapon projectile from entity ───
 spawn_weapon_from_entity:  lda     ent_x_px,x
         sta     jump_ptr
         lda     ent_x_screen,x
@@ -4519,129 +4634,155 @@ spawn_weapon_from_entity:  lda     ent_x_px,x
         rts
 
 ; =============================================================================
-; check_player_collision — Check if an enemy entity touches the player (contact damage) ($E55A)
+; check_player_collision — Enemy→player contact damage check ($E55A)
+; =============================================================================
+; Tests bounding-box overlap between player and enemy entity in slot X.
+; On hit: subtracts damage from player HP, applies knockback, or picks up item.
+; Output: temp_01 = 1 if collision occurred, 0 otherwise.
 ; =============================================================================
 check_player_collision:  lda     #$00
         sta     temp_01
-        lda     game_substate                     ; weapon select (0=no weapon out)
+        lda     game_substate           ; skip if player not active
         beq     player_collision_done
         lda     boss_state_flag
         bne     player_collision_done
-        lda     boss_fight_flag                     ; boss fight active flag
+        lda     boss_fight_flag
         bne     player_collision_done
+; --- X-axis distance: |player_x - enemy_x| ---
         sec
         lda     player_screen_x
         sbc     current_ent_x
-        bcs     player_coll_check_range
-        eor     #$FF
+        bcs     player_coll_check_range ; positive = no borrow
+        eor     #$FF                    ; negate: two's complement for |distance|
         adc     #$01
-player_coll_check_range:  ldy     ent_screen_x,x ; entity screen-relative X
-        cmp     contact_damage_range_x_tbl,y ; compare to hitbox width
-        bcs     player_collision_done
+player_coll_check_range:
+        ldy     ent_screen_x,x          ; Y = hitbox table index
+        cmp     contact_damage_range_x_tbl,y
+        bcs     player_collision_done   ; X distance >= hitbox width → no hit
+; --- Y-axis distance: |player_y - enemy_y| ---
         sec
         lda     ent_y_px
         sbc     ent_y_px,x
         bcs     player_coll_check_y
         eor     #$FF
         adc     #$01
-player_coll_check_y:  cmp     contact_damage_range_y_tbl,y ; compare to hitbox height
-        bcs     player_collision_done
+player_coll_check_y:
+        cmp     contact_damage_range_y_tbl,y
+        bcs     player_collision_done   ; Y distance >= hitbox height → no hit
+; --- Collision confirmed: dispatch by entity type ---
         ldy     ent_type,x
-        cpy     #$76
+        cpy     #$76                    ; types $76+ are item pickups
         bcs     player_collision_item
-        lda     invincibility_timer
+        lda     invincibility_timer     ; skip damage during i-frames
         bne     player_collision_done
         sec
         lda     ent_hp
-        sbc     contact_damage_to_player_tbl,y
+        sbc     contact_damage_to_player_tbl,y ; subtract enemy's contact damage
         sta     ent_hp
         beq     player_coll_kill
         bcs     player_coll_knockback
-player_coll_kill:  lda     #$00
+player_coll_kill:
+        lda     #$00
         sta     game_substate
         sta     ent_hp
-        jmp     boss_death_sequence     ; player died — run death seq
-
-player_coll_knockback:  lda     ent_flags
+        jmp     boss_death_sequence
+; --- Knockback: set player facing away from enemy ---
+player_coll_knockback:
+        lda     ent_flags               ; clear player direction bit
         and     #$BF
         sta     ent_flags
-        lda     ent_flags,x
+        lda     ent_flags,x             ; get enemy direction bit 6
         and     #$40
-        eor     #$40
+        eor     #$40                    ; flip: player faces AWAY from enemy
         ora     ent_flags
         sta     ent_flags
-        jsr     fire_weapon_buster
+        jsr     fire_weapon_buster      ; trigger recoil animation
         inc     temp_01
 player_collision_done:  rts
 
-player_collision_item:  lda     $AD
+; --- Item pickup: despawn item and clear parent's child HP ---
+player_collision_item:
+        lda     $AD
         bne     player_collision_return
-        lsr     ent_flags,x
-        sty     weapon_counter_3
+        lsr     ent_flags,x             ; deactivate item entity
+        sty     weapon_counter_3        ; store item type for pickup handler
         inc     temp_01
         lda     ent_state,x
         bne     player_collision_return
         lda     #$FF
-        sta     ent_despawn,x
-        lda     ent_parent_slot,x
+        sta     ent_despawn,x           ; mark for despawn
+        lda     ent_parent_slot,x       ; clear parent's child HP tracker
         tay
         lda     #$00
         sta     ent_child_hp,y
 player_collision_return:  rts
 
 ; =============================================================================
-; check_weapon_collision — Check if a weapon projectile hits an enemy entity ($E5EC)
+; check_weapon_collision — Weapon→enemy hit detection ($E5EC)
+; =============================================================================
+; Scans weapon slots 2-9 for bounding-box overlap with enemy in current slot.
+; Frame-alternating: starts at slot 9 on odd frames, slot 8 on even frames,
+; then decrements by 2 (9,7,5,3 or 8,6,4,2) to split work across frames.
+; On hit: dispatches to weapon-specific collision handler via pointer table.
 ; =============================================================================
 check_weapon_collision:  lda     ent_y_px,x
-        sta     temp_00
+        sta     temp_00                 ; enemy Y pixel
         lda     ent_screen_x,x
-        sta     jump_ptr
-        ldx     #$09                    ; start scanning from weapon slot 9
+        sta     jump_ptr                ; enemy screen-relative X
+        ldx     #$09                    ; start at weapon slot 9
         lda     frame_counter
-        and     #$01
+        and     #$01                    ; alternate: even frames start at slot 8
         bne     weapon_coll_check_slot
         dex
-weapon_coll_check_slot:  lda     ent_flags,x
-        bpl     weapon_coll_next_slot
+weapon_coll_check_slot:
+        lda     ent_flags,x
+        bpl     weapon_coll_next_slot   ; skip inactive weapons (bit 7 clear)
         and     #$01
-        beq     weapon_coll_next_slot
+        beq     weapon_coll_next_slot   ; skip non-weapon entities (bit 0 clear)
         clc
-        ldy     ent_weapon_type,x
+        ldy     ent_weapon_type,x       ; weapon damage type → hitbox table offset
         lda     weapon_range_offset_tbl,y
-        adc     jump_ptr
+        adc     jump_ptr                ; Y = hitbox table base + entity offset
         tay
+; --- X-axis distance check ---
         sec
         lda     current_ent_x
         sbc     ent_screen_x,x
         bcs     weapon_coll_check_range_x
         eor     #$FF
         adc     #$01
-weapon_coll_check_range_x:  cmp     contact_damage_range_x_tbl,y ; compare X distance to hitbox
+weapon_coll_check_range_x:
+        cmp     contact_damage_range_x_tbl,y
         bcs     weapon_coll_next_slot
+; --- Y-axis distance check ---
         sec
         lda     temp_00
         sbc     ent_y_px,x
         bcs     weapon_coll_check_range_y
         eor     #$FF
         adc     #$01
-weapon_coll_check_range_y:  cmp     contact_damage_range_y_tbl,y ; compare Y distance to hitbox
-        bcc     weapon_collision_dispatch
-weapon_coll_next_slot:  dex
+weapon_coll_check_range_y:
+        cmp     contact_damage_range_y_tbl,y
+        bcc     weapon_collision_dispatch ; both axes within range = hit
+weapon_coll_next_slot:
+        dex                             ; skip to next odd/even slot
         dex
         cpx     #$02
         bcs     weapon_coll_check_slot
-        ldx     current_entity_slot
+        ldx     current_entity_slot     ; no hit: restore entity slot
         lda     #$00
         sta     ent_hit_count,x
-        clc
+        clc                             ; carry clear = no collision
         rts
 
-weapon_collision_dispatch:  ldy     current_weapon ; current weapon ID for handler
-        lda     weapon_handler_ptr_lo,y ; dispatch to weapon handler
+; --- Hit confirmed: dispatch to weapon-specific collision handler ---
+weapon_collision_dispatch:
+        ldy     current_weapon
+        lda     weapon_handler_ptr_lo,y
         sta     jump_ptr
         lda     weapon_handler_ptr_hi,y
         sta     jump_ptr_hi
-        jmp     (jump_ptr)              ; indirect jump to handler
+        jmp     (jump_ptr)
 
         ldy     current_entity_slot
         lda     ent_flags,y
@@ -5052,6 +5193,7 @@ weapon_coll_handler_3_done_skip:
         lda     #$00
         sta     ent_flags,y
         beq     weapon_coll_handler_3_done
+; ─── Double damage on Normal difficulty ───
 apply_difficulty_modifier:  lda     $CB   ; difficulty flag: 0=Normal, 1=Difficult
         bne     difficulty_done       ; Difficult: use base damage as-is
         asl     temp_00              ; Normal: double enemy collision damage to player
@@ -5335,33 +5477,47 @@ collision_check_contact:  pla
         jmp     physics_despawn_check
 
 ; =============================================================================
-; apply_entity_physics — Apply velocity to entity position, handle bounds checking ($EEEF)
+; apply_entity_physics — Move entity by velocity, apply gravity, bounds check ($EEEF)
 ; =============================================================================
-apply_entity_physics:  sec
-        lda     ent_y_sub,x                 ; Y sub-pixel position
-        sbc     ent_y_vel_sub,x                 ; subtract Y velocity (sub-pixel)
+; Input: X = entity slot
+; Output: carry clear = in bounds, carry set = despawned
+;
+; Y velocity is SUBTRACTED (positive Y_vel = upward movement in NES coords).
+; X velocity is added/subtracted based on facing direction (bit 6).
+; Gravity decreases Y velocity each frame (increasing downward speed).
+; Entities outside screen bounds ($08-$F7 relative to scroll) are despawned.
+; =============================================================================
+apply_entity_physics:
+; --- Y movement: position -= velocity (16-bit sub-pixel) ---
+        sec
+        lda     ent_y_sub,x
+        sbc     ent_y_vel_sub,x
         sta     ent_y_sub,x
-        lda     ent_y_px,x                 ; Y pixel position
-        sbc     ent_y_vel,x                 ; subtract Y velocity (whole)
+        lda     ent_y_px,x
+        sbc     ent_y_vel,x
         sta     ent_y_px,x
-        cmp     #$F0
+        cmp     #$F0                    ; Y >= $F0 = fallen off screen
         bcc     physics_check_gravity
         jmp     physics_out_of_bounds
 
-physics_check_gravity:  lda     ent_flags,x ; check entity flags
+; --- Gravity: velocity -= gravity constant (increases downward speed) ---
+physics_check_gravity:
+        lda     ent_flags,x
         and     #$04                    ; bit 2 = gravity enabled
         beq     physics_move_left
         clc
         lda     ent_y_vel_sub,x
-        sbc     gravity_sub_lo
+        sbc     gravity_sub_lo          ; 16-bit subtract: vel -= gravity
         sta     ent_y_vel_sub,x
         lda     ent_y_vel,x
         sbc     gravity_sub_hi
         sta     ent_y_vel,x
-physics_move_left:  lda     ent_flags,x     ; check facing direction
-        and     #$40                    ; bit 6 = facing right
+; --- X movement: direction-dependent (bit 6 = facing) ---
+physics_move_left:
+        lda     ent_flags,x
+        and     #$40                    ; bit 6: 0=left, 1=right
         bne     physics_move_right
-        sec
+        sec                             ; facing left: position -= velocity
         lda     ent_x_sub,x
         sbc     ent_x_vel_sub,x
         sta     ent_x_sub,x
@@ -5369,20 +5525,21 @@ physics_move_left:  lda     ent_flags,x     ; check facing direction
         sbc     ent_x_vel,x
         sta     ent_x_px,x
         lda     ent_x_screen,x
-        sbc     #$00
+        sbc     #$00                    ; borrow into screen byte
         sta     ent_x_screen,x
-        sec
+        sec                             ; compute screen-relative X
         lda     ent_x_px,x
         sbc     scroll_x
         sta     jump_ptr
         lda     ent_x_screen,x
         sbc     nametable_select
-        bne     physics_out_of_bounds
+        bne     physics_out_of_bounds   ; different screen = offscreen
         lda     jump_ptr
-        cmp     #$08
+        cmp     #$08                    ; left boundary
         bcc     physics_out_of_bounds
         bcs     physics_in_bounds
-physics_move_right:  clc
+physics_move_right:
+        clc                             ; facing right: position += velocity
         lda     ent_x_sub,x
         adc     ent_x_vel_sub,x
         sta     ent_x_sub,x
@@ -5390,9 +5547,9 @@ physics_move_right:  clc
         adc     ent_x_vel,x
         sta     ent_x_px,x
         lda     ent_x_screen,x
-        adc     #$00
+        adc     #$00                    ; carry into screen byte
         sta     ent_x_screen,x
-        sec
+        sec                             ; compute screen-relative X
         lda     ent_x_px,x
         sbc     scroll_x
         sta     jump_ptr
@@ -5400,26 +5557,32 @@ physics_move_right:  clc
         sbc     nametable_select
         bne     physics_out_of_bounds
         lda     jump_ptr
-        cmp     #$F8
+        cmp     #$F8                    ; right boundary
         bcs     physics_out_of_bounds
-physics_in_bounds:  clc
+physics_in_bounds:
+        clc                             ; carry clear = entity still active
         rts
 
-physics_out_of_bounds:  lsr     ent_flags,x ; deactivate entity (clear bit 7)
-physics_despawn_check:  cpx     #$10
+; --- Despawn: deactivate entity and handle parent-child cleanup ---
+physics_out_of_bounds:
+        lsr     ent_flags,x             ; clear bit 7 (deactivate)
+physics_despawn_check:
+        cpx     #$10                    ; slots $00-$0F = player/weapons (no despawn tracking)
         bcc     physics_despawn_return
         lda     death_context
         bne     physics_despawn_secondary
-        lda     #$FF
+        lda     #$FF                    ; primary despawn: mark spawn slot
         sta     a:$F0,x
-physics_despawn_return:  sec
+physics_despawn_return:
+        sec                             ; carry set = entity despawned
         rts
 
-physics_despawn_secondary:  lda     #$FF
+physics_despawn_secondary:
+        lda     #$FF                    ; secondary despawn: notify parent
         sta     ent_despawn,x
         lda     ent_parent_slot,x
         tay
-        lda     ent_hp,x
+        lda     ent_hp,x               ; pass child HP to parent
         sta     ent_child_hp,y
         sec
         rts
@@ -5428,27 +5591,34 @@ physics_despawn_secondary:  lda     #$FF
         bne     apply_entity_physics_alt_skip
 
 ; =============================================================================
-; apply_entity_physics_alt — Alternate physics — used for weapons/projectiles ($EFB3)
+; apply_entity_physics_alt — Collision + death handling for enemies ($EFB3)
+; =============================================================================
+; Called by enemy AI handlers. Tests contact and weapon collision based on
+; ent_flags bits 0-1. On weapon kill: rolls item drop, converts entity
+; to death explosion, and runs despawn check.
+; Output: carry set = entity destroyed, carry clear = alive
 ; =============================================================================
 apply_entity_physics_alt:  lda     #$00
 apply_entity_physics_alt_skip:
-        sta     death_context
+        sta     death_context           ; 0=primary despawn, 1=secondary (child)
         lda     ent_flags,x
-        and     #$03                    ; check contact/weapon bits
+        and     #$03                    ; bits 0-1: contact(0) + weapon(1)
         beq     physics_alt_check_offscreen
         pha
-        and     #$01                    ; bit 0 = contact damage
+        and     #$01                    ; bit 0: player contact damage?
         beq     physics_alt_check_contact
-        jsr     check_player_collision  ; test player contact
-physics_alt_check_contact:  pla
-        and     #$02                    ; bit 1 = weapon collidable
+        jsr     check_player_collision
+physics_alt_check_contact:
+        pla
+        and     #$02                    ; bit 1: weapon collidable?
         beq     physics_alt_check_offscreen
-        jsr     check_weapon_collision  ; test weapon hits
-        bcc     physics_alt_check_offscreen
-        jsr     item_drop_rng           ; roll for item drop
-        lda     #ENTITY_DEATH_EXPLODE
+        jsr     check_weapon_collision
+        bcc     physics_alt_check_offscreen  ; carry clear = no hit
+; --- Enemy killed by weapon ---
+        jsr     item_drop_rng           ; random item drop
+        lda     #ENTITY_DEATH_EXPLODE   ; convert to death explosion
         sta     ent_type,x
-        lda     #$80
+        lda     #$80                    ; active, no collision flags
         sta     ent_flags,x
         lda     #$00
         sta     ent_anim_frame,x
@@ -5460,6 +5630,7 @@ physics_alt_check_offscreen:  lda     $2F
         clc
         rts
 
+; ─── Turn entity to face player ───
 entity_face_player:  lda     ent_flags,x
         and     #$BF
         sta     ent_flags,x
@@ -5477,6 +5648,7 @@ entity_face_player:  lda     ent_flags,x
         sta     ent_flags,x
 entity_face_player_done:  rts
 
+; ─── Find active entity by type ID ───
 find_entity_by_type:  sta     temp_00
         ldy     #$0F
 find_entity_scan:  lda     temp_00
@@ -5649,18 +5821,29 @@ horiz_coll_no_hit:  plp
 
 tile_solid_lookup_tbl:  .byte   $00,$01,$00,$01,$00,$01,$01,$01 ; solid flag lookup per tile type
         .byte   $01
-spawn_entity_from_parent:  pha
+; =============================================================================
+; spawn_entity_from_parent — Spawn child entity from parent ($F182)
+; =============================================================================
+; Input: A = child entity type, X = parent slot (current_entity_slot)
+; Output: carry clear = success (child slot in X), carry set = no free slot
+; Copies parent's position and direction bit 6 to child entity.
+; =============================================================================
+spawn_entity_from_parent:
+        pha
         jsr     find_empty_entity_slot
         bcs     spawn_entity_no_slot
         pla
-spawn_entity_init:  jsr     entity_init_from_type
+spawn_entity_init:
+        jsr     entity_init_from_type   ; init child in slot X
         txa
-        tay
-        ldx     current_entity_slot
+        tay                             ; Y = child slot
+        ldx     current_entity_slot     ; X = parent slot
+; --- Copy parent direction (bit 6) to child spawn flags ---
         lda     ent_flags,x
-        and     #$40
+        and     #$40                    ; parent facing direction
         ora     ent_spawn_flags,y
         sta     ent_spawn_flags,y
+; --- Copy parent position to child ---
         lda     ent_x_sub,x
         sta     ent_x_spawn_sub,y
         lda     ent_x_px,x
@@ -5671,27 +5854,44 @@ spawn_entity_init:  jsr     entity_init_from_type
         sta     ent_y_spawn_sub,y
         lda     ent_y_px,x
         sta     ent_y_spawn_px,y
-        clc
+        clc                             ; carry clear = success
         rts
 
-spawn_entity_no_slot:  pla
+spawn_entity_no_slot:
+        pla
         ldx     current_entity_slot
-        sec
+        sec                             ; carry set = failed
         rts
 
-        ldy     #$40
+; =============================================================================
+; calc_aimed_velocity — Compute velocity vector toward player ($F1A2)
+; =============================================================================
+; Input: jump_ptr/jump_ptr_hi = base speed (sub/main), X = entity slot
+; Calculates X/Y distances to player, then uses division to compute
+; a velocity vector that aims toward the player at the given speed.
+;
+; Algorithm:
+;   1. Compute |delta_x| and |delta_y| between entity and player
+;   2. Set entity facing direction toward player (bit 6)
+;   3. If |delta_x| > |delta_y|:
+;        x_vel = base_speed, y_vel = base_speed * (delta_y / delta_x)
+;   4. If |delta_y| >= |delta_x|:
+;        y_vel = base_speed, x_vel = base_speed * (delta_x / delta_y)
+;   5. Negate Y velocity if player is above entity (PHP/PLP preserves sign)
+; =============================================================================
+        ldy     #$40                    ; assume facing right (bit 6)
         sec
         lda     player_screen_x
         sbc     current_ent_x
-        sta     temp_00
-        bcs     @skip
+        sta     temp_00                 ; temp_00 = delta_x (signed)
+        bcs     @skip                   ; positive = player is to the right
         lda     temp_00
-        eor     #$FF
+        eor     #$FF                    ; negate: |delta_x|
         adc     #$01
-        ldy     #$00
+        ldy     #$00                    ; facing left (bit 6 = 0)
         sta     temp_00
 @skip:
-        lda     ent_flags,x
+        lda     ent_flags,x             ; set entity facing direction
         and     #$BF
         sta     ent_flags,x
         tya
@@ -5700,68 +5900,76 @@ spawn_entity_no_slot:  pla
         sec
         lda     ent_y_px
         sbc     ent_y_px,x
-        php
+        php                             ; save sign flag (player above/below)
         bcs     calc_entity_velocity
-        eor     #$FF
+        eor     #$FF                    ; negate: |delta_y|
         adc     #$01
-calc_entity_velocity:  sta     temp_01
-        cmp     temp_00
+calc_entity_velocity:
+        sta     temp_01                 ; temp_01 = |delta_y|
+        cmp     temp_00                 ; compare |delta_y| vs |delta_x|
         bcs     calc_vel_y_greater
+; --- |delta_x| > |delta_y|: X is primary axis ---
+; x_vel = base_speed, y_vel = base_speed * (delta_y / delta_x)
         lda     jump_ptr_hi
         sta     temp_0D
-        sta     ent_x_vel,x
+        sta     ent_x_vel,x            ; X velocity = base speed (main)
         lda     jump_ptr
         sta     temp_0C
-        sta     ent_x_vel_sub,x
-        lda     temp_00
+        sta     ent_x_vel_sub,x        ; X velocity = base speed (sub)
+        lda     temp_00                 ; divisor = |delta_x|
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit
-        lda     temp_0F
-        sta     temp_0D
+        jsr     divide_16bit            ; quotient = base_speed / delta_x
+        lda     temp_0F                 ; multiply quotient by delta_y:
+        sta     temp_0D                 ;   set up second division
         lda     temp_0E
         sta     temp_0C
-        lda     temp_01
+        lda     temp_01                 ; dividend = |delta_y|
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit
+        jsr     divide_16bit            ; result = base_speed * delta_y / delta_x
         ldx     current_entity_slot
         lda     temp_0F
-        sta     ent_y_vel,x
+        sta     ent_y_vel,x            ; Y velocity (main byte)
         lda     temp_0E
-        sta     ent_y_vel_sub,x
+        sta     ent_y_vel_sub,x        ; Y velocity (sub-pixel)
         jmp     calc_vel_negate_y
 
-calc_vel_y_greater:  lda     jump_ptr_hi
+; --- |delta_y| >= |delta_x|: Y is primary axis ---
+; y_vel = base_speed, x_vel = base_speed * (delta_x / delta_y)
+calc_vel_y_greater:
+        lda     jump_ptr_hi
         sta     temp_0D
-        sta     ent_y_vel,x
+        sta     ent_y_vel,x            ; Y velocity = base speed (main)
         lda     jump_ptr
         sta     temp_0C
-        sta     ent_y_vel_sub,x
-        lda     temp_01
+        sta     ent_y_vel_sub,x        ; Y velocity = base speed (sub)
+        lda     temp_01                 ; divisor = |delta_y|
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit
+        jsr     divide_16bit            ; quotient = base_speed / delta_y
         lda     temp_0F
         sta     temp_0D
         lda     temp_0E
         sta     temp_0C
-        lda     temp_00
+        lda     temp_00                 ; dividend = |delta_x|
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit
+        jsr     divide_16bit            ; result = base_speed * delta_x / delta_y
         ldx     current_entity_slot
         lda     temp_0F
-        sta     ent_x_vel,x
+        sta     ent_x_vel,x            ; X velocity (main byte)
         lda     temp_0E
-        sta     ent_x_vel_sub,x
-calc_vel_negate_y:  plp
-        bcc     calc_vel_done
-        lda     ent_y_vel_sub,x
+        sta     ent_x_vel_sub,x        ; X velocity (sub-pixel)
+; --- Negate Y velocity if player is above entity ---
+calc_vel_negate_y:
+        plp                             ; restore sign from delta_y comparison
+        bcc     calc_vel_done           ; carry clear = player below → Y positive
+        lda     ent_y_vel_sub,x         ; two's complement 16-bit negate
         eor     #$FF
         adc     #$01
         sta     ent_y_vel_sub,x

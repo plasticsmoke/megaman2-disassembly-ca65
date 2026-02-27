@@ -4,6 +4,38 @@
 ; Bank $0B — Game Logic & Enemy AI
 ; Enemy AI dispatch, boss initialization, collision detection, projectile
 ; management, and sprite handling for all enemy types.
+;
+; ─── Boss Battle Flow ─────────────────────────────────────────────────────
+;
+;   boss_init (entry from bank0E when boss_id set):
+;     │
+;     ├─ Load boss-specific data (HP, hitbox, sprite tiles)
+;     ├─ Set boss_phase = 0 (idle / entrance)
+;     └─ JMP to boss AI via enemy_ai_dispatch pointer table
+;
+;   enemy_ai_dispatch (14 entries: 8 Robot Masters + 6 Wily bosses):
+;     │
+;     ├─ boss_phase acts as state machine index
+;     │     Phase 0: entrance / idle animation
+;     │     Phase 1+: active attack patterns
+;     │     Phase N: death sequence → boss_death_effect
+;     │
+;     ├─ Per-boss attack patterns:
+;     │     ├─ Timer-driven: dec timer → fire on zero (Heat Man 3-burst)
+;     │     ├─ Position-driven: calc_player_boss_distance → aim
+;     │     │     └─ Self-modifying: .byte $AD,$61,$04 = LDA $0461
+;     │     ├─ Phase-table: velocity tables indexed by phase (Alien orbit)
+;     │     └─ Spawner: spawn_entity_from_parent (child projectiles)
+;     │
+;     ├─ Common utilities:
+;     │     ├─ calc_player_boss_distance — |player.X - boss.X| with sign
+;     │     ├─ divide_16bit — 16-bit binary long division
+;     │     ├─ weapon_difficulty_scale — 2x weapon damage on Normal
+;     │     └─ tile_lookup → floor collision for grounded bosses
+;     │
+;     └─ Death: boss HP ≤ 0 → convert to type $0F (boss_death_effect)
+;              → explosion animation → beaten_bosses |= mask → stage end
+;
 ; =============================================================================
 
         .setcpu "6502"
@@ -56,6 +88,7 @@ enemy_ai_routine_lo:  .byte   $C5,$E3,$FB,$56,$9E,$56,$20,$C3
         .byte   $10,$13,$9B,$6E,$C0,$2A
 enemy_ai_routine_hi:  .byte   $80,$82,$84,$86,$87,$89,$8B,$8C
         .byte   $8E,$92,$93,$96,$96,$9B
+; ─── Boss spawn timer and health drain ───
 boss_spawn_check:  lda     #$00
         sta     boss_anim_frame
         jsr     setup_ppu_normal
@@ -138,6 +171,7 @@ boss_frame_update_rts_skip_2:
         lda     boss_hp
         cmp     #MAX_HP
         bne     boss_palette_timer_tick
+; ─── Activate boss battle phase ───
 boss_activate_phase:  lda     #$02
         sta     boss_phase
         lda     #$00
@@ -148,6 +182,7 @@ boss_activate_phase:  lda     #$02
         jsr     play_sound_and_reset_anim
         rts
 
+; ─── Increment boss health bar fill ───
 boss_palette_timer_tick:  lda     frame_counter
         and     #$03
         bne     boss_palette_tick_rts
@@ -159,9 +194,7 @@ boss_palette_tick_rts:  rts
         .byte   $09,$0C,$0F,$0A,$09,$09,$08,$08
         .byte   $0C,$10,$10,$0C,$0C,$0C,$0C,$0C
 enemy_state_transition:  .byte   $0F,$0F,$0B,$05,$09,$07,$05,$03
-enemy_spawn_sound_ids:  .byte   $51,$67,$6D
-        adc     ($55,x)
-        .byte   $5C,$64,$6A
+enemy_spawn_sound_ids:  .byte   $51,$67,$6D,$61,$55,$5C,$64,$6A
         lda     #ENTITY_HEATMAN_FIRE
         jsr     find_entity_by_type
         bcs     @skip
@@ -191,31 +224,36 @@ heatman_store_aim_low:  sta     temp_04
 
 
 ; =============================================================================
-; Boss AI: Heat Man — projectile spawning and movement patterns ($8194)
+; Heat Man — 3-shot burst: spawn projectiles with spread velocities ($8194)
 ; =============================================================================
-heatman_spawn_projectile_loop:  ldx     temp_01
+; Fires 3 projectiles (index 2,1,0) with different Y-aim offsets and speeds.
+; Each projectile's Y velocity = divide(aim_offset[i], speed[i]).
+; The spread creates a fan pattern: high, mid, low trajectory.
+; =============================================================================
+heatman_spawn_projectile_loop:
+        ldx     temp_01                 ; projectile index (2,1,0)
         lda     #$00
-        sta     temp_0A
-        sta     temp_0C
-        lda     temp_02,x
+        sta     temp_0A                 ; dividend lo = 0
+        sta     temp_0C                 ; divisor lo = 0
+        lda     temp_02,x              ; dividend hi = aim offset for this shot
         sta     temp_0B
-        lda     heatman_proj_speed_table,x
+        lda     heatman_proj_speed_table,x ; divisor hi = shot speed
         sta     temp_0D
-        jsr     divide_16bit            ; divide for velocity ratio
+        jsr     divide_16bit            ; quotient = aim / speed → Y velocity
         ldx     #$01
         lda     #ENTITY_HEATMAN_FIRE
         jsr     spawn_entity_from_boss
         ldx     temp_01
-        lda     heatman_proj_hitbox_y,x
+        lda     heatman_proj_hitbox_y,x ; per-shot hitbox height
         sta     ent_hitbox_h_hi,y
         lda     heatman_proj_hitbox_mask,x
         sta     ent_hitbox_h_lo,y
-        lda     temp_0E
+        lda     temp_0E                 ; store computed Y velocity
         sta     ent_hitbox_w_hi,y
         lda     temp_0F
         sta     ent_hitbox_w_lo,y
         lda     ent_spawn_flags,y
-        ora     #$04
+        ora     #$04                    ; enable gravity on projectile
         sta     ent_spawn_flags,y
         dec     temp_01
         bpl     heatman_spawn_projectile_loop
@@ -234,10 +272,8 @@ heatman_frame_update:  ldx     #$01
 heatman_attack_rts:  rts
 
         .byte   $0F,$15,$0F,$0F,$0F
-heatman_proj_hitbox_y:  rol     current_lives,x
-        .byte   $76
-heatman_proj_hitbox_mask:  .byte   $07
-        ora     temp_03
+heatman_proj_hitbox_y:  .byte   $36,$A8,$76
+heatman_proj_hitbox_mask:  .byte   $07,$05,$03
 heatman_proj_speed_table:  .byte   $3A,$2E,$1C
         lda     boss_ai_state
         bne     @skip_2
@@ -497,6 +533,11 @@ airman_frame_update:  ldx     #$01
         jsr     boss_update_with_sound
         rts
 
+; --- Air Man tornado spawn routine (dispatch target, encoded as .byte) ---
+; Decodes to: JSR init_tornado / LDA #$0B / STA $01 / LDA #$10 / STA $02
+; JSR spawn / check temp_00 / index boss_action_timer into position tables /
+; write entity position arrays / inc phase after 3 spawns / flip facing
+; Followed by tornado position table data
         .byte   $20,$D9,$84,$A9,$0B,$85,$01,$A9
         .byte   $10,$85,$02,$20
         .byte   $D4,$A2,$A5,$00,$F0,$3A,$A6,$B2
@@ -509,6 +550,7 @@ airman_frame_update:  ldx     #$01
         .byte   $85,$B2,$A9,$67,$20,$0C,$A1,$60
         .byte   $60,$E6,$76,$00,$04,$07,$00,$39
         .byte   $9A,$00,$01,$01,$00
+; ─── Boss update with hit check and sound ───
 boss_update_with_sound:  lda     boss_hit_timer
         beq     boss_update_collision_check
         jsr     boss_apply_movement_physics
@@ -525,8 +567,7 @@ boss_update_rts:  rts
         .byte   $D3,$F1,$19,$80,$80,$82,$84,$84
         dex
         lda     $864E,x
-        .byte   $85
-        php
+        sta     jump_ptr
         lda     bubbleman_ai_table_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
@@ -673,6 +714,7 @@ woodman_jmp_frame_update_2:  jsr     woodman_update_with_sound
         jsr     play_sound_and_reset_anim
 woodman_collision_rts:  rts
 
+; ─── Wood Man hit check and physics ───
 woodman_update_with_sound:  lda     boss_hit_timer
         beq     woodman_collision_check
         jsr     boss_apply_movement_physics
@@ -820,6 +862,7 @@ bubbleman_anim_rts:  rts
         lda     #$61
         jsr     play_sound_and_reset_anim
         jmp     bubbleman_check_anim_reset
+; ─── Bubble Man hit check and physics ───
 bubbleman_update_with_sound:  lda     boss_hit_timer
         beq     bubbleman_collision_check
         jsr     boss_apply_movement_physics
@@ -964,6 +1007,7 @@ quickman_frame_rts:  rts
 quickman_y_vel_table:  .byte   $07,$08,$04
 quickman_sec_flag:  .byte   $38,$40
         .byte   $20,$20,$09,$A2,$A2,$00
+; ─── Quick Man phase change and sound ───
 quickman_phase_transition:  lda     #$00
         sta     boss_ai_state
         sta     boss_action_timer
@@ -1013,11 +1057,13 @@ quickman_state2_frame_update_skip:
         jsr     boss_flip_and_check_wall
         rts
 
+; ─── Quick Man hitbox and wall check ───
 quickman_hitbox_params:  lda     #$08
         sta     temp_01
         lda     #$0C
         sta     temp_02
         jsr     boss_wall_collision_check
+; ─── Quick Man hit check and physics ───
 quickman_update_with_sound:  lda     boss_hit_timer
         beq     quickman_collision_check
         jsr     boss_apply_movement_physics
@@ -1235,6 +1281,7 @@ flashman_hit_response:  lda     boss_phase
         sta     boss_phase
         lda     #$5C
         jsr     play_sound_and_reset_anim
+; ─── Flash Man hit check and physics ───
 flashman_update_with_sound:  lda     boss_hit_timer
         beq     flashman_collision_check
         jsr     boss_apply_movement_physics
@@ -1248,6 +1295,7 @@ flashman_collision_check:  jsr     boss_check_weapon_hit
         sta     boss_hit_timer
         rts
 
+; ─── Flash Man hitbox and wall check ───
 flashman_hitbox_params:  lda     #$08
         sta     temp_01
         lda     #$0C
@@ -1428,6 +1476,7 @@ metalman_palette_copy_loop:  lda     metalman_palette_data,x
         iny
         cpy     #$03
         bne     metalman_palette_copy_loop
+; ─── Metal Man hit check and physics ───
 metalman_update_with_sound:  lda     boss_hit_timer
         beq     metalman_collision_check
         jsr     boss_apply_movement_physics
@@ -1474,9 +1523,8 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         bne     @skip
         lda     crashman_response_timer
         beq     crashman_setup_velocity_skip
-        .byte   $CE,$A7
-        ora     $D0
-        .byte   $52
+        dec     crashman_response_timer
+        .byte   $D0,$52           ; bne +82 (far branch into phase code)
 @skip:
         lda     #$87
         sta     boss_flags
@@ -1593,6 +1641,7 @@ crashman_check_anim_state:  lda     boss_anim_id
 crashman_jmp_aim:  jsr     calc_player_boss_distance
         rts
 
+; ─── Crash Man hit check and physics ───
 crashman_update_with_sound:  lda     boss_hit_timer
         beq     crashman_collision_check
         jsr     boss_apply_movement_physics
@@ -1646,20 +1695,26 @@ crashman_ai_table_hi:  .byte   $80,$8C,$8C,$8D
 
 
 ; =============================================================================
-; Boss AI: Wily 1 — Mecha Dragon nametable setup and column fill ($8E59)
+; Mecha Dragon — Phase 1: nametable column fill ($8E59)
 ; =============================================================================
-dragon_column_tile       := $05A7  ; nametable column fill tile value
-dragon_fill_column_loop:  lda     dragon_column_tile
+; Pre-renders the dragon's platform by writing 15 tile columns to the
+; nametable. Each column has variable height from dragon_column_length_table.
+; Tile IDs auto-increment per row to create the platform graphic.
+; boss_action_timer counts columns 0-14; advances to phase 2 at $0F.
+; =============================================================================
+dragon_column_tile       := $05A7  ; auto-incrementing tile ID
+dragon_fill_column_loop:
+        lda     dragon_column_tile      ; current tile ID
         sta     col_update_tiles,y
         iny
-        inc     dragon_column_tile
+        inc     dragon_column_tile      ; next row uses next tile
         dec     temp_00
         bne     dragon_fill_column_loop
-        inx
+        inx                             ; next column
         stx     boss_action_timer
-        cpx     #$0F
+        cpx     #$0F                    ; 15 columns total
         bne     dragon_phase_rts
-        inc     boss_ai_state
+        inc     boss_ai_state           ; advance to phase 2
         lda     #$00
         sta     boss_action_timer
         rts
@@ -1811,6 +1866,7 @@ dragon_dec_phase_timer:  jsr     dragon_update_position
         sta     boss_anim_frame
 dragon_frame_rts:  rts
 
+; ─── Dragon Y-axis oscillation bounds ───
 dragon_y_bounds_check:  lda     boss_ai_state
         bne     dragon_y_set_rising
         lda     boss_y_px
@@ -1861,6 +1917,7 @@ dragon_movement_update_2:  jsr     dragon_y_bounds_check
         inc     boss_phase
 dragon_health_check_rts:  rts
 
+; ─── Dragon fire breath projectile spawn ───
 dragon_fire_breath:  lda     #$2C
         jsr     bank_switch_enqueue
         lda     #$01
@@ -1927,6 +1984,7 @@ dragon_apply_facing:  lda     dragon_saved_flags
         sta     boss_flags
         rts
 
+; ─── Dragon aim velocity at target X ───
 dragon_set_target_velocity:  lda     #$00
         sta     jump_ptr_hi
         lda     #$C4
@@ -1960,6 +2018,7 @@ dragon_phase2_reset:  lda     #$00
         dec     boss_phase
 dragon_jmp_vel_check:  jmp     dragon_velocity_check
 
+; ─── Dragon check Y range to fire ───
 dragon_check_fire_range:  sec
         lda     ent_y_px
         sbc     boss_y_px
@@ -2039,6 +2098,7 @@ dragon_check_hit_flash:  lda     temp_02
         bne     dragon_apply_movement
         lda     #$30
         sta     palette_sprite
+; ─── Dragon apply movement and scroll camera ───
 dragon_apply_movement:  jsr     boss_apply_movement_physics
         sec
         lda     camera_y_sub
@@ -2089,6 +2149,8 @@ dragon_move_facing_left:  sec
         sta     camera_x_offset_hi
         rts
 
+; --- Metal Man AI dispatch pointer table ---
+; NOTE: first 3 bytes decoded as asl instruction — actually table data
         asl     flashman_data_overlap,x
         .byte   $FC,$64,$E5,$22,$8E,$8F,$8F,$8F
         .byte   $90,$90,$91
@@ -2792,6 +2854,7 @@ boobeam_palette_loop_end:  dex
 boobeam_target_palette:  .byte   $0F,$15,$17,$35,$0F,$27,$17,$07
         .byte   $0F,$15,$17,$07,$0F,$0F,$11,$2C
         .byte   $0F,$0F,$25,$15
+; ─── Boobeam nametable column fill ───
 boobeam_column_fill:  lda     projectile_x_velocity,x
         sta     col_update_addr_hi
         lda     projectile_y_velocity,x
@@ -2808,6 +2871,7 @@ boobeam_column_fill_loop:  lda     boobeam_column_tile
         inc     boss_action_timer
         rts
 
+; ─── Boobeam tile row copy to PPU buffer ───
 boobeam_tile_row_copy:  ldy     #$00
 boobeam_tile_row_loop:  lda     projectile_anim_frames,x
         sta     col_update_tiles,y
@@ -3370,25 +3434,34 @@ alien_palette_data_byte:  .byte   $03
         jsr     dragon_fire_setup_velocity
 alien_frame_update:  rts
 
+; --- Alien orbit velocity tables (8-step sinusoidal path) ---
+; Each row is one step in the orbital pattern. The Alien cycles through
+; these 8 velocity presets to trace a figure-8 or circular path.
 alien_move_y_sub_table:  .byte   $B9,$19,$00,$E7,$47,$E7,$00,$19
 alien_move_y_hi_table:  .byte   $FE,$FF,$00,$00,$01,$00,$00,$FF
 alien_move_x_sub_table:  .byte   $00,$E7,$47,$E7,$00,$E7,$47,$E7
 alien_move_x_hi_table:  .byte   $00,$00,$01,$00,$00,$00,$01,$00
-alien_advance_timer:  dec     boss_action_timer
+; --- Advance orbit timer: decrement, advance pattern step on expiry ---
+alien_advance_timer:
+        dec     boss_action_timer
         bne     alien_movement_pattern
-        inc     alien_pattern_index
+        inc     alien_pattern_index     ; next step in 8-step orbit
         lda     #MAX_HP
-        sta     boss_action_timer
-
+        sta     boss_action_timer       ; reload timer ($1C frames per step)
 
 ; =============================================================================
-; Alien Movement Pattern — sinusoidal path from velocity tables ($9CE3)
+; Alien Movement — Load velocity from 8-step orbit table ($9CE3)
 ; =============================================================================
-alien_scroll_col_lo      := $05A7  ; scroll column address low byte
-alien_scroll_col_hi      := $05A9  ; scroll column address high byte
-alien_movement_pattern:  lda     alien_scroll_col_hi
+; Uses alien_scroll_col_hi AND $07 as table index (0-7).
+; Bit 3 of alien_scroll_col_hi controls facing direction:
+;   0 → $83 (right-facing), 1 → $C3 (left-facing)
+; =============================================================================
+alien_scroll_col_lo      := $05A7
+alien_scroll_col_hi      := $05A9
+alien_movement_pattern:
+        lda     alien_scroll_col_hi
         pha
-        and     #$07
+        and     #$07                    ; orbit step index (0-7)
         tax
         lda     alien_move_y_sub_table,x
         sta     boss_y_vel_sub
@@ -3398,11 +3471,11 @@ alien_movement_pattern:  lda     alien_scroll_col_hi
         sta     boss_x_vel_sub
         lda     alien_move_x_hi_table,x
         sta     boss_x_vel
-        ldx     #$83
+        ldx     #$83                    ; default: facing right
         pla
-        and     #$08
+        and     #$08                    ; bit 3 = facing toggle
         beq     alien_facing_store_2
-        ldx     #$C3
+        ldx     #$C3                    ; facing left
 alien_facing_store_2:  stx     boss_flags
         rts
 
@@ -3430,6 +3503,7 @@ alien_phase_dispatch:  dex
         sta     jump_ptr
         jmp     (jump_ptr)
 
+; ─── Alien palette flash effect ───
 alien_palette_flash_tick:  lda     frame_counter
         and     #$0F
         bne     alien_palette_set_colors
@@ -3574,6 +3648,7 @@ alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
         inc     boss_ai_state
         rts
 
+; ─── Alien sprite palette toggle ───
 alien_sprite_flash:  ldx     #$2C
         lda     frame_counter
         and     #$04
@@ -3909,6 +3984,7 @@ boss_health_bar_tick:  lda     frame_counter      ; frame counter for timing
         jsr     bank_switch_enqueue
 boss_health_bar_rts:  rts
 
+; ─── Flip boss facing and check wall ───
 boss_flip_and_check_wall:  lda     boss_flags
         eor     #$40
         sta     boss_flags
@@ -3919,6 +3995,7 @@ boss_flip_and_check_wall:  lda     boss_flags
         sta     boss_flags
         jmp     boss_movement_physics_inner
 
+; ─── Check weapon hit and apply movement ───
 boss_check_weapon_hit:  jsr     weapon_boss_collision_check
         bcc     boss_apply_movement_physics
         inc     boss_hit_count
@@ -4009,23 +4086,31 @@ boss_movement_done:  clc
 
 
 ; =============================================================================
-; Player-Boss Distance — calculate X distance for aim/facing ($A209)
+; calc_player_boss_distance — Signed X distance from player to boss ($A209)
 ; =============================================================================
-calc_player_boss_distance:  lda     boss_flags; boss entity flags
-        and     #$BF
+; Output: temp_00 = |player_x - boss_x|
+;         boss_flags bit 6: 0=player right of boss, 1=player left
+;
+; SELF-MODIFYING CODE: bytes $AD,$61,$04 form a hidden "LDA $0461"
+; instruction that reads the player's screen X position at runtime.
+; The disassembler cannot decode this — it appears as raw .byte data.
+; =============================================================================
+calc_player_boss_distance:
+        lda     boss_flags
+        and     #$BF                    ; clear facing flag (bit 6)
         sta     boss_flags
         sec
-        .byte   $AD
-        .byte   $61
-calc_distance_data_byte:  .byte   $04
-        sbc     ent_x_px
+        .byte   $AD                     ; LDA abs opcode ($AD)
+        .byte   $61                     ;   addr low = $61
+calc_distance_data_byte:  .byte   $04   ;   addr high = $04 → LDA $0461
+        sbc     ent_x_px                ; A = player_x - boss_x
         sta     temp_00
-        bcs     calc_distance_done
-        lda     temp_00
+        bcs     calc_distance_done      ; positive = player to the right
+        lda     temp_00                 ; negative: negate for absolute value
         eor     #$FF
         adc     #$01
         sta     temp_00
-        lda     #$40
+        lda     #$40                    ; set bit 6: player is to the left
         ora     boss_flags
         sta     boss_flags
 calc_distance_done:  rts

@@ -1,9 +1,9 @@
 .segment "BANK0C"
 
 ; =============================================================================
-; Bank $0C — Weapons & UI
-; Weapon select handler, HUD energy bar rendering, lives display,
-; password screen, and CHR-RAM tile upload routines.
+; Bank $0C — Weapons, UI & Sound Engine
+; Weapon select handler, energy bar rendering, lives display,
+; password screen, CHR-RAM tile upload, and real-time sound engine.
 ; =============================================================================
 
         .setcpu "6502"
@@ -14,8 +14,47 @@
 .include "include/constants.inc"
 
 sound_temp      := $00F4
-        jmp     hud_update_main
 
+; ─── Sound slot field offsets (31-byte per-channel structure) ──────────────
+SND_FREQ_LO       = $00    ; current note frequency low
+SND_FREQ_HI       = $01    ; current note frequency high
+SND_NOTE_DUR_LO   = $02    ; note duration counter low
+SND_NOTE_DUR_HI   = $03    ; note duration counter high
+SND_PERIOD        = $04    ; duty cycle period (freq multiply factor)
+SND_FLAGS         = $05    ; note flags (bit7=loop, bit0=double-speed)
+SND_VOL_ENV       = $06    ; volume/sweep envelope byte
+SND_FREQ_TBL_LO   = $07    ; frequency table pointer low
+SND_FREQ_TBL_HI   = $08    ; frequency table pointer high
+SND_NOISE_PER     = $09    ; noise channel period
+SND_TARGET_LO     = $0A    ; target/portamento freq low
+SND_TARGET_HI     = $0B    ; target/portamento freq high
+SND_DUTY_CMD      = $0C    ; duty cycle / command byte
+SND_PORTA_RATE    = $0D    ; portamento rate (signed)
+SND_PORTA_ACC     = $0E    ; portamento accumulator
+SND_PORTA_DIR     = $0F    ; portamento direction/params
+SND_APU_OUT       = $10    ; APU output register shadow
+SND_STREAM_LO     = $11    ; stream data pointer low
+SND_STREAM_HI     = $12    ; stream data pointer high
+SND_DUTY_VOL      = $13    ; duty/volume register
+SND_VIB_AMP       = $14    ; vibrato amplitude
+SND_VIB_PHASE     = $15    ; vibrato phase accumulator
+SND_SWEEP_CTRL    = $16    ; sweep control (bit7=active)
+SND_SWEEP_DELTA   = $17    ; sweep pitch delta (signed)
+SND_VIB_CTR       = $18    ; vibrato period counter
+SND_VIB_DIR       = $19    ; vibrato direction flag
+SND_FREQ_ACC_LO   = $1A    ; frequency accumulator low
+SND_FREQ_ACC_HI   = $1B    ; frequency accumulator high
+SND_PREV_FREQ     = $1C    ; previous frequency (for delta calc)
+SND_SWEEP_CTR     = $1D    ; sweep timing counter
+SND_SWEEP_ACC     = $1E    ; sweep accumulator
+        jmp     sound_update_main       ; entry 0: per-frame sound update
+
+; ─── Bank entry dispatch — A = command code on entry ───
+; $00-$EB: weapon index → weapon_select_handler (load weapon data + CHR tiles)
+; $FC: set frame repeat count → weapon_cmd_fc_handler
+; $FD: enter password screen → password_mode_init
+; $FE: reinit weapon slots (no CHR upload) → weapon_secondary_init
+; $FF: clear all weapon display slots → weapon_clear_display
         cmp     #$FC
         bne     :+
         jmp     weapon_cmd_fc_handler
@@ -23,14 +62,10 @@ sound_temp      := $00F4
         bne     weapon_dispatch_check_fd
         jmp     password_mode_init
 
-
-; =============================================================================
-; weapon_dispatch_check_fd — Weapon Dispatch — route weapon/UI commands by code ($FC/$FD/$FE/$FF) ($8003)
-; =============================================================================
 weapon_dispatch_check_fd:  cmp     #$FE
         bne     weapon_dispatch_check_ff
         lda     #$01
-        sta     hud_busy_flag
+        sta     sound_busy_flag         ; lock sound engine during init
         lda     #$00
         sta     sound_slot_lo
         jmp     weapon_secondary_init
@@ -38,7 +73,7 @@ weapon_dispatch_check_fd:  cmp     #$FE
 weapon_dispatch_check_ff:  cmp     #$FF
         bne     weapon_select_handler
         lda     #$01
-        sta     hud_busy_flag
+        sta     sound_busy_flag
         lda     #$00
         sta     sound_slot_lo
         jmp     weapon_clear_display
@@ -48,16 +83,16 @@ weapon_dispatch_check_ff:  cmp     #$FF
 ; Weapon Selection Handler
 ; Processes weapon select from pause menu.
 ; =============================================================================
-weapon_select_handler:  asl     a       ; Handle weapon selection (A = weapon index)
+weapon_select_handler:  asl     a       ; A = weapon index → X = table offset (×2)
         tax
-        lda     weapon_data_ptr_lo,x
+        lda     weapon_data_ptr_lo,x    ; load weapon definition pointer
         sta     weapon_data_lo
         lda     weapon_data_ptr_hi,x
         sta     weapon_data_hi
         ldy     #$00
-        lda     ($E2),y
+        lda     (weapon_data_lo),y      ; byte 0: slot config (hi nybble | lo nybble)
         tax
-        and     #$0F
+        and     #$0F                    ; lo nybble = slot type for low path
         beq     weapon_select_high_nybble
         lda     weapon_select_state
         and     #$0F
@@ -66,13 +101,13 @@ weapon_select_handler:  asl     a       ; Handle weapon selection (A = weapon in
         bcs     weapon_select_store_type
         rts
 
-weapon_select_store_type:  stx     $E5   ; store weapon type in temp
+weapon_select_store_type:  stx     slot_counter   ; store weapon type in temp
         lda     weapon_select_state
         and     #$F0
         ora     slot_counter
         sta     weapon_select_state
         lda     #$01
-        sta     hud_busy_flag
+        sta     sound_busy_flag
         lda     #$00
         sta     sound_slot_lo
         lda     #$00
@@ -81,22 +116,22 @@ weapon_select_store_type:  stx     $E5   ; store weapon type in temp
         lda     #$04
         sta     slot_counter
         lda     #$01
-chr_ram_data_transfer:  clc              ; advance pointer to next tile data
+chr_ram_data_transfer:  clc              ; advance weapon_data_lo by A to next tile record
         adc     weapon_data_lo
         sta     weapon_data_lo
         lda     #$00
         adc     weapon_data_hi
         sta     weapon_data_hi
-        ldx     sound_slot_lo
+        ldx     sound_slot_lo           ; X = destination offset in CHR-RAM shadow
         ldy     #$00
-chr_ram_tile_copy:  lda     ($E2),y     ; Copy tile data to CHR-RAM shadow at $0500
+chr_ram_tile_copy:  lda     (weapon_data_lo),y ; copy 2 tile bytes to CHR-RAM shadow ($0500+)
         sta     chr_ram_shadow,x
         inx
         iny
         cpy     #$02
 chr_ram_tile_copy_end:  bne     chr_ram_tile_copy
-        .byte   $A0                     ; skip-byte: LDY# eats next byte ($0A=ASL A opcode)
-chr_ram_padding_fill:  asl     a:current_weapon     ; fill padding bytes in CHR shadow
+        .byte   $A0                     ; skip-byte: LDY# eats $0A → LDY #$0A (Y=10 padding bytes)
+chr_ram_padding_fill:  asl     a:current_weapon ; (alternate entry: ASL $00A9 then fall through)
 chr_ram_padding_byte:  sta     chr_ram_shadow,x
         inx
 chr_ram_padding_loop:  dey
@@ -106,36 +141,36 @@ chr_ram_padding_loop:  dey
         bcs     weapon_select_advance_slot
         jsr     draw_energy_bar_template
 weapon_select_advance_slot:  jsr     display_offset_next_slot
-weapon_select_dec_count:  dec     $E5
+weapon_select_dec_count:  dec     slot_counter
         beq     weapon_select_store_palette
         lda     #$02
         jmp     chr_ram_data_transfer
 
 weapon_select_store_palette:  ldy     #$02
-        lda     ($E2),y
+        lda     (weapon_data_lo),y
         sta     sound_data_ptr_lo
         iny
-        lda     ($E2),y
+        lda     (weapon_data_lo),y
         sta     sound_data_ptr_hi
         jsr     weapon_shift_e1_right4
         lda     #$00
-        sta     hud_busy_flag
+        sta     sound_busy_flag
         rts
 
-weapon_select_high_nybble:  lda     $E0  ; check high nybble path
+weapon_select_high_nybble:  lda     weapon_select_state  ; check high nybble path
         and     #$F0
         sta     slot_counter
         cpx     slot_counter
         bcs     weapon_select_high_store
         rts
 
-weapon_select_high_store:  stx     $E5   ; store high nybble weapon type
+weapon_select_high_store:  stx     slot_counter   ; store high nybble weapon type
         lda     weapon_select_state
         and     #$0F
         ora     slot_counter
         sta     weapon_select_state
         lda     #$01
-        sta     hud_busy_flag
+        sta     sound_busy_flag
         lda     #$00
         sta     sound_slot_lo
         ldx     #$00
@@ -149,7 +184,7 @@ weapon_select_high_store:  stx     $E5   ; store high nybble weapon type
         stx     instrument_type
         stx     stream_update_flag
         ldy     #$01
-        lda     ($E2),y
+        lda     (weapon_data_lo),y
         and     #$0F
         tax
         ora     weapon_display_bits
@@ -180,9 +215,10 @@ weapon_bit_advance_slot:  jsr     display_offset_next_slot
         sta     channel_active_flags
         pla
         lda     #$00
-        sta     hud_busy_flag
+        sta     sound_busy_flag
         rts
 
+; ─── handle $FC weapon command ───
 weapon_cmd_fc_handler:
         iny
         sty     frame_repeat_count
@@ -192,26 +228,26 @@ weapon_cmd_fc_handler:
 ; =============================================================================
 ; Password Screen
 ; =============================================================================
-password_mode_init:  sty     $E8        ; Enter password screen mode
+password_mode_init:  sty     lives_timer        ; Enter password screen mode
         lda     #$01
         sta     lives_animate_timer
-        lda     hud_frame_counter
+        lda     sound_frame_counter
         and     #$01
-        sta     hud_frame_counter
+        sta     sound_frame_counter
         rts
 
 
 ; =============================================================================
 ; weapon_secondary_init — Weapon Secondary Init — initialize weapon slots without CHR-RAM upload ($8128)
 ; =============================================================================
-weapon_secondary_init:  lda     $E0
+weapon_secondary_init:  lda     weapon_select_state
         and     #$0F
         sta     weapon_select_state
         lda     #$04
         sta     slot_counter
         lda     #$02
         sta     slot_tile_offset
-weapon_secondary_loop:  lda     $E1
+weapon_secondary_loop:  lda     weapon_display_bits
         lsr     a
         bcc     weapon_secondary_advance
         jsr     draw_energy_bar_template
@@ -227,14 +263,14 @@ weapon_secondary_advance:  jsr     display_offset_next_slot
         sta     weapon_display_bits
         sta     channel_active_flags
         lda     #$00
-        sta     hud_busy_flag
+        sta     sound_busy_flag
         rts
 
 
 ; =============================================================================
 ; weapon_check_sound_slot — Weapon Sound Slot Check — verify APU channel availability for weapon ($816C)
 ; =============================================================================
-weapon_check_sound_slot:  lda     $EC
+weapon_check_sound_slot:  lda     sound_slot_lo
         clc
         adc     #$0A
         tax
@@ -254,7 +290,7 @@ weapon_check_sound_slot:  lda     $EC
 ; =============================================================================
 ; weapon_clear_display — Weapon Clear Display — zero out all 4 weapon CHR-RAM slots ($8190)
 ; =============================================================================
-weapon_clear_display:  lda     $E0       ; clear weapon display slots
+weapon_clear_display:  lda     weapon_select_state       ; clear weapon display slots
         and     #$F0
         sta     weapon_select_state
         lda     #$00
@@ -270,7 +306,7 @@ weapon_clear_loop:  lda     #$00
         dec     slot_counter
         bne     weapon_clear_loop
         lda     #$00
-        sta     hud_busy_flag
+        sta     sound_busy_flag
         rts
 
 
@@ -291,13 +327,16 @@ energy_bar_clear_loop:  sta     chr_ram_shadow,x
 
 
 ; =============================================================================
-; weapon_sound_copy_data — Weapon Sound Data Copy — copy 4 bytes of instrument data to CHR buffer ($81C4)
+; weapon_sound_copy_data — Weapon Sound Data Copy ($81C4)
+; Copies 4 bytes of instrument data from sound_data_ptr into the CHR-RAM shadow
+; buffer at the current slot's instrument region. The source offset is calculated
+; from the instrument index stored in chr_ram_shadow[slot+6].
 ; =============================================================================
-weapon_sound_copy_data:  lda     $E5
+weapon_sound_copy_data:  lda     slot_counter        ; save loop state
         pha
         lda     slot_tile_offset
         pha
-        lda     sound_data_ptr_lo
+        lda     sound_data_ptr_lo       ; set up (slot_counter) as source pointer
         sta     slot_counter
         lda     sound_data_ptr_hi
         sta     slot_tile_offset
@@ -305,23 +344,23 @@ weapon_sound_copy_data:  lda     $E5
         clc
         adc     #$06
         tax
-        lda     chr_ram_shadow,x
+        lda     chr_ram_shadow,x        ; instrument index from slot data
         and     #$1F
         beq     weapon_sound_calc_done
-        tay
+        tay                             ; Y = instrument index
         lda     #$00
-weapon_sound_calc_offset:  clc
+weapon_sound_calc_offset:  clc         ; compute source offset: index × 4
         adc     #$04
         dey
         bne     weapon_sound_calc_offset
-weapon_sound_calc_done:  tay
+weapon_sound_calc_done:  tay            ; Y = source byte offset
         txa
         clc
-        adc     #$0E
+        adc     #$0E                    ; X = dest offset (slot + $14)
         tax
-        lda     #$04
+        lda     #$04                    ; copy 4 bytes
 weapon_sound_copy_loop:  pha
-        lda     ($E5),y
+        lda     (slot_counter),y        ; read from sound_data_ptr + offset
         sta     chr_ram_shadow,x
         iny
         inx
@@ -339,7 +378,7 @@ weapon_sound_copy_loop:  pha
 ; =============================================================================
 ; display_offset_next_slot — Display Offset Next Slot — advance $EC by $1F to next weapon display slot ($8207)
 ; =============================================================================
-display_offset_next_slot:  lsr     $E1
+display_offset_next_slot:  lsr     weapon_display_bits
         bcc     display_offset_skip
         lda     weapon_display_bits
         ora     #$80
@@ -350,7 +389,8 @@ display_offset_skip:  lda     #$1F
         sta     sound_slot_lo
         rts
 
-weapon_shift_e1_right4:  lsr     $E1
+; ─── shift weapon display bits right 4 ───
+weapon_shift_e1_right4:  lsr     weapon_display_bits
         lsr     weapon_display_bits
         lsr     weapon_display_bits
         lsr     weapon_display_bits
@@ -373,15 +413,45 @@ apu_enable_channels:  lda     #$07       ; enable pulse 1+2 + triangle
 
 
 ; =============================================================================
-; HUD Update (Main)
-; Called each frame to update weapon energy bars and lives display.
+; Sound Engine — Main Update Loop
+; Called each frame to process all 4 sound channels and lives display.
+;
+; Per-frame processing chain (4 channels: pulse1, pulse2, triangle, noise):
+;
+;   sound_update_main
+;     └─ sound_channel_loop  ──── for each of 4 channels: ──────────────────
+;          │
+;          ├─ sound_stream_check         stream interpreter (if active)
+;          │    ├─ stream_cmd_*          7 stream commands ($00-$06)
+;          │    └─ sound_pattern_fetch   when stream loads sub-pattern
+;          │
+;          ├─ sound_note_process         note duration tick (repeat × tick)
+;          │    └─ sound_note_done ───►  sound_pattern_fetch (when note ends)
+;          │
+;          │  sound_pattern_fetch        pattern byte dispatcher
+;          │    ├─ sound_cmd_dispatch    10 pattern sub-commands ($0x range)
+;          │    │    └─ pattern_cmd_*    set period/noise/duty/env/note/etc.
+;          │    ├─ sound_pattern_set_vol_env  ($2x range: volume envelope)
+;          │    ├─ sound_pattern_set_loop     ($3x range: loop flag)
+;          │    └─ sound_freq_multiply   ($40+: note event, freq lookup)
+;          │
+;          ├─ sound_bar_update           volume/portamento processing
+;          │    └─ sound_sweep_check_flag
+;          │         ├─ sound_sweep_process    bidirectional sweep oscillator
+;          │         │    └─ sound_volume_write → APU vol register
+;          │         └─ sound_envelope_run     signed frequency envelope
+;          │              └─ sound_vibrato_check
+;          │                   └─ sound_frequency_calc → APU freq registers
+;          │
+;          └─ sound_channel_off          silence channel via APU
+;     └─ sound_lives_display             lives counter animation
 ; =============================================================================
-hud_update_main:  inc     $EA           ; Main HUD update (energy bars, lives)
-        lda     hud_busy_flag
-        beq     hud_init_slot_vars
+sound_update_main:  inc     sound_frame_counter           ; Main sound engine update (channels, bars, lives)
+        lda     sound_busy_flag
+        beq     sound_init_channels
         rts
 
-hud_init_slot_vars:  ldx     #$00        ; initialize 4 HUD slot variables
+sound_init_channels:  ldx     #$00        ; initialize 4 sound channel slots
         ldy     #$05
         stx     sound_slot_lo
         sty     sound_slot_hi
@@ -389,53 +459,53 @@ hud_init_slot_vars:  ldx     #$00        ; initialize 4 HUD slot variables
         sta     apu_channel_offset
         lda     #$04
         sta     active_channel_count
-hud_slot_loop:  lda     #$01
-        ldy     #$18
+sound_channel_loop:  lda     #$01
+        ldy     #SND_VIB_CTR
         clc
         adc     ($EC),y
         sta     ($EC),y
         lda     #$01
-        ldy     #$1D
+        ldy     #SND_SWEEP_CTR
         clc
         adc     ($EC),y
         sta     ($EC),y
         lda     channel_active_flags
         lsr     a
-        bcc     hud_check_pause_flag
+        bcc     sound_check_pause
         jsr     sound_stream_check
-hud_check_pause_flag:  lda     $41
+sound_check_pause:  lda     sound_pause_flag
         lsr     a
-        bcc     hud_check_slot_active
-        jmp     hud_slot_silent_check
+        bcc     sound_check_active
+        jmp     sound_channel_silent
 
-hud_check_slot_active:  ldy     #$00
+sound_check_active:  ldy     #SND_FREQ_LO
         lda     ($EC),y
         iny
         ora     ($EC),y
-        beq     hud_slot_silent_check
+        beq     sound_channel_silent
         lda     #$01
-        ldy     #$0E
+        ldy     #SND_PORTA_ACC
         clc
         adc     ($EC),y
         sta     ($EC),y
         jsr     sound_note_process
-        jmp     hud_shift_ef_flag
+        jmp     sound_shift_active_flags
 
-hud_slot_silent_check:  lda     $EF
+sound_channel_silent:  lda     channel_active_flags
         lsr     a
-        bcs     hud_shift_ef_flag
+        bcs     sound_shift_active_flags
         ldx     apu_channel_offset
         inx
         inx
         ldy     active_channel_count
         jsr     apu_sound_control
-hud_shift_ef_flag:  lsr     $EF
-        bcc     hud_next_slot
+sound_shift_active_flags:  lsr     channel_active_flags
+        bcc     sound_next_channel
         lda     channel_active_flags
         ora     #$80
         sta     channel_active_flags
-hud_next_slot:  dec     $EE
-        beq     hud_lives_display
+sound_next_channel:  dec     active_channel_count
+        beq     sound_lives_display
         lda     #$04
         clc
         adc     apu_channel_offset
@@ -447,30 +517,30 @@ hud_next_slot:  dec     $EE
         lda     #$00
         adc     sound_slot_hi
         sta     sound_slot_hi
-        jmp     hud_slot_loop
+        jmp     sound_channel_loop
 
-hud_lives_display:  lda     $E8          ; check lives counter display flag
+sound_lives_display:  lda     lives_timer          ; check lives counter display flag
         and     #$7F
-        beq     hud_check_refill_timer
-        cmp     hud_frame_counter
-        bne     hud_check_refill_timer
-        lda     hud_frame_counter
+        beq     sound_check_refill
+        cmp     sound_frame_counter
+        bne     sound_check_refill
+        lda     sound_frame_counter
         and     #$01
-        sta     hud_frame_counter
+        sta     sound_frame_counter
         inc     lives_animate_timer
         lda     #$10
         cmp     lives_animate_timer
-        bne     hud_check_refill_timer
+        bne     sound_check_refill
         lda     lives_timer
-        bmi     hud_lives_reset_timer
+        bmi     sound_lives_reset_timer
         lda     #$00
         sta     lives_timer
-hud_lives_reset_timer:  lda     #$0F
+sound_lives_reset_timer:  lda     #$0F
         sta     lives_animate_timer
-hud_check_refill_timer:  lda     $F2     ; check refill animation timer
-        beq     hud_final_shift_ef
+sound_check_refill:  lda     instrument_type     ; check refill animation timer
+        beq     sound_final_shift_flags
         dec     instrument_type
-hud_final_shift_ef:  lsr     $EF
+sound_final_shift_flags:  lsr     channel_active_flags
         lsr     channel_active_flags
         lsr     channel_active_flags
         lsr     channel_active_flags
@@ -478,60 +548,60 @@ hud_final_shift_ef:  lsr     $EF
 
 
 ; =============================================================================
-; hud_energy_bar_update — HUD Energy Bar Update — per-tick energy bar drain/fill animation ($82EC)
+; sound_bar_update — Sound Engine — Channel Volume & Portamento Processing ($82EC)
 ; =============================================================================
-hud_energy_bar_update:  ldy     #$0C
+sound_bar_update:  ldy     #SND_DUTY_CMD
         lda     ($EC),y
         ldy     #$02
         cpy     active_channel_count
-        beq     hud_energy_store_f4
+        beq     sound_bar_store_temp
         and     #$0F
-hud_energy_store_f4:  sta     sound_temp
+sound_bar_store_temp:  sta     sound_temp
         lda     lives_timer
         and     #$7F
-        beq     hud_energy_clamp_check
+        beq     sound_bar_clamp
         lda     lives_animate_timer
         ldy     #$02
         cpy     active_channel_count
-        bne     hud_energy_check_drain
+        bne     sound_bar_check_drain
         ldx     #$0C
-hud_energy_timer_add:  clc
+sound_bar_timer_add:  clc
         adc     lives_animate_timer
         dex
-        bne     hud_energy_timer_add
-hud_energy_check_drain:  tay
+        bne     sound_bar_timer_add
+sound_bar_check_drain:  tay
         lda     lives_timer
-        bmi     hud_energy_refill_loop
+        bmi     sound_bar_refill_loop
         ldx     #$FF
-hud_energy_drain_loop:  inx
+sound_bar_drain_loop:  inx
         cpx     sound_temp
-        beq     hud_energy_clamp_check
+        beq     sound_bar_clamp
         dey
-        bne     hud_energy_drain_loop
+        bne     sound_bar_drain_loop
         stx     sound_temp
-        jmp     hud_energy_clamp_check
+        jmp     sound_bar_clamp
 
-hud_energy_refill_loop:  dec     sound_temp
-        beq     hud_energy_clamp_check
+sound_bar_refill_loop:  dec     sound_temp
+        beq     sound_bar_clamp
         dey
-        bne     hud_energy_refill_loop
-hud_energy_clamp_check:  lda     #$02
+        bne     sound_bar_refill_loop
+sound_bar_clamp:  lda     #$02
         cmp     active_channel_count
-        beq     hud_energy_check_sweep
-        ldy     #$0D
+        beq     sound_sweep_check_flag
+        ldy     #SND_PORTA_RATE
         lda     ($EC),y
         tax
         and     #$7F
-        beq     hud_energy_check_sweep
+        beq     sound_sweep_check_flag
         iny
         cmp     ($EC),y
-        beq     hud_energy_reset_counter
+        beq     sound_sweep_reset
         iny
         lda     ($EC),y
         and     #$0F
-        jmp     hud_energy_clamp_max
+        jmp     sound_bar_clamp_max
 
-hud_energy_reset_counter:  lda     #$00
+sound_sweep_reset:  lda     #$00
         sta     ($EC),y
         iny
         lda     ($EC),y
@@ -541,264 +611,286 @@ hud_energy_reset_counter:  lda     #$00
         lsr     a
         sta     freq_register_hi
         txa
-        bpl     hud_energy_delta_read
+        bpl     sound_envelope_delta
         lda     #$00
         sec
         sbc     freq_register_hi
         sta     freq_register_hi
-hud_energy_delta_read:  lda     ($EC),y
+sound_envelope_delta:  lda     ($EC),y
         and     #$0F
         clc
         adc     freq_register_hi
-        bpl     hud_energy_clamp_max
+        bpl     sound_bar_clamp_max
         lda     #$00
-        jmp     hud_energy_store_result
+        jmp     sound_bar_store_result
 
-hud_energy_clamp_max:  cmp     sound_temp
-        bcc     hud_energy_store_result
+sound_bar_clamp_max:  cmp     sound_temp
+        bcc     sound_bar_store_result
         lda     sound_temp
-hud_energy_store_result:  sta     sound_temp
+sound_bar_store_result:  sta     sound_temp
         lda     ($EC),y
         and     #$F0
         ora     sound_temp
         sta     ($EC),y
-hud_energy_check_sweep:  lda     $EF
+; ─── route to sweep or envelope based on channel active flag ───
+; freq_register_hi is used as both a slot field selector (AND $7F → Y offset
+; for envelope/freq calc) and a processing mode flag (bit7: 0=first pass
+; through sweep+envelope, 1=second pass skips sweep). Two-pass processing
+; allows each channel to run two independent envelope generators.
+sound_sweep_check_flag:  lda     channel_active_flags
         lsr     a
-        bcs     hud_sound_sweep_init
-        lda     #$0C
+        bcs     sound_sweep_init        ; bit0 set: skip sweep, run envelope only
+        lda     #SND_DUTY_CMD           ; bit0 clear: use DUTY_CMD as base offset
         sta     freq_register_hi
-        jmp     hud_sound_sweep_check
+        jmp     sound_sweep_process
 
-hud_sound_sweep_init:  lda     #$09
+sound_sweep_init:  lda     #SND_NOISE_PER  ; use NOISE_PER as base offset
         sta     freq_register_hi
-        jmp     hud_sound_envelope_run
+        jmp     sound_envelope_run
 
 
 ; =============================================================================
-; hud_sound_sweep_check — Sound Sweep Engine — process pitch sweep and envelope for active channel ($838F)
+; sound_sweep_process — Sound Sweep Engine — process pitch sweep and envelope for active channel ($838F)
+; Bidirectional volume sweep oscillator. SWEEP_ACC bounces between 1 and 15;
+; at each boundary, SWEEP_DELTA is negated to reverse direction. The result
+; modulates the channel volume written to the APU.
 ; =============================================================================
-hud_sound_sweep_check:  ldy     #$16
+sound_sweep_process:  ldy     #SND_SWEEP_CTRL
         lda     ($EC),y
-        and     #$7F
-        beq     hud_sweep_compare_slot
-        ldy     #$1D
-        cmp     ($EC),y
-        beq     hud_sweep_reset_counter
-        jmp     hud_sweep_read_current
+        and     #$7F                    ; sweep period (0 = disabled)
+        beq     sound_sweep_next_channel
+        ldy     #SND_SWEEP_CTR
+        cmp     ($EC),y                 ; has counter reached period?
+        beq     sound_sweep_reset_ctr
+        jmp     sound_sweep_read
 
-hud_sweep_reset_counter:  lda     #$00
+sound_sweep_reset_ctr:  lda     #$00   ; reset counter, apply delta
         sta     ($EC),y
-        ldy     #$17
+        ldy     #SND_SWEEP_DELTA
         lda     ($EC),y
-        ldy     #$1E
+        ldy     #SND_SWEEP_ACC
         clc
-        adc     ($EC),y
-        beq     hud_sweep_clamp_low
-        bpl     hud_sweep_store_value
-hud_sweep_clamp_low:  lda     #$01
+        adc     ($EC),y                 ; acc += delta
+        beq     sound_sweep_clamp_low
+        bpl     sound_sweep_store
+sound_sweep_clamp_low:  lda     #$01   ; clamp to minimum 1
         sta     ($EC),y
-        jmp     hud_sweep_negate_delta
+        jmp     sound_sweep_negate      ; reverse direction
 
-hud_sweep_store_value:  sta     ($EC),y
+sound_sweep_store:  sta     ($EC),y
         cmp     #$10
-        bcc     hud_sweep_read_current
-        lda     #$0F
+        bcc     sound_sweep_read
+        lda     #$0F                    ; clamp to maximum 15
         sta     ($EC),y
-hud_sweep_negate_delta:  lda     #$00
-        ldy     #$17
+sound_sweep_negate:  lda     #$00       ; negate delta: delta = 0 - delta
+        ldy     #SND_SWEEP_DELTA
         sec
         sbc     ($EC),y
         sta     ($EC),y
-hud_sweep_read_current:  ldy     #$1E
+sound_sweep_read:  ldy     #SND_SWEEP_ACC
         lda     ($EC),y
         cmp     sound_temp
-        bcs     hud_sweep_compare_slot
+        bcs     sound_sweep_next_channel
         sta     sound_temp
-hud_sweep_compare_slot:  ldy     #$02
+sound_sweep_next_channel:  ldy     #$02 ; merge sweep volume with duty cycle
         cpy     active_channel_count
-        beq     hud_sound_write_volume
-        lda     freq_register_hi
-        and     #$7F
+        beq     sound_volume_write      ; triangle: use sweep value directly
+        lda     freq_register_hi        ; freq_register_hi AND $7F = slot offset
+        and     #$7F                    ;   to SND_DUTY_CMD or SND_NOISE_PER
         tay
-        lda     ($EC),y
+        lda     ($EC),y                 ; read duty/envelope upper nybble
         and     #$F0
-        ora     sound_temp
+        ora     sound_temp              ; merge with sweep volume (lower nybble)
         sta     sound_temp
-hud_sound_write_volume:  ldx     $EB
+sound_volume_write:  ldx     apu_channel_offset
         lda     sound_temp
-        sta     SQ1_VOL,x
-        lda     freq_register_hi
-        bpl     hud_sound_sweep_mode_b
-        lda     #$90
+        sta     SQ1_VOL,x              ; write volume to APU
+        lda     freq_register_hi        ; bit7: 0 = first pass (do sweep_mode_b)
+        bpl     sound_sweep_mode_b      ;        1 = second pass (skip to envelope)
+        lda     #SND_APU_OUT | $80
         sta     freq_register_hi
-        jmp     hud_sound_envelope_run
+        jmp     sound_envelope_run
 
-hud_sound_sweep_mode_b:  lda     #$09
+sound_sweep_mode_b:  lda     #SND_NOISE_PER
         sta     freq_register_hi
-hud_sound_envelope_run:  lda     $F5
+; ─── frequency envelope generator ───
+; freq_register_hi AND $7F selects the slot field containing a signed 8-bit
+; rate. Adds rate to the following 16-bit value (slot[offset+1..+2]), which
+; accumulates the pitch envelope delta applied during frequency calculation.
+sound_envelope_run:  lda     freq_register_hi
         and     #$7F
-        tay
+        tay                             ; Y = envelope rate field offset
         ldx     #$00
-        lda     ($EC),y
-        beq     hud_envelope_check_mode
-        bpl     hud_envelope_add_delta
-        dex
-hud_envelope_add_delta:  iny
+        lda     ($EC),y                 ; rate: 0=skip, >0=positive, <0=negative
+        beq     sound_envelope_mode
+        bpl     sound_envelope_add
+        dex                             ; X=$FF: sign-extend negative rate to hi byte
+sound_envelope_add:  iny
         clc
-        adc     ($EC),y
+        adc     ($EC),y                 ; slot[offset+1] += rate (lo)
         sta     ($EC),y
         txa
         iny
-        adc     ($EC),y
+        adc     ($EC),y                 ; slot[offset+2] += carry + sign (hi)
         sta     ($EC),y
-hud_envelope_check_mode:  lda     $F5
-        bmi     hud_vibrato_check
+sound_envelope_mode:  lda     freq_register_hi
+        bmi     sound_vibrato_check     ; bit7 set = second pass, continue to vibrato
         lda     channel_active_flags
         lsr     a
-        bcc     hud_vibrato_check
-        rts
+        bcc     sound_vibrato_check     ; bit0 clear = continue to vibrato
+        rts                             ; bit0 set = done (refill mode)
 
-hud_vibrato_check:  ldy     #$14
+; ─── vibrato modulation ───
+; Phase-accumulator vibrato. VIB_AMP[6:0] = period, VIB_PHASE[7:5] = amplitude
+; (0-7), VIB_PHASE[4:0] = step count per half-cycle. VIB_DIR[7] = direction
+; (0=add, 1=subtract), VIB_DIR[6:0] = step counter. Each step adds/subtracts
+; amplitude to FREQ_ACC. When step counter reaches step count, direction toggles.
+; VIB_AMP[7] alternates between widening and narrowing the vibrato range.
+sound_vibrato_check:  ldy     #SND_VIB_AMP
         lda     ($EC),y
-        and     #$7F
-        bne     hud_vibrato_timer_cmp
-        jmp     hud_frequency_calc
+        and     #$7F                    ; vibrato period (0 = disabled)
+        bne     sound_vibrato_timer
+        jmp     sound_frequency_calc
 
-hud_vibrato_timer_cmp:  ldy     #$18
-        cmp     ($EC),y
-        beq     hud_vibrato_reset
-        jmp     hud_frequency_calc
+sound_vibrato_timer:  ldy     #SND_VIB_CTR
+        cmp     ($EC),y                 ; has counter reached period?
+        beq     sound_vibrato_reset
+        jmp     sound_frequency_calc
 
-hud_vibrato_reset:  lda     #$00
+sound_vibrato_reset:  lda     #$00     ; reset timing counter
         sta     ($EC),y
-        tax
-        ldy     #$15
+        tax                             ; X = 0 (sign extension for positive delta)
+        ldy     #SND_VIB_PHASE
         lda     ($EC),y
-        rol     a
+        rol     a                       ; extract bits[7:5] → 3-bit amplitude
         rol     a
         rol     a
         rol     a
         and     #$07
-        sta     sound_temp
-        ldy     #$19
+        sta     sound_temp              ; sound_temp = amplitude delta
+        ldy     #SND_VIB_DIR
         lda     ($EC),y
-        asl     a
-        bcc     hud_vibrato_apply_delta
-        lda     #$00
+        asl     a                       ; bit7 → carry = direction
+        bcc     sound_vibrato_apply     ; carry clear = add (positive)
+        lda     #$00                    ; carry set = subtract (negative)
         sec
         sbc     sound_temp
-        sta     sound_temp
-        dex
-hud_vibrato_apply_delta:  lda     sound_temp
+        sta     sound_temp              ; sound_temp = -amplitude
+        dex                             ; X = $FF (sign extension for negative)
+sound_vibrato_apply:  lda     sound_temp ; apply delta to 16-bit freq accumulator
         clc
-        ldy     #$1A
+        ldy     #SND_FREQ_ACC_LO
         adc     ($EC),y
         sta     ($EC),y
         iny
-        txa
+        txa                             ; X = sign extension ($00 or $FF)
         adc     ($EC),y
         sta     ($EC),y
-        ldy     #$15
+        ldy     #SND_VIB_PHASE          ; step count = VIB_PHASE[4:0]
         lda     ($EC),y
         and     #$1F
         sta     sound_temp
-        ldy     #$19
+        ldy     #SND_VIB_DIR            ; increment step counter
         lda     ($EC),y
         clc
         adc     #$01
         sta     ($EC),y
-        and     #$7F
-        cmp     sound_temp
-        bne     hud_frequency_calc
-        lda     ($EC),y
+        and     #$7F                    ; counter[6:0]
+        cmp     sound_temp              ; reached step count?
+        bne     sound_frequency_calc    ; no — continue to freq calc
+        lda     ($EC),y                 ; yes — reset counter, toggle direction
         and     #$80
-        sta     ($EC),y
-        ldy     #$14
+        sta     ($EC),y                 ; keep direction bit, zero counter
+        ldy     #SND_VIB_AMP
         lda     ($EC),y
-        asl     a
-        bcs     hud_vibrato_toggle_dir
-        lda     ($EC),y
+        asl     a                       ; bit7 → carry = half-period flag
+        bcs     sound_vibrato_toggle    ; set: just clear the flag
+        lda     ($EC),y                 ; clear: set flag and flip VIB_DIR direction
         ora     #$80
         sta     ($EC),y
-        ldy     #$19
+        ldy     #SND_VIB_DIR
         lda     ($EC),y
-        bpl     hud_vibrato_set_dir_neg
+        bpl     sound_vibrato_neg       ; toggle direction bit7
         and     #$7F
         sta     ($EC),y
-        jmp     hud_frequency_calc
+        jmp     sound_frequency_calc
 
-hud_vibrato_set_dir_neg:  ora     #$80
+sound_vibrato_neg:  ora     #$80
         sta     ($EC),y
-        jmp     hud_frequency_calc
+        jmp     sound_frequency_calc
 
-hud_vibrato_toggle_dir:  lda     ($EC),y
+sound_vibrato_toggle:  lda     ($EC),y  ; clear VIB_AMP half-period flag
         and     #$7F
         sta     ($EC),y
 
 ; =============================================================================
-; hud_frequency_calc — Sound Frequency Calculator — compute and write APU frequency registers ($84A9)
+; sound_frequency_calc — Sound Frequency Calculator — compute and write APU frequency registers ($84A9)
+; Computes final_freq = base_freq + freq_accumulator, where base_freq is at
+; slot[offset+1..+2] and freq_acc holds accumulated envelope + vibrato deltas.
+; freq_register_hi AND $7F selects the base offset (SND_DUTY_CMD or SND_NOISE_PER).
+; Result is written to APU frequency registers. Noise channel has special handling.
 ; =============================================================================
-hud_frequency_calc:  lda     $F5
-        and     #$7F
+sound_frequency_calc:  lda     freq_register_hi
+        and     #$7F                    ; extract base slot offset
         sta     freq_register_hi
-        inc     freq_register_hi
-        ldy     #$1A
+        inc     freq_register_hi        ; offset+1 = base freq lo field
+        ldy     #SND_FREQ_ACC_LO
         lda     ($EC),y
         ldy     freq_register_hi
         clc
-        adc     ($EC),y
+        adc     ($EC),y                 ; X = (base_freq_lo + acc_lo)
         tax
-        ldy     #$1B
+        ldy     #SND_FREQ_ACC_HI
         lda     ($EC),y
-        inc     freq_register_hi
+        inc     freq_register_hi        ; offset+2 = base freq hi field
         ldy     freq_register_hi
-        adc     ($EC),y
+        adc     ($EC),y                 ; Y = (base_freq_hi + acc_hi + carry)
         tay
-        lda     #$01
+        lda     #$01                    ; noise channel? (channel 1 = noise)
         cmp     active_channel_count
-        bne     hud_frequency_write
-        lda     #$0F
+        bne     sound_frequency_write
+        lda     #$0F                    ; noise: enable all channels
         sta     SND_CHN
         txa
-        and     #$0F
+        and     #$0F                    ; noise period is 4-bit
         tax
-        inc     freq_register_hi
+        inc     freq_register_hi        ; offset+3 = noise mode flag field
         ldy     freq_register_hi
         lda     ($EC),y
-        and     #$80
+        and     #$80                    ; bit7 = noise mode (short/long)
         sta     sound_temp
         txa
         ora     sound_temp
         tax
         ldy     #$00
-hud_frequency_write:  txa
+sound_frequency_write:  txa             ; write freq lo to APU timer register
         ldx     apu_channel_offset
         inx
         inx
-        sta     SQ1_VOL,x
-        tya
-        ldy     #$1C
+        sta     SQ1_VOL,x              ; APU $4002/$4006/$400A/$400E (freq lo)
+        tya                             ; freq hi: only write if changed
+        ldy     #SND_PREV_FREQ          ;   (avoids retriggering phase on NES APU)
         cmp     ($EC),y
-        bne     hud_frequency_update_hi
+        bne     sound_frequency_hi
         rts
 
-hud_frequency_update_hi:  sta     ($EC),y
+sound_frequency_hi:  sta     ($EC),y
         ora     #$08
         sta     SQ1_SWEEP,x
         rts
 
 
 ; =============================================================================
-; hud_sound_channel_off — Sound Channel Off — disable APU channel if not noise channel ($84FD)
+; sound_channel_off — Sound Channel Off — disable APU channel if not noise channel ($84FD)
 ; =============================================================================
-hud_sound_channel_off:  ldy     #$01
+sound_channel_off:  ldy     #$01
         cpy     active_channel_count
-        bne     hud_sound_silence_pair
+        bne     sound_silence_pair
         lda     #$07
         sta     SND_CHN
         rts
 
-hud_sound_silence_pair:  lda     #$00
+sound_silence_pair:  lda     #$00
         ldx     apu_channel_offset
         inx
         inx
@@ -810,11 +902,11 @@ hud_sound_silence_pair:  lda     #$00
 ; =============================================================================
 ; sound_state_init_slot — Sound State Init Slot — reset envelope/sweep state for sound slot ($8516)
 ; =============================================================================
-sound_state_init_slot:  ldy     #$14
+sound_state_init_slot:  ldy     #SND_VIB_AMP
         lda     ($EC),y
         and     #$7F
         sta     ($EC),y
-        ldy     #$16
+        ldy     #SND_SWEEP_CTRL
         lda     ($EC),y
         asl     a
         bcc     sound_state_clear_regs
@@ -824,26 +916,27 @@ sound_state_init_slot:  ldy     #$14
         cpx     active_channel_count
         beq     sound_state_store_value
         and     #$0F
-sound_state_store_value:  ldy     #$1E
+sound_state_store_value:  ldy     #SND_SWEEP_ACC
         sta     ($EC),y
 sound_state_clear_regs:  ldx     #$06
         lda     #$00
-        ldy     #$18
+        ldy     #SND_VIB_CTR
 sound_state_clear_loop:  sta     ($EC),y
         iny
         dex
         bne     sound_state_clear_loop
         lda     #$FF
-        ldy     #$1C
+        ldy     #SND_PREV_FREQ
         sta     ($EC),y
         rts
 
-sound_state_save_restore:  ldy     #$1C
+; ─── save frequency, reinit slot, restore ───
+sound_state_save_restore:  ldy     #SND_PREV_FREQ
         lda     ($EC),y
         pha
         jsr     sound_state_init_slot
         pla
-        ldy     #$1C
+        ldy     #SND_PREV_FREQ
         sta     ($EC),y
         rts
 
@@ -869,13 +962,32 @@ sound_dispatch_table:  txa
 
 
 ; =============================================================================
-; sound_stream_check — Sound Data Stream Interpreter — fetch and execute sound stream commands ($856D)
+; sound_stream_check — Sound Data Stream Interpreter ($856D)
+;
+; Reads command bytes from the main stream pointer ($F0/$F1). If instrument_type
+; is nonzero and a sub-stream pointer (SND_STREAM_LO/HI) is active, runs in
+; refill mode — processes the slot's volume/envelope via sound_sweep_process.
+;
+; Stream byte encoding (read from ($F0)):
+;   $00-$06 : stream command — dispatched to one of 7 handlers
+;   $80-$FE : note event (low nybble != $0F)
+;             bits[2:0] = sub-stream pointer high byte
+;             next byte = sub-stream pointer low byte
+;             Sets SND_STREAM_LO/HI, reinitializes slot, silences channel
+;   $xF     : envelope reload (low nybble = $0F)
+;             next byte passed to sound_state_save_restore
+;
+; Stream commands (handler = byte value):
+;   0 = set instrument type       4 = set stream data pointer
+;   1 = set APU output register   5 = load vibrato/sweep params (4 bytes)
+;   2 = set duty cycle bits       6 = end stream / loop back
+;   3 = set volume bits
 ; =============================================================================
-sound_stream_check:  lda     $F2
+sound_stream_check:  lda     instrument_type
         bne     sound_stream_refill_check
         jmp     sound_stream_fetch
 
-sound_stream_refill_check:  ldy     #$11
+sound_stream_refill_check:  ldy     #SND_STREAM_LO
         lda     ($EC),y
         iny
         ora     ($EC),y
@@ -889,10 +1001,11 @@ sound_stream_refill_read:  iny
         beq     sound_stream_set_mode
         and     #$0F
 sound_stream_set_mode:  sta     sound_temp
-        lda     #$93
+        lda     #SND_DUTY_VOL | $80
         sta     freq_register_hi
-        jmp     hud_sound_sweep_check
+        jmp     sound_sweep_process
 
+; ─── fetch and dispatch next stream command ───
 sound_stream_fetch:  jsr     sound_data_read_byte ; fetch next sound command byte
         asl     a
         bcs     sound_stream_cmd_check
@@ -908,49 +1021,54 @@ sound_stream_cmd_check:  txa             ; check for special command ($xF)
 sound_stream_new_note:  and     #$07     ; extract note duration bits
         sta     sound_temp
         jsr     sound_data_read_byte
-        ldy     #$11
+        ldy     #SND_STREAM_LO
         sta     ($EC),y
         iny
         lda     sound_temp
         sta     ($EC),y
-        lda     #$13
+        lda     #SND_DUTY_VOL
         sta     sound_temp
         jsr     sound_state_init_slot
-        jmp     hud_sound_channel_off
+        jmp     sound_channel_off
 
 sound_stream_dispatch:  jsr     sound_dispatch_table
         .byte   $D3,$85,$DB,$85,$E5,$85,$F5,$85
         .byte   $0F,$86,$40,$86,$56,$86
-        jsr     sound_data_read_byte    ; handler 0: set instrument type
+stream_cmd_set_instrument:              ; handler 0: set instrument type
+        jsr     sound_data_read_byte
         sta     instrument_type
         jmp     sound_stream_fetch
 
-        jsr     sound_data_read_byte    ; handler 1: set channel output reg
-        ldy     #$10
+stream_cmd_set_apu_out:                 ; handler 1: set APU output register
+        jsr     sound_data_read_byte
+        ldy     #SND_APU_OUT
         sta     ($EC),y
         jmp     sound_stream_fetch
-        jsr     sound_data_read_byte    ; handler 2: set duty/volume
+stream_cmd_set_duty:                    ; handler 2: set duty cycle bits in SND_DUTY_VOL
+        jsr     sound_data_read_byte
         sta     sound_temp
-        ldy     #$13
+        ldy     #SND_DUTY_VOL
         lda     ($EC),y
         and     #$3F
         ora     sound_temp
         jmp     sound_cmd_store_param
 
+stream_cmd_set_volume:                  ; handler 3: set volume bits in SND_DUTY_VOL
         jsr     sound_data_read_byte
         ldy     #$02
         cpy     active_channel_count
         beq     sound_cmd_store_param
         sta     sound_temp
-        ldy     #$13
+        ldy     #SND_DUTY_VOL
         lda     ($EC),y
         and     #$C0
         ora     sound_temp
-sound_cmd_store_param:  ldy     #$13
+sound_cmd_store_param:  ldy     #SND_DUTY_VOL
         sta     ($EC),y
         jmp     sound_stream_fetch
 
-        jsr     sound_data_read_byte    ; handler 4: set stream pointer
+stream_cmd_set_pointer:                 ; handler 4: set stream data pointer
+        jsr     sound_data_read_byte
         txa
         beq     :+
         cpx     stream_update_flag
@@ -976,17 +1094,19 @@ sound_stream_skip_update:
         sta     sound_stream_hi
         jmp     sound_stream_fetch
 
-        lda     #$14
+stream_cmd_load_vibrato:                ; handler 5: load 4-byte vibrato/sweep params
+        lda     #SND_VIB_AMP
         sta     sound_temp
 sound_cmd_load_regs:  jsr     sound_data_read_byte
         ldy     sound_temp
         sta     ($EC),y
         inc     sound_temp
         ldy     sound_temp
-        cpy     #$18
+        cpy     #SND_VIB_CTR
         bne     sound_cmd_load_regs
         jmp     sound_stream_fetch
 
+stream_cmd_loop_back:                   ; handler 6: end stream, loop back or stop channel
         lda     sound_stream_lo
         sec
         sbc     #$01
@@ -1002,7 +1122,7 @@ sound_cmd_load_regs:  jsr     sound_data_read_byte
         lda     channel_active_flags
         and     #$FE
         sta     channel_active_flags
-        ldy     #$0A
+        ldy     #SND_TARGET_LO
         lda     ($EC),y
         iny
         ora     ($EC),y
@@ -1012,19 +1132,20 @@ sound_cmd_load_regs:  jsr     sound_data_read_byte
         inx
         ldy     active_channel_count
         jsr     apu_sound_control
-        ldy     #$00
+        ldy     #SND_FREQ_LO
         lda     ($EC),y
         iny
         ora     ($EC),y
         bne     sound_cmd_load_instrument
         rts
 
-sound_cmd_load_instrument:  ldy     #$06
+; ─── load instrument and reinit slot ───
+sound_cmd_load_instrument:  ldy     #SND_VOL_ENV
         lda     ($EC),y
         and     #$1F
         tax
         jsr     sound_instrument_load
-        lda     #$0C
+        lda     #SND_DUTY_CMD
         sta     sound_temp
         jmp     sound_state_init_slot
 
@@ -1047,9 +1168,9 @@ sound_data_read_byte:  ldy     #$00      ; read byte and advance pointer
 
 
 ; =============================================================================
-; sound_note_process — Sound Note Processing — advance note timing and trigger bar updates ($86B4)
+; sound_note_process — Sound Note Processing — advance note timing and trigger volume processing ($86B4)
 ; =============================================================================
-sound_note_process:  lda     $E7         ; process note with repeat count
+sound_note_process:  lda     frame_repeat_count         ; process note with repeat count
         beq     sound_note_tick
 sound_note_repeat_loop:  pha
         jsr     sound_note_tick
@@ -1059,15 +1180,16 @@ sound_note_repeat_loop:  pha
         bne     sound_note_repeat_loop
         rts
 
-sound_note_tick:  ldy     #$05           ; tick note timer, handle double-speed
+; ─── advance note timer one tick ───
+sound_note_tick:  ldy     #SND_FLAGS           ; tick note timer, handle double-speed
         lda     ($EC),y
         asl     a
         bcc     sound_note_check_active
-        lda     hud_frame_counter
+        lda     sound_frame_counter
         and     #$01
         beq     sound_note_check_active
         jsr     sound_note_check_active
-sound_note_check_active:  ldy     #$02
+sound_note_check_active:  ldy     #SND_NOTE_DUR_LO
         lda     ($EC),y
         iny
         ora     ($EC),y
@@ -1085,20 +1207,20 @@ sound_note_check_active:  ldy     #$02
         dey
         ora     ($EC),y
         beq     sound_note_done
-        ldy     #$0A
+        ldy     #SND_TARGET_LO
         lda     ($EC),y
         iny
         ora     ($EC),y
         bne     sound_note_goto_bar_update
         rts
 
-sound_note_goto_bar_update:  jmp     hud_energy_bar_update
+sound_note_goto_bar_update:  jmp     sound_bar_update
 
 
 ; =============================================================================
 ; sound_note_done — Sound Note Done — instrument/pattern fetch after note completes ($86FE)
 ; =============================================================================
-sound_note_done:  ldy     #$05           ; end of note — fetch instrument data
+sound_note_done:  ldy     #SND_FLAGS           ; end of note — fetch instrument data
         lda     ($EC),y
         and     #$7F
         sta     ($EC),y
@@ -1131,9 +1253,9 @@ sound_pattern_set_duty:  txa
         rol     a
         and     #$07
         tay
-        lda     weapon_shift_table_1,y
+        lda     freq_multiply_table_a,y
         jsr     sound_freq_multiply
-sound_pattern_volume_dec:  ldy     #$06
+sound_pattern_volume_dec:  ldy     #SND_VOL_ENV
         lda     ($EC),y
         and     #$E0
         beq     sound_pattern_lookup_freq
@@ -1164,7 +1286,7 @@ sound_pattern_noise_check:  ldy     #$01
         jmp     sound_pattern_store_freq
 
 sound_pattern_freq_table:  asl     a
-        ldy     #$07
+        ldy     #SND_FREQ_TBL_LO
         clc
         adc     ($EC),y
         sta     sound_temp
@@ -1177,26 +1299,26 @@ sound_pattern_freq_table:  asl     a
         tax
         dey
         lda     (sound_temp),y
-sound_pattern_store_freq:  ldy     #$0A
+sound_pattern_store_freq:  ldy     #SND_TARGET_LO
         sta     ($EC),y
         iny
         txa
         sta     ($EC),y
-        ldy     #$0D
+        ldy     #SND_PORTA_RATE
         lda     ($EC),y
         sta     sound_temp
         and     #$7F
         beq     sound_pattern_check_sweep
         jsr     sound_portamento_init
-sound_pattern_check_sweep:  lda     $EF
+sound_pattern_check_sweep:  lda     channel_active_flags
         lsr     a
         bcc     sound_pattern_init_state
         rts
 
-sound_pattern_init_state:  lda     #$0C
+sound_pattern_init_state:  lda     #SND_DUTY_CMD
         sta     sound_temp
         jsr     sound_state_init_slot
-        jmp     hud_sound_channel_off
+        jmp     sound_channel_off
 
 sound_pattern_set_vol_env:  ror     a
         ror     a
@@ -1204,7 +1326,7 @@ sound_pattern_set_vol_env:  ror     a
         ror     a
         and     #$E0
         sta     sound_temp
-        ldy     #$06
+        ldy     #SND_VOL_ENV
         lda     ($EC),y
         and     #$1F
         ora     sound_temp
@@ -1212,51 +1334,79 @@ sound_pattern_set_vol_env:  ror     a
         rts
 
 sound_pattern_set_loop:  lda     #$80
-        ldy     #$05
+        ldy     #SND_FLAGS
         ora     ($EC),y
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
 
 ; =============================================================================
-; sound_cmd_dispatch — Sound Command Dispatch — execute pattern sub-commands via jump table ($87C0)
+; sound_cmd_dispatch — Sound Command Dispatch ($87C0)
+;
+; Executes pattern sub-commands via a 10-entry inline jump table. Called when
+; channel_active_flags bit0 is set (channel in active pattern mode). Each
+; command reads 1-2 parameter bytes from the stream via sound_stream_read_next.
+;
+; Pattern commands (X = command index on entry):
+;   0 = set period     : 1 byte → SND_PERIOD (note duration multiplier)
+;   1 = set noise      : 1 byte → SND_NOISE_PER (noise channel period)
+;   2 = set duty       : 1 byte → SND_DUTY_CMD bits[7:6] (duty cycle select)
+;   3 = set envelope   : 1 byte → SND_DUTY_CMD bits[5:0] (envelope type)
+;                         triangle channel (ch 2) writes full byte instead
+;   4 = set note       : 1-3 bytes → SND_FREQ_LO/HI, SND_FLAGS
+;                         byte 1 = note index; if same as current, detune +2
+;                         bytes 2-3 = freq_lo, freq_hi (only if note changed)
+;   5 = set freq table : 1 byte → SND_FREQ_TBL_LO/HI (base = $8985)
+;                         param * 2 + base → frequency lookup table pointer
+;   6 = set detune     : 1 byte → SND_FREQ_ACC_LO/HI (code/data overlap trick)
+;                         top 3 bits index into 8-entry detune table
+;   7 = set portamento : 2 bytes → SND_PORTA_RATE, SND_PORTA_DIR
+;                         bit7 of rate = direction (0=up, 1=down)
+;   8 = set sweep env  : 1 byte → SND_VOL_ENV bits[4:0] (sweep index)
+;                         then loads 4-byte instrument data if ch not active
+;   9 = stop note      : 0 bytes → zero SND_FREQ_LO/HI, silence APU channel
 ; =============================================================================
 sound_cmd_dispatch:  jsr     sound_dispatch_table
         .byte   $D7,$87,$E1,$87,$EB,$87,$FB,$87  ; 10-entry dispatch table
         .byte   $15,$88,$5D,$88,$7A,$88,$8D,$88
         .byte   $C7,$88,$17,$89
-        jsr     sound_stream_read_next  ; cmd 0: set envelope rate
-        ldy     #$04
+pattern_cmd_set_period:                 ; cmd 0: set note duration multiplier
+        jsr     sound_stream_read_next
+        ldy     #SND_PERIOD
         sta     ($EC),y
         jmp     sound_pattern_fetch
-        jsr     sound_stream_read_next  ; cmd 1: set noise period
-        ldy     #$09
+pattern_cmd_set_noise:                  ; cmd 1: set noise channel period
+        jsr     sound_stream_read_next
+        ldy     #SND_NOISE_PER
         sta     ($EC),y
         jmp     sound_pattern_fetch
-        jsr     sound_stream_read_next  ; cmd 2: set duty cycle
+pattern_cmd_set_duty:                   ; cmd 2: set duty cycle bits in SND_DUTY_CMD
+        jsr     sound_stream_read_next
         sta     sound_temp
-        ldy     #$0C
+        ldy     #SND_DUTY_CMD
         lda     ($EC),y
         and     #$3F
         ora     sound_temp
         jmp     sound_cmd_store_duty
-        jsr     sound_stream_read_next  ; cmd 3: set envelope type
+pattern_cmd_set_envelope:               ; cmd 3: set envelope type in SND_DUTY_CMD
+        jsr     sound_stream_read_next
         ldy     #$02
         cpy     active_channel_count
         beq     sound_cmd_store_duty
         sta     sound_temp
-        ldy     #$0C
+        ldy     #SND_DUTY_CMD
         lda     ($EC),y
         and     #$C0
         ora     sound_temp
-sound_cmd_store_duty:  ldy     #$0C
+sound_cmd_store_duty:  ldy     #SND_DUTY_CMD
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
+pattern_cmd_set_note:                   ; cmd 4: set note frequency and duration flags
         jsr     sound_stream_read_next
         txa
         beq     sound_cmd_read_note_data
-        ldy     #$05
+        ldy     #SND_FLAGS
         lda     ($EC),y
         and     #$7F
         sta     sound_temp
@@ -1272,7 +1422,7 @@ sound_cmd_read_note_data:
         pha
         jsr     sound_stream_read_next
         pla
-        ldy     #$00
+        ldy     #SND_FREQ_LO
         sta     ($EC),y
         iny
         txa
@@ -1282,7 +1432,7 @@ sound_cmd_read_note_data:
 sound_cmd_skip_note:  lda     ($EC),y
         and     #$80
         sta     ($EC),y
-        ldy     #$00
+        ldy     #SND_FREQ_LO
         lda     #$02
         clc
         adc     ($EC),y
@@ -1293,13 +1443,14 @@ sound_cmd_skip_note:  lda     ($EC),y
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
+pattern_cmd_set_freq_table:             ; cmd 5: set frequency lookup table pointer
         jsr     sound_stream_read_next
         ldx     #$85
         ldy     #$89
         stx     sound_temp
         sty     freq_register_hi
         asl     a
-        ldy     #$07
+        ldy     #SND_FREQ_TBL_LO
         clc
         adc     sound_temp
         sta     ($EC),y
@@ -1309,26 +1460,24 @@ sound_cmd_skip_note:  lda     ($EC),y
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
-        jsr     sound_stream_read_next
+pattern_cmd_set_detune:                 ; cmd 6: set pitch detune
+        jsr     sound_stream_read_next  ; param byte: top 3 bits = detune table index
         rol     a
         rol     a
         rol     a
-sound_cmd_set_detune:  rol     a
+        rol     a
         and     #$07
         tay
-        .byte   $B9                     ; code/data overlap: LDA $897D,Y / JSR $8954 / JMP $8734
-sound_cmd_detune_table_ref:  adc     $2089,x ; (assembled bytes reinterpreted as LDA detune_table,Y)
-        .byte   $54
-        .byte   $89
-sound_cmd_jump_pattern:  .byte   $4C
-        .byte   $34
-sound_cmd_jump_target:  .byte   $87
-sound_cmd_set_portamento:  jsr     sound_stream_read_next
-        ldy     #$0D
+        lda     freq_multiply_table_b,y ; look up detune frequency offset
+        jsr     sound_freq_multiply     ; multiply base frequency by offset
+        jmp     sound_pattern_volume_dec ; continue to volume processing
+pattern_cmd_set_portamento:              ; cmd 7: set portamento rate and direction
+        jsr     sound_stream_read_next
+        ldy     #SND_PORTA_RATE
         sta     ($EC),y
         pha
         jsr     sound_stream_read_next
-        ldy     #$0F
+        ldy     #SND_PORTA_DIR
         sta     ($EC),y
         pla
         sta     sound_temp
@@ -1337,8 +1486,9 @@ sound_cmd_set_portamento:  jsr     sound_stream_read_next
         jsr     sound_portamento_init
 sound_cmd_portamento_done:  jmp     sound_pattern_fetch
 
+; ─── initialize portamento pitch slide ───
 sound_portamento_init:  lda     #$00
-        ldy     #$0E
+        ldy     #SND_PORTA_ACC
         sta     ($EC),y
         lda     sound_temp
         bpl     sound_portamento_dir_up
@@ -1347,16 +1497,17 @@ sound_portamento_init:  lda     #$00
 
 sound_portamento_dir_up:  lda     #$00
 sound_portamento_store:  sta     sound_temp
-        ldy     #$0F
+        ldy     #SND_PORTA_DIR
         lda     ($EC),y
         and     #$F0
         ora     sound_temp
         sta     ($EC),y
         rts
 
-        jsr     sound_stream_read_next  ; cmd 9: set sweep
+pattern_cmd_set_sweep:                  ; cmd 8: set sweep envelope
+        jsr     sound_stream_read_next
         sta     sound_temp
-        ldy     #$06
+        ldy     #SND_VOL_ENV
         lda     ($EC),y
         and     #$E0
         ora     sound_temp
@@ -1369,7 +1520,15 @@ sound_cmd_volume_done:  jmp     sound_pattern_fetch
 
 
 ; =============================================================================
-; sound_instrument_load — Sound Instrument Load — load 4-byte instrument data from pointer table ($88E1)
+; sound_instrument_load — Load Instrument Data ($88E1)
+;
+; Copies a 4-byte instrument definition into the current sound slot.
+; Instrument data is stored sequentially at (sound_data_ptr), each entry 4 bytes:
+;   byte 0 → SND_VIB_AMP   : vibrato amplitude + half-period flag (bit7)
+;   byte 1 → SND_VIB_PHASE : vibrato phase (bits[7:5]=amplitude, bits[4:0]=step count)
+;   byte 2 → SND_SWEEP_CTRL: sweep control (bit7=enable)
+;   byte 3 → SND_SWEEP_DELTA: sweep pitch delta (signed)
+; Entry: X = instrument index (0-based)
 ; =============================================================================
 sound_instrument_load:  txa              ; X = instrument index
         beq     sound_instrument_copy
@@ -1385,11 +1544,11 @@ sound_instrument_copy:  clc
         adc     sound_data_ptr_hi
         sta     freq_register_hi
         ldx     #$00
-        ldy     #$14
+        ldy     #SND_VIB_AMP
 sound_instrument_byte:  lda     (sound_temp,x)
         sta     ($EC),y
         iny
-        cpy     #$18
+        cpy     #SND_VIB_CTR
         bne     sound_instrument_next
         rts
 
@@ -1402,7 +1561,8 @@ sound_instrument_next:  lda     #$01
         sta     freq_register_hi
         jmp     sound_instrument_byte
 
-        ldy     #$00
+pattern_cmd_stop_note:                  ; cmd 9: stop note and silence channel
+        ldy     #SND_FREQ_LO
         lda     #$00
         sta     ($EC),y
         iny
@@ -1424,7 +1584,7 @@ sound_instrument_next:  lda     #$01
 ; =============================================================================
 ; sound_stream_read_next — Sound Stream Read Next — read byte from current sound stream pointer ($8935)
 ; =============================================================================
-sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
+sound_stream_read_next:  ldy     #SND_FREQ_LO    ; read byte from ($EC) stream
         lda     ($EC),y
         sta     sound_temp
         iny
@@ -1449,9 +1609,9 @@ sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
 ; sound_freq_multiply — Sound Frequency Multiply — multiply frequency by duty cycle period ($8954)
 ; =============================================================================
 sound_freq_multiply:  sta     sound_temp      ; multiply freq by period count
-        lda     #$00
+        lda     #SND_FREQ_LO
         sta     freq_register_hi
-        ldy     #$04
+        ldy     #SND_PERIOD
         lda     ($EC),y
         tay
         lda     #$00
@@ -1461,7 +1621,7 @@ sound_freq_mult_loop:  clc
         inc     freq_register_hi
 sound_freq_mult_dec:  dey
         bne     sound_freq_mult_loop
-        ldy     #$02
+        ldy     #SND_NOTE_DUR_LO
         sta     ($EC),y
         iny
         lda     freq_register_hi
@@ -1470,10 +1630,11 @@ sound_freq_mult_dec:  dey
 
 
 ; =============================================================================
-; weapon_shift_table_1 — Sound/Weapon Data Tables — frequency tables, weapon data pointers ($8978)
+; freq_multiply_table_a — Sound Data Tables — Frequency Multiply & Note Frequency Tables ($8978)
 ; =============================================================================
-weapon_shift_table_1:  .byte   $00,$00,$02,$04,$08,$10,$20,$40
-weapon_shift_table_2:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
+freq_multiply_table_a:  .byte   $00,$00,$02,$04,$08,$10,$20,$40
+freq_multiply_table_b:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
+note_freq_table:                        ; 128-entry 16-bit note frequency lookup (base pointer $8985)
         .byte   $00,$00,$00,$00
         .byte   $00
         .byte   $00
@@ -1516,7 +1677,7 @@ weapon_shift_table_2:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
         .byte   $FF,$FF,$FF
 
 ; =============================================================================
-; weapon_data_ptr_lo — Weapon Data Pointer Table — low/high bytes for each weapon's CHR data ($8AD6)
+; weapon_data_ptr_lo — Weapon/Music Data Pointer Table — interleaved lo/hi pointers ($8AD6)
 ; =============================================================================
 weapon_data_ptr_lo:  .byte   $D6
 weapon_data_ptr_hi:  .byte   $8A,$1D,$8E,$C8,$90,$87,$94,$98

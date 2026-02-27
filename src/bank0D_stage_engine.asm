@@ -4,6 +4,41 @@
 ; Bank $0D — Stage Engine
 ; Stage initialization, main stage loop, player rendering & collision,
 ; OAM sprite management, entity update/physics, and stage transitions.
+;
+; ─── Stage Frame Loop ─────────────────────────────────────────────────────
+;
+;   main_stage_render (entry 1 from dispatch):
+;     │
+;     ├─ read_controller_input
+;     │     └─ Latch + shift 8 bits from $4016/$4017
+;     │
+;     ├─ player_physics_update
+;     │     ├─ player_horizontal_physics (walk/slide/ladder)
+;     │     ├─ player_vertical_physics (jump/fall/gravity)
+;     │     │     └─ Gravity: vel -= $40/frame, clamp at $F4 (terminal)
+;     │     │         Floor snap: Y &= $F0, vel = 0
+;     │     └─ check_player_tile_collision
+;     │
+;     ├─ scroll_update
+;     │     ├─ camera tracks player X within dead zone
+;     │     ├─ metatile_render_column (new column entering view)
+;     │     └─ attr_table_write (attribute bytes for new column)
+;     │
+;     ├─ render_player_sprites
+;     │     ├─ 3-layer compose: base pose → weapon overlay → flash
+;     │     └─ write_sprite_to_oam (Y, tile, attr, X) per 8×8 tile
+;     │
+;     ├─ stage_transition_check
+;     │     ├─ Horizontal: screen boundary → load next screen
+;     │     ├─ Vertical: ladder/fall across row boundary
+;     │     └─ Boss door: special scroll lock + shutter animation
+;     │
+;     └─ weapon_select (Start pressed)
+;           ├─ Pause entities (game_mode |= $04)
+;           ├─ D-pad: 24-frame delay, 8-frame auto-repeat
+;           ├─ Cursor wraps through acquired weapons
+;           └─ Start/B: unpause, restore weapon palette
+;
 ; =============================================================================
 
         .setcpu "6502"
@@ -463,67 +498,82 @@ collision_hide_loop:  sta     oam_buffer + $E0,x
         rts
 
 ; =============================================================================
-; Render Player Sprites — draw 3 sprite layers for Mega Man
+; Render Player Sprites — draw 3 scrolling sprite layers for Mega Man
 ; =============================================================================
-render_player_sprites:  ldy     #$50
-        ldx     #$00
-        lda     #$30
+; Mega Man is drawn as 3 overlapping sprite layers with different scroll
+; speeds (parallax effect on weapon get screen). Each layer has its own
+; tile base, sprite count, and sub-pixel X velocity.
+; Layers: 0=$15 sprites @4px/frame, 1=$0D @1px, 2=$07 @0px (static)
+; OAM output starts at $0250 (Y index $50).
+; =============================================================================
+render_player_sprites:
+        ldy     #$50                    ; OAM buffer offset (starts at $0250)
+        ldx     #$00                    ; sprite data table index
+        lda     #$30                    ; base tile ID (normal mode)
         sta     temp_00
-        lda     #$02
+        lda     #$02                    ; 3 layers (2,1,0)
         sta     temp_03
-render_sprite_layer_loop:  sty     temp_04
-        stx     temp_05
+render_sprite_layer_loop:
+        sty     temp_04                 ; save OAM position
+        stx     temp_05                 ; save table index
         lda     ent_flags
         beq     render_sprite_load_data
-        lda     #$80
+        lda     #$80                    ; hit flash: alternate tile $80/$81
         sta     temp_00
         lda     frame_counter
-        and     #$04
+        and     #$04                    ; flash every 4 frames
         bne     render_sprite_load_data
         inc     temp_00
-render_sprite_load_data:  ldx     temp_03
-        lda     sprite_count_table,x
+render_sprite_load_data:
+        ldx     temp_03                 ; X = layer index (2,1,0)
+        lda     sprite_count_table,x    ; sprites per layer
         sta     temp_01
-        clc
+        clc                             ; accumulate sub-pixel X velocity
         lda     ent_x_sub + $01,x
         adc     sprite_xvel_sub_table,x
         sta     ent_x_sub + $01,x
-        lda     ent_x_px + $01,x
+        lda     ent_x_px + $01,x       ; carry propagates to pixel position
         adc     sprite_xvel_table,x
         sta     ent_x_px + $01,x
-        sta     temp_02
+        sta     temp_02                 ; temp_02 = layer X base position
         ldx     temp_05
         ldy     temp_04
         jsr     write_sprite_to_oam
-        inc     temp_00
+        inc     temp_00                 ; next tile base for next layer
         dec     temp_03
         bpl     render_sprite_layer_loop
         rts
 
-sprite_count_table:  .byte   $07,$0D,$15
-sprite_xvel_sub_table:  .byte   $00,$47,$41
-sprite_xvel_table:  .byte   $04,$01,$00
+sprite_count_table:       .byte   $07,$0D,$15      ; sprites per layer (far, mid, near)
+sprite_xvel_sub_table:    .byte   $00,$47,$41      ; sub-pixel X velocity per layer
+sprite_xvel_table:        .byte   $04,$01,$00      ; pixel X velocity per layer
 
 ; =============================================================================
-; Write Sprite to OAM — copy one sprite set to $0200 buffer
+; Write Sprite to OAM — write sprite set to $0200 buffer
 ; =============================================================================
-write_sprite_to_oam:  lda     player_sprite_y_table,x
+; Input: X = sprite data table index, Y = OAM buffer offset
+;        temp_00 = tile ID, temp_01 = sprite count, temp_02 = X base
+; OAM format: [Y position, tile ID, attributes, X position] per sprite
+; =============================================================================
+write_sprite_to_oam:
+        lda     player_sprite_y_table,x ; OAM byte 0: Y position
         sta     oam_buffer,y
         iny
-        lda     temp_00
+        lda     temp_00                 ; OAM byte 1: tile ID
         sta     oam_buffer,y
         iny
-        lda     ent_flags
+        lda     ent_flags               ; OAM byte 2: attributes
         beq     write_oam_attr_byte
-        lda     #$40
-write_oam_attr_byte:  sta     oam_buffer,y
+        lda     #$40                    ; horizontal flip if facing left
+write_oam_attr_byte:
+        sta     oam_buffer,y
         iny
         clc
-        lda     player_sprite_x_table,x
+        lda     player_sprite_x_table,x ; OAM byte 3: X = table offset + base
         adc     temp_02
         sta     oam_buffer,y
         iny
-        inx
+        inx                             ; advance to next sprite (2 bytes per)
         inx
         dec     temp_01
         bne     write_sprite_to_oam
@@ -1451,6 +1501,7 @@ projectile_sprite_ptr_hi:  .byte   $88
         .byte   $FA,$F8,$CA,$03,$F0,$F8,$CB,$03
         .byte   $F8,$F8,$CC,$03,$00,$F8,$CD,$03
         .byte   $08
+; ─── weapon select screen render ───
 main_stage_render:
         jsr     clear_oam_buffer_fixed
         lda     #$00
@@ -1600,14 +1651,23 @@ wselect_set_weapon_index:  stx     $FD
 ; =============================================================================
 ; Weapon Select — Input Loop (D-pad / Start / weapon switching)
 ; =============================================================================
-wselect_input_loop:  lda     $9A
-        asl     a
+; Main input loop: builds weapon availability bitmask, processes D-pad with
+; auto-repeat, and handles Start button for page toggle / weapon selection.
+; general_ptr_lo = current page (0=page 1, 1=page 2)
+; $FD = cursor position (0=Buster, 1-6=weapons, 7=E-Tank)
+; temp_07 = weapon availability bitmask (bit set = weapon available)
+; general_ptr_hi = auto-repeat timer
+; =============================================================================
+wselect_input_loop:
+; --- Build weapon availability bitmask for current page ---
+        lda     $9A                     ; page 1: beaten_bosses << 1 | $41
+        asl     a                       ;   bit 0 = Buster (always), bit 6 = Metal (always)
         ora     #$41
         sta     temp_07
         lda     general_ptr_lo
-        beq     wselect_check_start
-        lda     beaten_bosses
-        sta     temp_07
+        beq     wselect_check_start     ; page 1 → done
+        lda     beaten_bosses           ; page 2: rotate beaten_bosses_hi
+        sta     temp_07                 ;   left 3 bits to align with slots
         lda     beaten_bosses_hi
         asl     temp_07
         rol     a
@@ -1616,78 +1676,96 @@ wselect_input_loop:  lda     $9A
         asl     temp_07
         rol     a
         sta     temp_07
-wselect_check_start:  lda     p1_new_presses
-        and     #$08                    ; Start button pressed?
+wselect_check_start:
+        lda     p1_new_presses
+        and     #$08
         beq     wselect_check_dpad
         jmp     wselect_start_pressed
 
-wselect_check_dpad:  lda     p1_new_presses
-        and     #$30                    ; D-pad up/down new press?
-        bne     wselect_dpad_pressed
+; --- D-pad input with auto-repeat ---
+wselect_check_dpad:
+        lda     p1_new_presses
+        and     #$30                    ; up/down new press?
+        bne     wselect_dpad_pressed    ; new press → immediate response
         lda     controller_1
-        and     #$30                    ; D-pad up/down new press?
+        and     #$30                    ; held down?
         beq     wselect_clear_repeat
         sta     temp_00
-        lda     p1_prev_buttons
-        and     #$30                    ; D-pad up/down new press?
+        lda     p1_prev_buttons         ; same direction as last frame?
+        and     #$30
         cmp     temp_00
         bne     wselect_clear_repeat
-        inc     general_ptr_hi
+        inc     general_ptr_hi          ; increment hold timer
         lda     general_ptr_hi
-        cmp     #$18                    ; Auto-repeat delay (24 frames)
+        cmp     #$18                    ; 24-frame initial delay
         bcc     wselect_update_and_vblank
-        lda     #$08
+        lda     #$08                    ; reset to 8 frames (repeat rate)
         sta     general_ptr_hi
-wselect_dpad_pressed:  ldx     #$07
-        lda     general_ptr_lo
+; --- Move cursor and validate weapon availability ---
+wselect_dpad_pressed:
+        ldx     #$07                    ; max cursor position
+        lda     general_ptr_lo          ; page 2 has 1 fewer slot
         beq     wselect_sound_and_move
         dex
-wselect_sound_and_move:  lda     #$2F
+wselect_sound_and_move:
+        lda     #$2F                    ; cursor move sound
         jsr     bank_switch_enqueue
         lda     controller_1
         and     #$30
-        and     #$10
+        and     #$10                    ; bit 4 = up (move left in menu)
         bne     wselect_move_left
-wselect_move_right:  inc     $FD        ; Move cursor right
-        cpx     general_counter
+wselect_move_right:
+        inc     $FD                     ; move cursor right
+        cpx     general_counter         ; wrap at max position
         bcs     wselect_check_valid
         lda     #$00
         sta     general_counter
-wselect_check_valid:  ldy     $FD
-        beq     wselect_update_and_vblank
-        lda     weapon_bitmask_table,y
+wselect_check_valid:
+        ldy     $FD
+        beq     wselect_update_and_vblank ; cursor 0 = Buster (always valid)
+        lda     weapon_bitmask_table,y  ; check if weapon available
         and     temp_07
-        beq     wselect_move_right
+        beq     wselect_move_right      ; not available → skip to next
         bne     wselect_update_and_vblank
-wselect_move_left:  dec     $FD         ; Move cursor left
+wselect_move_left:
+        dec     $FD
         bpl     wselect_check_valid_left
-        stx     general_counter
-wselect_check_valid_left:  ldy     $FD
+        stx     general_counter         ; wrap to max
+wselect_check_valid_left:
+        ldy     $FD
         beq     wselect_update_and_vblank
         lda     weapon_bitmask_table,y
         and     temp_07
-        beq     wselect_move_left
+        beq     wselect_move_left       ; not available → skip
         bne     wselect_update_and_vblank
-wselect_clear_repeat:  lda     #$00
-        sta     general_ptr_hi
-wselect_update_and_vblank:  jsr     wselect_render_oam
+wselect_clear_repeat:
+        lda     #$00
+        sta     general_ptr_hi          ; reset auto-repeat timer
+wselect_update_and_vblank:
+        jsr     wselect_render_oam
         jsr     wait_for_vblank_0D
         jmp     wselect_input_loop
 
 ; =============================================================================
-; Weapon Select — Start Pressed (toggle page or select weapon)
+; Weapon Select — Start Pressed (toggle page / use E-Tank / select weapon)
 ; =============================================================================
-wselect_start_pressed:  lda     $FD
+; cursor=0: toggle page (XOR general_ptr_lo)
+; cursor=7: use E-Tank (fill HP to MAX_HP at 1 unit per 4 frames)
+; cursor=1-6: select weapon (ID = cursor-1 on page 1, cursor+5 on page 2)
+; =============================================================================
+wselect_start_pressed:
+        lda     $FD
         bne     wselect_check_etank
-        lda     general_ptr_lo
+        lda     general_ptr_lo          ; cursor 0 = toggle page
         eor     #$01
         sta     general_ptr_lo
         jmp     wselect_clear_repeat
 
-wselect_check_etank:  cmp     #$07
+wselect_check_etank:
+        cmp     #$07                    ; cursor 7 = E-Tank
         bne     wselect_weapon_selected
         lda     current_etanks
-        beq     wselect_clear_repeat
+        beq     wselect_clear_repeat    ; no E-Tanks available
         dec     current_etanks
 wselect_etank_fill_loop:  lda     ent_hp
         cmp     #MAX_HP                    ; Full health = 28 units
@@ -2123,6 +2201,7 @@ wselect_weapon_pal_idx:  .byte   $98
         .byte   $98
         .byte   $9B,$9B,$9B,$9B
 weapon_bitmask_table:  .byte   $00,$01,$02,$04,$08,$10,$20,$40
+; ─── boss get screen init ───
 boss_get_screen_init:
         lda     #$10
         sta     ppuctrl_shadow
@@ -2936,6 +3015,7 @@ wily_fade_palette_data:  .byte   $0F,$00,$01,$0F,$0F,$00,$0F,$0F
         .byte   $0F,$17,$21,$07,$0F,$16,$29,$09
         .byte   $0F,$0F,$30,$38,$0F,$0F,$28,$30
         .byte   $0F,$0F,$12,$2C
+; ─── Wily intro and credits init ───
 wily_intro_init:
         lda     #$10
         sta     ppuctrl_shadow
@@ -3738,6 +3818,7 @@ password_beaten_check:  cpx     #$30
 password_beaten_wait:  jsr     wait_for_vblank_0D
         dec     general_counter
         bne     password_beaten_wait
+; ─── password screen exit ───
 password_exit:  jsr     disable_nmi_and_rendering
         rts
 
@@ -3793,7 +3874,7 @@ ending_column_inner:  lda     #$46
         clc
         adc     indirect_page
         sta     indirect_ptr_hi
-        lda     ($C9),y
+        lda     (indirect_ptr_lo),y
         sta     col_update_tiles,x
         tya
         clc
@@ -3895,6 +3976,7 @@ ending_advance_anim:  dec     ent_anim_backup
         sta     ent_spawn_type
 ending_anim_rts:  rts
 
+; ─── load star OAM positions ───
 ending_star_oam_init:
         ldx     #$14
 ending_load_star_oam:  lda     ending_star_oam_positions,x
@@ -4236,6 +4318,7 @@ palette_fade_out_frame:  jsr     wait_for_vblank_0D
 
 palette_fade_out_rts:  rts
 
+; ─── darken all palette entries one step ───
 palette_fade_out_step:  ldx     #$07
         lda     #$04
         jsr     palette_dec_range
@@ -4244,6 +4327,7 @@ palette_fade_out_step:  ldx     #$07
         jsr     palette_dec_range
         rts
 
+; ─── decrement palette range by one shade ───
 palette_dec_range:  sta     temp_00
 palette_dec_loop:  sec
         lda     palette_ram,x
@@ -4272,6 +4356,7 @@ palette_fade_in_frame:  jsr     wait_for_vblank_0D
 
 palette_fade_in_rts:  rts
 
+; ─── brighten all palette entries one step ───
 palette_fade_in_step:  ldx     #$07
         ldy     #$07
         lda     #$04
@@ -4282,6 +4367,7 @@ palette_fade_in_step:  ldx     #$07
         jsr     palette_inc_range
         rts
 
+; ─── increment palette range toward target ───
 palette_inc_range:  sta     temp_01
 palette_inc_loop:  lda     palette_ram,x
         cmp     #$0F                    ; Is color black ($0F)?
@@ -5293,6 +5379,7 @@ wily_castle_attr_data_2:  .byte   $FF,$FF,$55,$55,$55,$55,$55,$FF
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00
+; ─── ending scene init ───
 ending_scene_init:
         jsr     reset_scroll_state
         inc     nametable_select
@@ -5756,6 +5843,7 @@ ending_sprite_fade_table:  .byte   $1B,$1A,$19,$0F,$2C,$1F,$1E,$1D
 ending_walk_vel_sub:  .byte   $80,$80,$E5,$00
 ending_walk_vel_whole:  .byte   $00,$00,$00,$08
 ending_health_tile_data:  .byte   $13,$14,$01,$06,$06
+; ─── ending walk scene init ───
 ending_walk_init:
         lda     #$03
         jsr     chr_ram_bank_load
@@ -6076,7 +6164,7 @@ weapon_get_text_upload:  sty     temp_00
         clc
         adc     indirect_page
         sta     indirect_ptr_hi
-        lda     ($C9),y
+        lda     (indirect_ptr_lo),y
         sta     col_update_addr_hi
         tya
         clc
@@ -6085,7 +6173,7 @@ weapon_get_text_upload:  sty     temp_00
         lda     indirect_ptr_hi
         adc     #$00
         sta     indirect_ptr_hi
-        lda     ($C9),y
+        lda     (indirect_ptr_lo),y
         sta     col_update_addr_lo
         tya
         clc
@@ -6103,7 +6191,7 @@ weapon_get_text_inner:  jsr     weapon_get_wait_frame
         bne     weapon_get_text_byte
         lda     ent_flags
         bne     weapon_get_text_store
-weapon_get_text_byte:  lda     ($C9),y
+weapon_get_text_byte:  lda     (indirect_ptr_lo),y
 weapon_get_text_store:  sta     col_update_tiles
         inc     col_update_count
         inc     col_update_addr_lo
