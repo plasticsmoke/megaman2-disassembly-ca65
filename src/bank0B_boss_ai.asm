@@ -94,7 +94,7 @@ boss_spawn_deplete:  lda     #$00
         lda     #$00
         sta     game_mode
         lda     #$01
-        sta     $50
+        sta     scroll_lock_hi
         inc     boss_hit_count
         lda     #$00
 boss_spawn_store_count:  sta     boss_hp
@@ -195,12 +195,12 @@ heatman_store_aim_low:  sta     temp_04
 ; =============================================================================
 heatman_spawn_projectile_loop:  ldx     temp_01
         lda     #$00
-        sta     $0A
-        sta     $0C
+        sta     temp_0A
+        sta     temp_0C
         lda     temp_02,x
-        sta     $0B
+        sta     temp_0B
         lda     heatman_proj_speed_table,x
-        sta     $0D
+        sta     temp_0D
         jsr     divide_16bit            ; divide for velocity ratio
         ldx     #$01
         lda     #ENTITY_HEATMAN_FIRE
@@ -210,9 +210,9 @@ heatman_spawn_projectile_loop:  ldx     temp_01
         sta     ent_hitbox_h_hi,y
         lda     heatman_proj_hitbox_mask,x
         sta     ent_hitbox_h_lo,y
-        lda     $0E
+        lda     temp_0E
         sta     ent_hitbox_w_hi,y
-        lda     $0F
+        lda     temp_0F
         sta     ent_hitbox_w_lo,y
         lda     ent_spawn_flags,y
         ora     #$04
@@ -317,7 +317,7 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         sta     boss_flags
         lda     #$00
         sta     boss_ai_state
-        sta     $B4
+        sta     boss_hit_flag
         lda     rng_seed
         sta     temp_01
         lda     #$03
@@ -350,9 +350,9 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         sta     jump_ptr_hi
         jmp     (jump_ptr)
         lda     #$00
-        sta     $40
-        sta     $4F
-        sta     $50
+        sta     conveyor_type
+        sta     scroll_lock_lo
+        sta     scroll_lock_hi
         lda     boss_action_timer
         cmp     #$03
         bne     @skip_3
@@ -462,29 +462,29 @@ airman_dec_leaf_count:  lda     #$00
         jmp     airman_dec_leaf_count
 
 airman_shield_active:  lda     #$01
-        sta     $40
+        sta     conveyor_type
         lda     boss_flags
         and     #$40
-        sta     $AF
+        sta     platform_facing
         clc
-        lda     $4F
+        lda     scroll_lock_lo
         adc     #$10
-        sta     $4F
-        lda     $50
+        sta     scroll_lock_lo
+        lda     scroll_lock_hi
         adc     #$00
-        sta     $50
+        sta     scroll_lock_hi
         cmp     #$04
         bne     airman_update_scroll_lock
         lda     #$00
-        sta     $4F
+        sta     scroll_lock_lo
 airman_update_scroll_lock:  ldy     #$0F
         lda     #$5D
         sta     temp_00
 airman_sprite_scan_loop:  jsr     collision_check_sprite
         bcs     airman_check_anim_state
-        lda     $4F
+        lda     scroll_lock_lo
         sta     ent_hitbox_w_hi,y
-        lda     $50
+        lda     scroll_lock_hi
         sta     ent_hitbox_w_lo,y
         dey
         bpl     airman_sprite_scan_loop
@@ -872,16 +872,16 @@ bubbleman_collision_params:  lda     #$09
         lda     quickman_y_vel_table,x
         sta     boss_y_vel
         lda     temp_00,x
-        sta     $0B
+        sta     temp_0B
         lda     quickman_sec_flag,x
-        sta     $0D
+        sta     temp_0D
         lda     #$00
-        sta     $0A
-        sta     $0C
+        sta     temp_0A
+        sta     temp_0C
         jsr     divide_16bit            ; divide for velocity ratio
-        lda     $0F
+        lda     temp_0F
         sta     boss_x_vel
-        lda     $0E
+        lda     temp_0E
         sta     boss_x_vel_sub
         inc     boss_ai_state
         inc     boss_action_timer
@@ -1413,12 +1413,12 @@ metalman_palette_flash:  lda     #$0F
         sta     palette_sprite
         ldx     #$00
         ldy     #$00
-        lda     $45
+        lda     palette_toggle_a
         eor     #$40
-        sta     $45
-        lda     $46
+        sta     palette_toggle_a
+        lda     palette_toggle_b
         eor     #$40
-        sta     $46
+        sta     palette_toggle_b
         beq     metalman_palette_copy_loop
         inx
 metalman_palette_copy_loop:  lda     metalman_palette_data,x
@@ -1490,12 +1490,12 @@ metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10,$D3,$2E
         clc
         lda     temp_00
         adc     #$20
-        sta     $0B
+        sta     temp_0B
         lda     rng_seed
         and     #$01
         beq     crashman_setup_velocity
         sec
-        lda     $0B
+        lda     temp_0B
         sbc     #$40
         bcs     crashman_aim_y_offset
         lda     #$00
@@ -1508,14 +1508,14 @@ crashman_aim_y_offset:  sta     $0B
 crashman_response_timer  := $05A7  ; hit response countdown (set to $9C)
 crashman_saved_facing    := $05A9  ; saved boss_flags for facing restore
 crashman_setup_velocity:  lda     #$37
-        sta     $0D
+        sta     temp_0D
         lda     #$00
-        sta     $0A
-        sta     $0C
+        sta     temp_0A
+        sta     temp_0C
         jsr     divide_16bit            ; divide for velocity ratio
-        lda     $0F
+        lda     temp_0F
         sta     boss_x_vel
-        lda     $0E
+        lda     temp_0E
         sta     boss_x_vel_sub
         lda     #$6B
         jsr     play_sound_and_reset_anim
@@ -2041,9 +2041,9 @@ dragon_check_hit_flash:  lda     temp_02
         sta     palette_sprite
 dragon_apply_movement:  jsr     boss_apply_movement_physics
         sec
-        lda     $B5
+        lda     camera_y_sub
         sbc     boss_y_vel_sub
-        sta     $B5
+        sta     camera_y_sub
         lda     camera_y_offset
         sbc     boss_y_vel
         sta     camera_y_offset
@@ -2066,9 +2066,9 @@ dragon_check_facing_dir:  lda     boss_flags
         and     #$40
         beq     dragon_move_facing_left
         clc
-        lda     $B7
+        lda     camera_x_sub
         adc     boss_x_vel_sub
-        sta     $B7
+        sta     camera_x_sub
         lda     camera_x_offset
         adc     boss_x_vel
         sta     camera_x_offset
@@ -2078,9 +2078,9 @@ dragon_check_facing_dir:  lda     boss_flags
         rts
 
 dragon_move_facing_left:  sec
-        lda     $B7
+        lda     camera_x_sub
         sbc     boss_x_vel_sub
-        sta     $B7
+        sta     camera_x_sub
         lda     camera_x_offset
         sbc     boss_x_vel
         sta     camera_x_offset
@@ -2157,11 +2157,11 @@ picopico_spawn_entity_loop:  stx     temp_02
         ldx     temp_02
         lda     jump_ptr,x
         sta     ent_hitbox_h_lo,y
-        lda     $0A,x
+        lda     temp_0A,x
         sta     ent_hitbox_w_lo,y
-        lda     $0C,x
+        lda     temp_0C,x
         sta     ent_spawn_flags,y
-        lda     $0E,x
+        lda     temp_0E,x
         sta     ent_despawn,y
         inc     temp_01
         inx
@@ -2169,7 +2169,7 @@ picopico_spawn_entity_loop:  stx     temp_02
         bne     picopico_spawn_entity_loop
         lda     boss_action_timer
         asl     a
-        sta     $0C
+        sta     temp_0C
 picopico_attr_update_loop:  ldx     $0C
         lda     ent_x_screen
         sta     jump_ptr_hi
@@ -2177,12 +2177,12 @@ picopico_attr_update_loop:  ldx     $0C
         and     #$F0
         sta     jump_ptr
         lda     picopico_y_pos_table,x
-        sta     $0A
+        sta     temp_0A
         jsr     metatile_render
         lda     attr_update_count
         bne     picopico_advance_phase
         inc     attr_update_count
-        inc     $0C
+        inc     temp_0C
         bne     picopico_attr_update_loop
 picopico_advance_phase:  lda     #$82
         sta     attr_update_count
@@ -2421,7 +2421,7 @@ gutsdozer_setup_complete:  lda     #$00
         bne     gutsdozer_spawn_turret
         lda     #$8B
         sta     boss_flags
-        lda     $B7
+        lda     camera_x_sub
         sta     boss_x_sub
         jmp     gutsdozer_advance_turret
 
@@ -2441,7 +2441,7 @@ gutsdozer_spawn_turret:  lda     gutsdozer_turret_y_table,x
         sta     ent_y_spawn_px,y
         lda     #$FF
         sta     ent_x_spawn_px,y
-        lda     $B7
+        lda     camera_x_sub
         sta     ent_x_spawn_sub,y
         lda     temp_02
         sta     ent_ai_behavior,y
@@ -2855,12 +2855,12 @@ wily_machine_apply_facing:  sta     boss_flags
         pla
         sta     boss_x_px
         lda     temp_00
-        sta     $0B
+        sta     temp_0B
         lda     #$1A
-        sta     $0D
+        sta     temp_0D
         lda     #$00
-        sta     $0A
-        sta     $0C
+        sta     temp_0A
+        sta     temp_0C
         jsr     divide_16bit            ; divide for velocity ratio
         lda     #ENTITY_WILY_BALL
         ldx     #$01
@@ -2874,9 +2874,9 @@ wily_machine_apply_facing:  sta     boss_flags
         lda     boss_y_px
         adc     #$36
         sta     ent_y_spawn_px,y
-        lda     $0F
+        lda     temp_0F
         sta     ent_hitbox_w_lo,y
-        lda     $0E
+        lda     temp_0E
         sta     ent_hitbox_w_hi,y
         lda     boss_phase
         cmp     #$04
@@ -3148,7 +3148,7 @@ projectile_x_velocity:  and     p1_prev_buttons
         rol     p2_prev_buttons
         rol     p2_prev_buttons
 projectile_y_velocity:  .byte   $17
-        rol     $56,x
+        rol     active_entity_list,x
         adc     ($90),y
         bcs     wily_machine_data_byte
         beq     wily_machine_proj_timing_data
@@ -3323,8 +3323,8 @@ alien_part_x_flags_table:  .byte   $20,$B0,$D0
         lda     ($31,x)
         sbc     ($11,x)
 alien_palette_table:  bmi     alien_palette_data_byte
-        asl     $0F,x
-        asl     $30,x
+        asl     temp_0F,x
+        asl     gravity_sub_lo,x
         bmi     alien_palette_block_2
         asl     current_screen,x
         sec
@@ -3349,9 +3349,9 @@ alien_facing_store:  .byte   $8E
         .byte   $66
 alien_palette_data_byte:  .byte   $03
         clc
-        lda     $B7
+        lda     camera_x_sub
         adc     #$60
-        sta     $B7
+        sta     camera_x_sub
         lda     camera_x_offset
         adc     #$01
         sta     camera_x_offset
@@ -3457,13 +3457,13 @@ alien_palette_fill_loop:  sta     palette_ram,x
 @skip:
         inc     boss_ai_state
         lda     #$00
-        sta     $FD
+        sta     general_counter
         lda     #$0F
-        sta     $FE
+        sta     general_ptr_lo
         rts
 
         jsr     alien_palette_flash_tick
-        lda     $FD
+        lda     general_counter
         cmp     #$60
         bcs     @skip_2
         jsr     scroll_column_render
@@ -3797,9 +3797,9 @@ fortress_inc_spawn_timer:  inc     fortress_explode_timer
         lda     boss_x_screen
         sta     jump_ptr_hi
         lda     boss_y_px
-        sta     $0A
+        sta     temp_0A
         lda     #$60
-        sta     $0B
+        sta     temp_0B
         jsr     explosion_array_setup_inner
         lda     #$41
         jsr     bank_switch_enqueue
@@ -3816,7 +3816,7 @@ fortress_inc_spawn_timer:  inc     fortress_explode_timer
         lda     #$85
         sta     ent_spawn_flags + $0E
         inc     ent_drop_flag + $0E
-        lda     $BC
+        lda     boss_mode_flag
         cmp     #$FF
         beq     fortress_spawn_rts
         lsr     boss_flags
@@ -3947,10 +3947,10 @@ boss_clamp_y_position:  lda     boss_flags
         beq     boss_check_facing_right
         clc
         lda     boss_y_vel_sub
-        sbc     $30
+        sbc     gravity_sub_lo
         sta     boss_y_vel_sub
         lda     boss_y_vel
-        sbc     $31
+        sbc     gravity_sub_hi
         sta     boss_y_vel
 boss_check_facing_right:  lda     temp_03
         and     #$40
@@ -4059,7 +4059,7 @@ find_entity_found:  clc
 ; Boss Floor Collision — check tiles below boss for solid ground ($A249)
 ; =============================================================================
 boss_floor_collision_check:  lda     #$00
-        sta     $0B
+        sta     temp_0B
         lda     boss_y_vel
         php
         bpl     boss_floor_check_above
@@ -4098,7 +4098,7 @@ boss_floor_store_y:  sta     $0A
         beq     boss_floor_rts
         plp
         bmi     boss_floor_snap_down
-        lda     $0A
+        lda     temp_0A
         and     #$0F
         eor     #$0F
         sec
@@ -4107,7 +4107,7 @@ boss_floor_store_y:  sta     $0A
 
 boss_floor_snap_down:  lda     boss_y_px
         pha
-        lda     $0A
+        lda     temp_0A
         and     #$0F
         sta     temp_02
         pla
@@ -4133,9 +4133,9 @@ boss_floor_rts:  plp
 ; Boss Wall Collision — check tiles ahead of boss for walls ($A2D4)
 ; =============================================================================
 boss_wall_collision_check:  lda     boss_y_px
-        sta     $0A
+        sta     temp_0A
         lda     #$00
-        sta     $0B
+        sta     temp_0B
         lda     boss_flags
         and     #$40
         php
@@ -4255,56 +4255,56 @@ velocity_calc_y_major:  sta     temp_01
         cmp     temp_00
         bcs     velocity_calc_x_major
         lda     jump_ptr_hi
-        sta     $0D
+        sta     temp_0D
         sta     ent_x_vel,x
         lda     jump_ptr
-        sta     $0C
+        sta     temp_0C
         sta     ent_x_vel_sub,x
         lda     temp_00
-        sta     $0B
+        sta     temp_0B
         lda     #$00
-        sta     $0A
+        sta     temp_0A
         jsr     divide_16bit            ; divide for velocity ratio
-        lda     $0F
-        sta     $0D
-        lda     $0E
-        sta     $0C
+        lda     temp_0F
+        sta     temp_0D
+        lda     temp_0E
+        sta     temp_0C
         lda     temp_01
-        sta     $0B
+        sta     temp_0B
         lda     #$00
-        sta     $0A
+        sta     temp_0A
         jsr     divide_16bit            ; divide for velocity ratio
         ldx     current_entity_slot
-        lda     $0F
+        lda     temp_0F
         sta     ent_y_vel,x
-        lda     $0E
+        lda     temp_0E
         sta     ent_y_vel_sub,x
         jmp     velocity_calc_negate_y
 
 velocity_calc_x_major:  lda     jump_ptr_hi
-        sta     $0D
+        sta     temp_0D
         sta     ent_y_vel,x
         lda     jump_ptr
-        sta     $0C
+        sta     temp_0C
         sta     ent_y_vel_sub,x
         lda     temp_01
-        sta     $0B
+        sta     temp_0B
         lda     #$00
-        sta     $0A
+        sta     temp_0A
         jsr     divide_16bit            ; divide for velocity ratio
-        lda     $0F
-        sta     $0D
-        lda     $0E
-        sta     $0C
+        lda     temp_0F
+        sta     temp_0D
+        lda     temp_0E
+        sta     temp_0C
         lda     temp_00
-        sta     $0B
+        sta     temp_0B
         lda     #$00
-        sta     $0A
+        sta     temp_0A
         jsr     divide_16bit            ; divide for velocity ratio
         ldx     current_entity_slot
-        lda     $0F
+        lda     temp_0F
         sta     ent_x_vel,x
-        lda     $0E
+        lda     temp_0E
         sta     ent_x_vel_sub,x
 velocity_calc_negate_y:  plp
         bcc     velocity_calc_done
@@ -4407,9 +4407,9 @@ setup_ppu_normal:  lda     #$00
         sta     temp_01
         lda     game_substate
         beq     proximity_check_rts
-        lda     $BD
+        lda     boss_state_flag
         bne     proximity_check_rts
-        lda     $F9
+        lda     boss_fight_flag
         bne     proximity_check_rts
         sec
         lda     ent_x_px
@@ -4494,7 +4494,7 @@ weapon_boss_next_slot:  dex
         bcs     weapon_boss_check_slot
         ldx     current_entity_slot
         lda     #$00
-        sta     $B4
+        sta     boss_hit_flag
         sta     temp_02
 weapon_boss_no_hit:  clc
         rts
@@ -4535,7 +4535,7 @@ buster_apply_damage:  jsr     weapon_difficulty_scale
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -4601,7 +4601,7 @@ metal_blade_apply:  jsr     weapon_difficulty_scale
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -4640,7 +4640,7 @@ metal_blade_done:  clc
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -4683,7 +4683,7 @@ air_shooter_killed_skip:
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -4731,7 +4731,7 @@ leaf_shield_apply:  jsr     weapon_difficulty_scale
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -4773,7 +4773,7 @@ crash_bomber_apply:  jsr     weapon_difficulty_scale
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -4827,7 +4827,7 @@ quick_boomerang_apply:  jsr     weapon_difficulty_scale
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -4874,7 +4874,7 @@ quick_boomerang_done:  clc
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-        inc     $B4
+        inc     boss_hit_flag
         sec
         lda     boss_hp
         sbc     temp_00
@@ -5409,7 +5409,7 @@ gutsdozer_attr_data:  .byte   $FF,$3F,$0F,$FF,$FF,$FF,$FF,$33
         .byte   $80,$C0,$C0,$C0,$C0,$03,$03,$03
         .byte   $03,$01,$01,$01,$01,$03,$03,$03
         .byte   $03,$01,$01
-chr_data_B4BE:  .byte   $01,$01
+        .byte   $01,$01
         .byte   $F0,$FC
         .byte   $FE,$F9,$F6
         .byte   $E8
@@ -5520,7 +5520,7 @@ chr_data_B4BE:  .byte   $01,$01
         .byte   $FF,$FF,$FC,$E0,$7C,$FE,$FF,$FE
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $0F,$87,$07,$03,$03
-chr_data_B805:  .byte   $81,$81
+        .byte   $81,$81
         .byte   $01,$C0
         .byte   $E0,$F0
         .byte   $F0,$F8
@@ -5543,7 +5543,7 @@ chr_data_B805:  .byte   $81,$81
         .byte   $00,$00,$0F,$0F,$0F,$07,$07,$07
         .byte   $07,$03,$1F,$0F,$03,$00,$00,$00
         .byte   $00,$00,$00,$00,$80
-chr_data_B88B:  .byte   $C0,$E0
+        .byte   $C0,$E0
         .byte   $F0,$FC
         .byte   $FF,$FF,$FF,$FF,$7E,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -5616,14 +5616,14 @@ chr_data_B88B:  .byte   $C0,$E0
         .byte   $00,$1F,$1F,$00,$00,$00,$00,$00
         .byte   $07,$1F,$1F,$3F,$3F,$7F,$FF,$00
         .byte   $00,$FF,$FF,$00,$00,$00,$00
-chr_data_BA87:  .byte   $00,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+        .byte   $00,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $00,$00,$FF,$FF,$00,$00,$00,$01
         .byte   $07,$FF,$FF,$FF,$FF,$FC,$F1,$C7
         .byte   $3F,$01,$DC,$9F,$3F,$77,$E7,$FF
         .byte   $FF,$E1,$DC,$BF,$7F,$E7,$E7,$FF
         .byte   $FF,$00,$00,$80,$E0,$B8,$3C,$FE
         .byte   $FF,$FE,$7C,$9C,$E0,$38
-chr_data_BABD:  .byte   $3C,$FE,$FF,$00,$00,$7F,$00,$0F
+        .byte   $3C,$FE,$FF,$00,$00,$7F,$00,$0F
         .byte   $08,$08,$08,$7F,$FF,$FF,$7F,$3F
         .byte   $1E,$1E,$1E,$00,$00,$FF,$00,$FF
         .byte   $61,$61,$61,$FF,$FF,$FF,$FF,$FF
@@ -5655,7 +5655,7 @@ chr_data_BABD:  .byte   $3C,$FE,$FF,$00,$00,$7F,$00,$0F
         .byte   $FF,$E0,$CF,$FF,$FF,$FF,$00,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$00,$00,$FF
         .byte   $FF,$00,$FC,$FF,$FF
-chr_data_BBBA:  .byte   $FF,$00,$FF,$FF,$FF,$FF,$F8,$F8
+        .byte   $FF,$00,$FF,$FF,$FF,$FF,$F8,$F8
         .byte   $00,$00,$FF,$E0,$00,$00,$FF,$FF
         .byte   $FF,$07,$FF,$FF,$FF,$FF,$E7,$FF
         .byte   $FF,$00,$FF,$00,$00,$00,$FF,$FF
@@ -5777,10 +5777,10 @@ chr_data_BDCA:  .byte   $7E,$7E,$7E
         .byte   $00,$0F,$0F,$00,$88,$00,$00,$00
         .byte   $00,$F0
         .byte   $F0,$00
-chr_data_BEF1:  .byte   $80,$00,$00,$00,$00,$0F,$0F,$03
+        .byte   $80,$00,$00,$00,$00,$0F,$0F,$03
         .byte   $80,$00,$00,$00,$00,$F0
         .byte   $F0,$00
-chr_data_BF01:  .byte   $00
+        .byte   $00
         .byte   $00,$0E,$1C,$08,$00,$00,$03,$03
         .byte   $06,$00
         .byte   $00
@@ -5807,7 +5807,7 @@ chr_data_BF01:  .byte   $00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00
-chr_data_BFBE:  .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00

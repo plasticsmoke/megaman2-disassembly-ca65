@@ -50,7 +50,7 @@ stage_select_init:
         jsr     reset_scroll_state
         jsr     load_stage_nametable
         ldx     #$00
-        lda     $9A
+        lda     beaten_bosses
         sta     temp_01
 
 ; =============================================================================
@@ -88,7 +88,7 @@ stage_init_next_boss:  ldx     temp_00
         jsr     load_scroll_palette
         jsr     clear_oam_buffer
         ldx     #$00
-        lda     $9A
+        lda     beaten_bosses
         sta     temp_02
         ldy     #$00
 stage_init_oam_loop:  stx     temp_01       ; Save boss index
@@ -113,7 +113,7 @@ stage_init_oam_next:  ldx     temp_01
         jsr     bank_switch_enqueue
         lda     #$00
         sta     current_stage
-        sta     $FD
+        sta     general_counter
         jsr     wait_for_vblank_0D
 
 ; =============================================================================
@@ -138,7 +138,7 @@ stage_loop_render:  jsr     player_render_collision ; Render player & update col
 ; =============================================================================
 stage_paused_handler:  ldx     current_stage
         bne     stage_select_handler
-        lda     $9A
+        lda     beaten_bosses
         cmp     #$FF
         bne     stage_loop_render
         lda     #$08
@@ -149,7 +149,7 @@ stage_paused_handler:  ldx     current_stage
 ; Stage Select Handler — load boss entities and run intro sequence
 ; =============================================================================
 stage_select_handler:  ldy     stage_select_index_table,x
-        lda     $9A
+        lda     beaten_bosses
         and     boss_bitmask_table,y
         bne     stage_loop_render
         sty     current_stage
@@ -178,13 +178,13 @@ stage_select_load_entity:  lda     stage_entity_x_table,x
         sta     ent_y_sub
         sta     ent_anim_frame
         lda     #$30
-        sta     $FD
+        sta     general_counter
 
 ; =============================================================================
 ; Intro Palette Blink — animate stage select palette cycling
 ; =============================================================================
 intro_palette_blink_loop:  ldx     #$3F
-        lda     $FD
+        lda     general_counter
         and     #$04                    ; Toggle palette every 4 frames
         bne     intro_load_palette
         ldx     #$1F
@@ -214,7 +214,7 @@ intro_update_scroll_col:  lda     ent_x_screen,x
         sta     col_update_addr_hi
         adc     #$00
         sta     ent_y_px
-        dec     $FD
+        dec     general_counter
         beq     intro_finish_palette
         jsr     wait_for_vblank_0D
         jmp     intro_palette_blink_loop
@@ -249,7 +249,7 @@ intro_copy_stage_palette:  lda     stage_palette_per_boss,x
         sta     nametable_select
         jsr     ppu_set_scroll_state
         lda     #$18
-        sta     $FD
+        sta     general_counter
         lda     #$0A
         jsr     bank_switch_enqueue
 
@@ -258,7 +258,7 @@ intro_copy_stage_palette:  lda     stage_palette_per_boss,x
 ; =============================================================================
 intro_blank_frames:  jsr     clear_oam_buffer
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     intro_blank_frames
         jsr     clear_projectile_positions
         lda     #$80
@@ -294,20 +294,20 @@ intro_player_landed:  inc     ent_anim_id
         and     #$01                    ; Facing direction from controller
         sta     ent_flags
         lda     #$00
-        sta     $FD
+        sta     general_counter
         lda     #$08
-        sta     $FE
+        sta     general_ptr_lo
 
 ; =============================================================================
 ; Intro Weapon Flash — cycle weapon palette colors
 ; =============================================================================
 intro_weapon_flash_loop:  lda     #$00
         sta     ent_anim_frame
-        dec     $FE
+        dec     general_ptr_lo
         bne     intro_weapon_flash_frame
         lda     #$08
-        sta     $FE
-        ldx     $FD
+        sta     general_ptr_lo
+        ldx     general_counter
         lda     weapon_flash_tile_lo,x
         sta     palette_sprite + $02
         lda     weapon_flash_tile_hi,x
@@ -316,7 +316,7 @@ intro_weapon_flash_loop:  lda     #$00
         inx
         cpx     #$10                    ; All 8 color pairs shown?
         beq     intro_weapon_show_hold
-        stx     $FD
+        stx     general_counter
 intro_weapon_flash_frame:  jsr     clear_oam_buffer
         jsr     update_projectile_anim
         jsr     render_player_sprites
@@ -327,49 +327,49 @@ intro_weapon_flash_frame:  jsr     clear_oam_buffer
 ; Intro Weapon Show — hold weapon color then scroll health bar
 ; =============================================================================
 intro_weapon_show_hold:  lda     #$50
-        sta     $FD
+        sta     general_counter
 intro_weapon_show_frame:  jsr     clear_oam_buffer
         jsr     update_projectile_anim
         jsr     render_player_sprites
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     intro_weapon_show_frame
         lda     #$28
-        sta     $FD
+        sta     general_counter
         lda     #$26
         sta     col_update_addr_hi
         lda     #$0A
         sta     col_update_addr_lo
         lda     current_stage
         asl     a
-        sta     $FE
+        sta     general_ptr_lo
         asl     a
         asl     a
-        adc     $FE
-        sta     $FE
+        adc     general_ptr_lo
+        sta     general_ptr_lo
 intro_health_fill_loop:  lda     $FD
         and     #$03                    ; Add health every 4 frames
         bne     intro_health_fill_frame
-        ldx     $FE
+        ldx     general_ptr_lo
         lda     intro_health_tile_data,x
         sta     col_update_tiles
         lda     #$01
         sta     col_update_count
-        inc     $FE
+        inc     general_ptr_lo
         inc     col_update_addr_lo
 intro_health_fill_frame:  jsr     clear_oam_buffer
         jsr     update_projectile_anim
         jsr     render_player_sprites
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     intro_health_fill_loop
         lda     #$BB
-        sta     $FD
+        sta     general_counter
 intro_health_hold_frame:  jsr     clear_oam_buffer
         jsr     update_projectile_anim
         jsr     render_player_sprites
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     intro_health_hold_frame
 
 ; =============================================================================
@@ -635,9 +635,9 @@ reset_scroll_state:  lda     #$00
         sta     nametable_select
         sta     scroll_y
         sta     scroll_y_page
-        sta     $B5
+        sta     camera_y_sub
         sta     camera_y_offset
-        sta     $B7
+        sta     camera_x_sub
         sta     camera_x_offset
         sta     camera_x_offset_hi
         sta     palette_anim_target
@@ -956,7 +956,7 @@ projectile_sprite_ptr_hi:  .byte   $88
 ; =============================================================================
 ; Sprite Definition Data — raw OAM data for projectile/weapon sprites
 ; =============================================================================
-sprite_def_data_8831:  .byte   $8D,$8D,$8D
+        .byte   $8D,$8D,$8D
         .byte   $8E,$8E,$8E
         .byte   $8E,$8F,$8F
         .byte   $8F,$8F,$90,$90,$90,$0E
@@ -990,7 +990,7 @@ sprite_def_data_8831:  .byte   $8D,$8D,$8D
         .byte   $E8,$DE,$03,$F4,$E8,$E0,$03,$FC
         .byte   $E8,$E1,$03,$04,$E9,$C0,$01,$FA
         .byte   $F0,$E2,$03
-sprite_def_data_88EE:  .byte   $F4,$F0,$E3,$03,$FC,$F0,$E4,$03
+        .byte   $F4,$F0,$E3,$03,$FC,$F0,$E4,$03
         .byte   $04,$F8
         .byte   $E5,$03
         .byte   $F7,$F8,$E6,$03,$04,$0A,$E0
@@ -1017,7 +1017,7 @@ sprite_def_data_88EE:  .byte   $F4,$F0,$E3,$03,$FC,$F0,$E4,$03
         .byte   $B1,$03
         .byte   $00
         .byte   $F8
-sprite_def_data_894A:  .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
+        .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
         .byte   $B4,$03,$00,$F8,$B5,$03,$08,$0C
         .byte   $E0,$B6,$03,$F8,$E8,$B7,$03,$F3
         .byte   $E8,$B8,$03,$FB,$E8,$B9,$03,$03
@@ -1082,7 +1082,7 @@ sprite_def_data_894A:  .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
         .byte   $04
         .byte   $0D,$E0,$C6
         .byte   $02,$04
-sprite_def_data_8ABD:  .byte   $E8
+        .byte   $E8
         .byte   $AC,$03,$F4
         .byte   $E8
         .byte   $AD,$03,$FC
@@ -1105,12 +1105,12 @@ sprite_def_data_8ABD:  .byte   $E8
         .byte   $F3,$E0,$A1,$03,$03,$E8,$F5,$03
         .byte   $F2,$E8,$F6,$03,$FA,$E8,$F7,$03
         .byte   $02,$EC,$BF,$01
-sprite_def_data_8B36:  .byte   $FB,$F0,$F8,$03,$F4
+        .byte   $FB,$F0,$F8,$03,$F4
         .byte   $F0,$F9
         .byte   $03,$FC,$F0,$FA,$03,$04,$F8,$FB
         .byte   $03,$F4,$F8,$FC,$03,$FC,$00,$FD
         .byte   $03,$FD,$0D,$E0,$A0,$03,$FC
-sprite_def_data_8B54:  .byte   $E8
+        .byte   $E8
         .byte   $A1,$03
         .byte   $F6,$E8
         .byte   $A2,$03
@@ -1128,7 +1128,7 @@ sprite_def_data_8B54:  .byte   $E8
         .byte   $B0,$03
         .byte   $08
         .byte   $EB,$F4
-sprite_def_data_8B9F:  .byte   $01,$FD
+        .byte   $01,$FD
         .byte   $F0,$B1
         .byte   $03,$F8,$F0,$B2,$03,$00,$F0,$B3
         .byte   $03,$08,$F8,$B4,$03,$F0,$F8,$B5
@@ -1160,11 +1160,11 @@ sprite_def_data_8B9F:  .byte   $01,$FD
         .byte   $02,$00,$E8,$BB,$02,$08,$ED,$F4
         .byte   $01,$FD,$F0,$BC,$02,$F0,$F0,$BD
         .byte   $03,$F8,$F0,$BE,$03,$00,$F0
-sprite_def_data_8C7E:  .byte   $BF,$02,$08
+        .byte   $BF,$02,$08
         .byte   $F8
         .byte   $C0,$02
         .byte   $F0,$F8
-sprite_def_data_8C86:  .byte   $C8
+        .byte   $C8
         .byte   $02,$F8,$F8,$C9,$03,$00,$F8,$C3
         .byte   $02
         .byte   $08
@@ -1173,9 +1173,9 @@ sprite_def_data_8C86:  .byte   $C8
         .byte   $03,$F0,$E8,$AE,$03,$F8,$E8,$AF
         .byte   $03,$00,$E8,$B0,$03,$08,$EB,$F4
         .byte   $01,$FD
-sprite_def_data_8CAE:  .byte   $F0,$D6
+        .byte   $F0,$D6
         .byte   $03,$F8,$F0,$D7,$03,$00,$F0,$D8
-sprite_def_data_8CB8:  .byte   $03,$08,$F8,$D9,$03,$F8,$F8,$DA
+        .byte   $03,$08,$F8,$D9,$03,$F8,$F8,$DA
         .byte   $03,$00,$00,$DB,$03,$F8,$00,$DC
         .byte   $03,$00,$09,$E8,$A1,$03,$F8,$E8
         .byte   $A2,$03,$00,$E9,$A0,$01,$F9,$F0
@@ -1195,7 +1195,7 @@ sprite_def_data_8CB8:  .byte   $03,$08,$F8,$D9,$03,$F8,$F8,$DA
         .byte   $F8
         .byte   $B0,$03
         .byte   $F4,$F8,$B1
-sprite_def_data_8D16:  .byte   $03,$FC,$F8,$B2,$03,$04,$09,$E8
+        .byte   $03,$FC,$F8,$B2,$03,$04,$09,$E8
         .byte   $B3,$03,$F4,$E8,$B4,$03,$FC,$E8
         .byte   $B5,$03,$04,$E9,$A0,$01,$FC,$F0
         .byte   $B6,$03,$F9,$F0,$B7,$03,$01
@@ -1217,16 +1217,16 @@ sprite_def_data_8D16:  .byte   $03,$FC,$F8,$B2,$03,$04,$09,$E8
         .byte   $A6,$03
         .byte   $00
         .byte   $E8,$A7,$03,$08,$F0,$A8
-sprite_def_data_8D8D:  .byte   $03,$F0,$F0,$A9,$03,$F8,$F0,$AA
+        .byte   $03,$F0,$F0,$A9,$03,$F8,$F0,$AA
         .byte   $03,$00,$F0
-sprite_def_data_8D98:  .byte   $AB,$03,$08,$F8,$AC,$03
+        .byte   $AB,$03,$08,$F8,$AC,$03
         .byte   $F0,$F8
         .byte   $AD,$03,$F8
         .byte   $F8
         .byte   $AE,$03,$00
         .byte   $F8
         .byte   $AF,$03,$08,$E2,$DE
-sprite_def_data_8DAD:  .byte   $01,$FB
+        .byte   $01,$FB
         .byte   $12
         .byte   $E0,$B0
         .byte   $03,$F6,$E0,$B1,$03,$FE,$E0,$B2
@@ -1284,15 +1284,15 @@ sprite_def_data_8DAD:  .byte   $01,$FB
         .byte   $F0,$C7,$03,$00,$F0,$C8,$03,$08
         .byte   $F8,$C9,$03,$F5,$F8,$CA,$03,$FD
         .byte   $F8,$CB,$03
-sprite_def_data_8E81:  .byte   $05,$00
+        .byte   $05,$00
         .byte   $CC,$03,$F5
         .byte   $00
         .byte   $CD,$03,$05,$E4
         .byte   $DE,$01,$FB
-sprite_def_data_8E8E:  .byte   $0B,$E8,$A0,$03,$F8,$E8,$A1,$03
+        .byte   $0B,$E8,$A0,$03,$F8,$E8,$A1,$03
         .byte   $00,$F0,$A2,$03,$F0,$F0,$A3,$03
         .byte   $F8,$F0,$A4,$03,$00,$F0
-sprite_def_data_8EA4:  .byte   $A5,$03
+        .byte   $A5,$03
         .byte   $08
         .byte   $F8
         .byte   $A6,$03
@@ -1300,7 +1300,7 @@ sprite_def_data_8EA4:  .byte   $A5,$03
         .byte   $A7,$03,$F8,$F8,$A8,$03,$00,$F8
         .byte   $A9,$03,$08,$ED,$F3,$01,$FA,$0D
         .byte   $E0
-sprite_def_data_8EBD:  .byte   $AA,$03,$F0,$E0,$AB,$03,$F8,$E8
+        .byte   $AA,$03,$F0,$E0,$AB,$03,$F8,$E8
         .byte   $AC,$03,$F0
         .byte   $E8
         .byte   $AD,$03,$F8
@@ -1311,10 +1311,10 @@ sprite_def_data_8EBD:  .byte   $AA,$03,$F0,$E0,$AB,$03,$F8,$E8
         .byte   $B1,$03
         .byte   $00
         .byte   $F8,$B2
-sprite_def_data_8EDE:  .byte   $03,$F0,$F8,$B3,$03,$F8,$F8,$B4
+        .byte   $03,$F0,$F8,$B3,$03,$F8,$F8,$B4
         .byte   $03,$00,$F8,$B5,$03,$08,$ED,$F3
         .byte   $01,$F9,$0D,$E8
-sprite_def_data_8EF2:  .byte   $B6,$03
+        .byte   $B6,$03
         .byte   $F0,$E8
         .byte   $B7,$03,$F8,$E8,$B8,$03,$00,$E8
         .byte   $B9,$03,$08
@@ -1339,13 +1339,13 @@ sprite_def_data_8EF2:  .byte   $B6,$03
         .byte   $A2,$03,$08,$E8,$A3,$03,$F0,$E8
         .byte   $A4,$03
         .byte   $F8
-sprite_def_data_8F73:  .byte   $E8
+        .byte   $E8
         .byte   $A5,$03
         .byte   $00
         .byte   $E8,$A6,$03,$08,$F0,$A7,$03,$F0
         .byte   $F0,$A8,$03,$F8,$F0,$A9,$03,$00
         .byte   $F0,$AA,$03,$08,$F8,$AB,$03,$F0
-sprite_def_data_8F8F:  .byte   $F8
+        .byte   $F8
         .byte   $AC,$03,$F8
         .byte   $F8
         .byte   $AC,$43,$00
@@ -1358,7 +1358,7 @@ sprite_def_data_8F8F:  .byte   $F8
         .byte   $08
         .byte   $F0,$B5
         .byte   $03,$F5,$F0,$B6,$03,$FD,$F0
-sprite_def_data_8FC5:  .byte   $B7,$03,$05,$F8,$B8,$03,$F0,$F8
+        .byte   $B7,$03,$05,$F8,$B8,$03,$F0,$F8
         .byte   $B9,$03,$F8,$F8,$BA,$03,$00,$F8
         .byte   $BB,$03,$08,$E8,$F4,$02,$FA,$10
         .byte   $E0,$AE,$03,$F8,$E0,$AF,$03,$00
@@ -1372,7 +1372,7 @@ sprite_def_data_8FC5:  .byte   $B7,$03,$05,$F8,$B8,$03,$F0,$F8
         .byte   $C1,$03,$F8
         .byte   $F0,$C2
         .byte   $03,$00,$F0
-sprite_def_data_9006:  .byte   $C3,$03
+        .byte   $C3,$03
         .byte   $08
         .byte   $F8
         .byte   $B8
@@ -1390,22 +1390,22 @@ sprite_def_data_9006:  .byte   $C3,$03
         .byte   $CE,$03,$F8
         .byte   $E8
         .byte   $A5
-sprite_def_data_9034:  .byte   $03
+        .byte   $03
         .byte   $00
         .byte   $E8,$CF,$03,$08,$F0,$D0,$03,$F0
         .byte   $F0,$D1,$03,$F8,$F0,$D2,$03,$00
         .byte   $F0
-sprite_def_data_9047:  .byte   $D3
-sprite_def_data_9048:  .byte   $03,$08,$F8,$D4,$03
+        .byte   $D3
+        .byte   $03,$08,$F8,$D4,$03
         .byte   $F0,$F8
         .byte   $D5,$03
         .byte   $F8
         .byte   $F8
         .byte   $D5,$03
-sprite_def_data_9055:  .byte   $00
+        .byte   $00
         .byte   $F8,$D6,$03,$08,$E7,$F4,$02,$FA
         .byte   $E0,$CB
-sprite_def_data_9060:  .byte   $03,$F0,$11,$E0,$C1,$03
+        .byte   $03,$F0,$11,$E0,$C1,$03
         .byte   $F0,$E0
         .byte   $C2,$03,$F8,$E0,$C3,$03,$00,$E0
         .byte   $C4,$03,$08,$E8
@@ -1425,7 +1425,7 @@ sprite_def_data_9060:  .byte   $03,$F0,$11,$E0,$C1,$03
         .byte   $C9,$03
         .byte   $08
         .byte   $F0
-sprite_def_data_9094:  .byte   $C0,$01
+        .byte   $C0,$01
         .byte   $FA
         .byte   $F8
         .byte   $CA
@@ -1455,11 +1455,11 @@ main_stage_render:
         jsr     clear_oam_buffer_fixed
         lda     #$00
         jsr     weapon_palette_copy_indexed
-        lda     $B5
+        lda     camera_y_sub
         pha
         lda     camera_y_offset
         pha
-        lda     $B7
+        lda     camera_x_sub
         pha
         lda     camera_x_offset
         pha
@@ -1480,8 +1480,8 @@ wselect_save_palette_loop:  lda     palette_anim_target,x
         bpl     wselect_save_palette_loop
         lda     #$00
         sta     camera_x_offset
-        sta     $B7
-        sta     $B5
+        sta     camera_x_sub
+        sta     camera_y_sub
         sta     camera_y_offset
         lda     current_stage
         cmp     #$04
@@ -1537,23 +1537,23 @@ wselect_calc_scroll_pos:  clc
         adc     #$80
         and     #$E0
         ora     #$04
-        sta     $52
+        sta     wselect_ppu_lo
         lda     nametable_select
         adc     #$00
-        sta     $53
+        sta     wselect_ppu_hi
         ldx     #$00
 wselect_column_loop:  stx     $FD
         clc
-        lda     $52
+        lda     wselect_ppu_lo
         adc     wselect_column_offset,x
         sta     jump_ptr
-        lda     $53
+        lda     wselect_ppu_hi
         adc     #$00
         sta     jump_ptr_hi
         lda     #$00
         sta     ppu_buffer_count
         jsr     attr_table_write
-        ldx     $FD
+        ldx     general_counter
         lda     wselect_column_type,x
         asl     a
         asl     a
@@ -1576,17 +1576,17 @@ wselect_copy_tiles:  lda     wselect_tile_data,x
         ldx     #$00
         jsr     metatile_render_column
         jsr     wait_for_vblank_0D
-        ldx     $FD
+        ldx     general_counter
         inx
         cpx     #$0F
         bne     wselect_column_loop
-        stx     $FD
+        stx     general_counter
         ldy     #$99
         ldx     #$00
         jsr     metatile_render_column
         lda     #$00
-        sta     $FE
-        sta     $FF
+        sta     general_ptr_lo
+        sta     general_ptr_hi
         ldx     current_weapon
         inx
         cpx     #$07
@@ -1594,7 +1594,7 @@ wselect_copy_tiles:  lda     wselect_tile_data,x
         txa
         sbc     #$06
         tax
-        inc     $FE
+        inc     general_ptr_lo
 wselect_set_weapon_index:  stx     $FD
 
 ; =============================================================================
@@ -1604,11 +1604,11 @@ wselect_input_loop:  lda     $9A
         asl     a
         ora     #$41
         sta     temp_07
-        lda     $FE
+        lda     general_ptr_lo
         beq     wselect_check_start
-        lda     $9A
+        lda     beaten_bosses
         sta     temp_07
-        lda     $9B
+        lda     beaten_bosses_hi
         asl     temp_07
         rol     a
         asl     temp_07
@@ -1632,14 +1632,14 @@ wselect_check_dpad:  lda     p1_new_presses
         and     #$30                    ; D-pad up/down new press?
         cmp     temp_00
         bne     wselect_clear_repeat
-        inc     $FF
-        lda     $FF
+        inc     general_ptr_hi
+        lda     general_ptr_hi
         cmp     #$18                    ; Auto-repeat delay (24 frames)
         bcc     wselect_update_and_vblank
         lda     #$08
-        sta     $FF
+        sta     general_ptr_hi
 wselect_dpad_pressed:  ldx     #$07
-        lda     $FE
+        lda     general_ptr_lo
         beq     wselect_sound_and_move
         dex
 wselect_sound_and_move:  lda     #$2F
@@ -1649,10 +1649,10 @@ wselect_sound_and_move:  lda     #$2F
         and     #$10
         bne     wselect_move_left
 wselect_move_right:  inc     $FD        ; Move cursor right
-        cpx     $FD
+        cpx     general_counter
         bcs     wselect_check_valid
         lda     #$00
-        sta     $FD
+        sta     general_counter
 wselect_check_valid:  ldy     $FD
         beq     wselect_update_and_vblank
         lda     weapon_bitmask_table,y
@@ -1661,7 +1661,7 @@ wselect_check_valid:  ldy     $FD
         bne     wselect_update_and_vblank
 wselect_move_left:  dec     $FD         ; Move cursor left
         bpl     wselect_check_valid_left
-        stx     $FD
+        stx     general_counter
 wselect_check_valid_left:  ldy     $FD
         beq     wselect_update_and_vblank
         lda     weapon_bitmask_table,y
@@ -1669,7 +1669,7 @@ wselect_check_valid_left:  ldy     $FD
         beq     wselect_move_left
         bne     wselect_update_and_vblank
 wselect_clear_repeat:  lda     #$00
-        sta     $FF
+        sta     general_ptr_hi
 wselect_update_and_vblank:  jsr     wselect_render_oam
         jsr     wait_for_vblank_0D
         jmp     wselect_input_loop
@@ -1679,9 +1679,9 @@ wselect_update_and_vblank:  jsr     wselect_render_oam
 ; =============================================================================
 wselect_start_pressed:  lda     $FD
         bne     wselect_check_etank
-        lda     $FE
+        lda     general_ptr_lo
         eor     #$01
-        sta     $FE
+        sta     general_ptr_lo
         jmp     wselect_clear_repeat
 
 wselect_check_etank:  cmp     #$07
@@ -1711,7 +1711,7 @@ wselect_weapon_selected:  lda     $FD
         beq     wselect_clear_repeat
         tax
         dex
-        lda     $FE
+        lda     general_ptr_lo
         beq     wselect_store_weapon
         clc
         txa
@@ -1724,10 +1724,10 @@ wselect_store_weapon:  stx     current_weapon
         ldx     #$00
 wselect_render_column:  stx     $FD
         clc
-        lda     $52
+        lda     wselect_ppu_lo
         adc     wselect_column_offset,x
         sta     jump_ptr
-        lda     $53
+        lda     wselect_ppu_hi
         adc     #$00
         sta     jump_ptr_hi
         lda     jump_ptr
@@ -1745,7 +1745,7 @@ wselect_render_column:  stx     $FD
         lda     #$00
         sta     ppu_buffer_count
         jsr     metatile_column_render
-        lda     $FD
+        lda     general_counter
         cmp     #$08
         bcs     wselect_render_default_col
         ldx     current_weapon
@@ -1761,11 +1761,11 @@ wselect_render_default_col:  ldy     #$90
         ldx     #$00
 wselect_render_col_call:  jsr     metatile_render_column
         jsr     wait_for_vblank_0D
-        ldx     $FD
+        ldx     general_counter
         inx
         cpx     #$0F
         bne     wselect_render_column
-        stx     $FD
+        stx     general_counter
         ldy     #$90
         ldx     #$00
         jsr     metatile_render_column
@@ -1800,13 +1800,13 @@ wselect_restore_pal_loop:  lda     palette_save_buf,x
         pla
         sta     camera_x_offset
         pla
-        sta     $B7
+        sta     camera_x_sub
         pla
         sta     camera_y_offset
         pla
-        sta     $B5
+        sta     camera_y_sub
         lda     #$00
-        sta     $AC
+        sta     weapon_counter_2
         sta     game_substate
         sta     ent_anim_frame
         sta     ent_anim_id
@@ -1824,7 +1824,7 @@ wselect_wily10_pal_data:  .byte   $27,$11,$16
 ; Weapon Select — Render OAM (header, boss icons, HP bars, cursor)
 ; =============================================================================
 wselect_render_oam:  jsr     clear_oam_buffer_fixed
-        lda     $52
+        lda     wselect_ppu_lo
         and     #$E0
         sec
         sbc     scroll_x
@@ -1835,19 +1835,19 @@ wselect_load_header_oam:  lda     wselect_header_oam,y
         iny
         cpy     #$14
         bne     wselect_load_header_oam
-        lda     $9A
+        lda     beaten_bosses
         asl     a
         ora     #$01
         sta     temp_07
         lda     #$05
         sta     temp_01
         ldx     #$00
-        lda     $FE
+        lda     general_ptr_lo
         beq     wselect_build_boss_icons
         ldx     #$06
-        lda     $9A
+        lda     beaten_bosses
         sta     temp_07
-        lda     $9B
+        lda     beaten_bosses_hi
         asl     temp_07
         rol     a
         asl     temp_07
@@ -1881,7 +1881,7 @@ wselect_icon_tile:  lda     wselect_icon_tile_ids,x
         inx
         dec     temp_01
         bpl     wselect_icon_oam_entry
-        lda     $FE
+        lda     general_ptr_lo
         bne     wselect_page2_labels
         ldx     #$00
 wselect_load_labels_p1:  lda     wselect_label_oam_data,x
@@ -1992,7 +1992,7 @@ wselect_cursor_blink:  ldy     #$00
         bne     wselect_cursor_offset
         ldy     #$20
 wselect_cursor_offset:  sty     temp_00
-        ldx     $FD
+        ldx     general_counter
         bne     wselect_cursor_not_first
         lda     temp_00
         beq     wselect_adjust_positions
@@ -2233,7 +2233,7 @@ boss_get_walk_stop:  jsr     clear_oam_buffer
         ldx     #$01
         jsr     entity_update_handler
         lda     #$3E
-        sta     $FD
+        sta     general_counter
 
 ; =============================================================================
 ; Boss Get — Idle Loop (wait before jump)
@@ -2245,7 +2245,7 @@ boss_get_idle_loop:  jsr     update_animation_frame
         ldx     #$01
         jsr     entity_update_handler
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     boss_get_idle_loop
         lda     #$04
         sta     ent_type + $02
@@ -2256,7 +2256,7 @@ boss_get_idle_loop:  jsr     update_animation_frame
         lda     #$00
         sta     ent_x_screen + $02
         lda     #$50
-        sta     $FD
+        sta     general_counter
 
 ; =============================================================================
 ; Boss Get — Jump Up Loop (player rises with weapon shimmer)
@@ -2271,10 +2271,10 @@ boss_get_jump_up_loop:  sec
         jsr     update_animation_frame
         jsr     update_all_entities
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     boss_get_jump_up_loop
         lda     #$FA
-        sta     $FD
+        sta     general_counter
 
 ; =============================================================================
 ; Boss Get — Shimmer Loop (weapon color cycling)
@@ -2294,10 +2294,10 @@ boss_get_shimmer_loop:  inc     ent_anim_frame + $02
 boss_get_shimmer_frame:  jsr     update_animation_frame
         jsr     update_all_entities
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     boss_get_shimmer_loop
         lda     #$50
-        sta     $FD
+        sta     general_counter
 
 ; =============================================================================
 ; Boss Get — Land Loop (player descends back to ground)
@@ -2312,7 +2312,7 @@ boss_get_land_loop:  clc
         jsr     update_animation_frame
         jsr     update_all_entities
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     boss_get_land_loop
         lda     #$FD
         jsr     bank_switch_enqueue
@@ -2321,7 +2321,7 @@ boss_get_land_loop:  clc
         lda     #$01
         sta     ent_anim_id
         lda     #$00
-        sta     $FD
+        sta     general_counter
         sta     ent_x_vel_sub
         lda     #$04
         sta     ent_x_vel
@@ -2374,7 +2374,7 @@ boss_get_bounce_up:  clc
         sta     ent_x_px
         cmp     #$68
         bcc     boss_get_bounce_render
-        ldx     $FD
+        ldx     general_counter
         lda     bounce_entity_type,x
         sta     ent_type
         lda     ent_x_px
@@ -2389,8 +2389,8 @@ boss_get_bounce_reverse:  lda     #$00
         sta     ent_anim_id
         plp
         beq     boss_get_bounce_render
-        inc     $FD
-        lda     $FD
+        inc     general_counter
+        lda     general_counter
         cmp     #$03
         bne     boss_get_bounce_render
         lda     #$11
@@ -2409,7 +2409,7 @@ boss_get_bounce_render:  jsr     clear_oam_buffer
 boss_get_apply_gravity:  jsr     apply_gravity
         jsr     render_stars_overlay
         jsr     wait_for_vblank_0D
-        lda     $FD
+        lda     general_counter
         cmp     #$05
         beq     boss_get_fall_init
         jmp     boss_get_bounce_main
@@ -2447,9 +2447,9 @@ boss_get_fall_loop:  clc
 boss_get_fall_done:  jsr     clear_oam_buffer
         jsr     render_stars_overlay
         lda     #$3E
-        sta     $FD
+        sta     general_counter
 boss_get_wait_loop:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     boss_get_wait_loop
         jsr     clear_oam_buffer
 
@@ -2462,26 +2462,26 @@ boss_get_flash_pal_load:  lda     boss_get_flash_palette_data,x
         dex
         bpl     boss_get_flash_pal_load
         lda     #$37
-        sta     $FD
+        sta     general_counter
 boss_get_flash_loop:  ldx     #$0F
-        lda     $FD
+        lda     general_counter
         and     #$08                    ; Flash every 8 frames
         beq     boss_get_flash_set_color
         ldx     #$30
 boss_get_flash_set_color:  stx     palette_sprite
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bpl     boss_get_flash_loop
         ldx     current_stage
         lda     boss_get_scroll_start,x
-        sta     $FD
+        sta     general_counter
         lda     #$3E
-        sta     $FE
+        sta     general_ptr_lo
 boss_get_title_scroll_start:  lda     $FD
         sta     temp_00
         jsr     boss_get_title_render
         jsr     wait_for_vblank_0D
-        dec     $FE
+        dec     general_ptr_lo
         bne     boss_get_title_scroll_start
 
 ; =============================================================================
@@ -2493,9 +2493,9 @@ boss_get_title_scroll_loop:  lda     frame_counter
         lda     #$28
         jsr     bank_switch_enqueue
         clc
-        lda     $FD
+        lda     general_counter
         adc     #$04                    ; Advance 4 pixels per step
-        sta     $FD
+        sta     general_counter
         ldx     current_stage
         cmp     boss_get_scroll_end,x
         beq     boss_get_title_hold_start
@@ -2506,16 +2506,16 @@ boss_get_title_frame:  lda     $FD
         jmp     boss_get_title_scroll_loop
 
 boss_get_title_hold_start:  lda     #$7D
-        sta     $FE
+        sta     general_ptr_lo
 boss_get_title_hold_frame:  lda     $FD
         sta     temp_00
         jsr     boss_get_title_render
         jsr     wait_for_vblank_0D
-        dec     $FE
+        dec     general_ptr_lo
         bne     boss_get_title_hold_frame
         jsr     disable_nmi_and_rendering
         lda     #$00
-        sta     $AE
+        sta     sprite_8x16_flag
         lda     #$0E
         jsr     banked_entry
         rts
@@ -2557,7 +2557,7 @@ update_all_entity_inner:  stx     current_entity_slot
 ; =============================================================================
 apply_gravity:  lda     scroll_y             ; Apply downward acceleration to entity
         bne     gravity_accelerate
-        lda     $AE
+        lda     sprite_8x16_flag
         bne     gravity_rts
 gravity_accelerate:  clc
         lda     scroll_y_page
@@ -2568,7 +2568,7 @@ gravity_accelerate:  clc
         cmp     #$F0
         bne     gravity_store
         lda     #$02
-        sta     $AE
+        sta     sprite_8x16_flag
         lda     #$00
 gravity_store:  sta     scroll_y
         lda     scroll_y
@@ -2675,19 +2675,19 @@ entity_update_handler:  ldy     ent_type,x
         lda     entity_sprite_ptr_hi,y
         sta     jump_ptr_hi
         lda     ent_x_px,x
-        sta     $0A
+        sta     temp_0A
         lda     ent_x_screen,x
-        sta     $0B
+        sta     temp_0B
         lda     ent_y_px,x
-        sta     $0C
+        sta     temp_0C
         ldy     #$00
         lda     (jump_ptr),y
         iny
-        sta     $0D
+        sta     temp_0D
         ldx     temp_00
 entity_oam_loop:  clc
         lda     (jump_ptr),y
-        adc     $0C
+        adc     temp_0C
         sta     oam_buffer,x
         iny
         lda     (jump_ptr),y
@@ -2698,9 +2698,9 @@ entity_oam_loop:  clc
         iny
         clc
         lda     (jump_ptr),y
-        adc     $0A
+        adc     temp_0A
         sta     temp_01
-        lda     $0B
+        lda     temp_0B
         adc     #$00
         beq     entity_oam_store_x
         lda     #$F8
@@ -2713,7 +2713,7 @@ entity_oam_store_x:  lda     temp_01
         inx
         inx
 entity_oam_next_sprite:  iny
-        dec     $0D
+        dec     temp_0D
         bne     entity_oam_loop
         stx     temp_00
         rts
@@ -2727,18 +2727,18 @@ wily_intro_clear_pal:  sta     palette_ram,x
         dex
         bpl     wily_intro_clear_pal
         lda     #$02
-        sta     $AE
+        sta     sprite_8x16_flag
         jsr     enable_nmi_and_rendering
         jsr     render_stars_overlay
         ldx     #$00
-        stx     $FD
+        stx     general_counter
         lda     #$08
-        sta     $FE
+        sta     general_ptr_lo
 wily_intro_fade_loop:  dec     $FE
         bne     wily_intro_vblank
         lda     #$08
-        sta     $FE
-        ldx     $FD
+        sta     general_ptr_lo
+        ldx     general_counter
         ldy     #$00
 wily_intro_load_pal:  lda     wily_fade_palette_data,x
         sta     palette_ram,y
@@ -2748,20 +2748,20 @@ wily_intro_load_pal:  lda     wily_fade_palette_data,x
         bne     wily_intro_load_pal
         cpx     #$60
         beq     wily_intro_sound
-        stx     $FD
+        stx     general_counter
 wily_intro_vblank:  jsr     wait_for_vblank_0D
         jmp     wily_intro_fade_loop
 
 wily_intro_sound:  lda     #$11
         jsr     bank_switch_enqueue
         lda     #$02
-        sta     $FE
+        sta     general_ptr_lo
 wily_intro_wait_outer:  lda     #$A0
-        sta     $FD
+        sta     general_counter
 wily_intro_wait_inner:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     wily_intro_wait_inner
-        dec     $FE
+        dec     general_ptr_lo
         bne     wily_intro_wait_outer
         jsr     clear_oam_buffer
         rts
@@ -2845,7 +2845,7 @@ entity_sprite_ptr_hi:  .byte   $9B,$9C,$9C,$9C,$9C,$9C,$9D,$9D
         .byte   $10,$08
         .byte   $5C,$03,$08,$08,$5D,$03,$10
         .byte   $08
-sprite_data_9D19:  .byte   $5D,$43,$18
+        .byte   $5D,$43,$18
         .byte   $08
         .byte   $5C,$43
         .byte   $20,$10,$5E
@@ -2947,7 +2947,7 @@ wily_intro_init:
         jsr     banked_entry
         jsr     reset_scroll_state
         lda     #$00
-        sta     $BE
+        sta     ending_state
         lda     #$02
         jsr     chr_ram_bank_load
         lda     #$20
@@ -2995,9 +2995,9 @@ credits_load_tiles_inner:  lda     credits_tile_layout_data,x
         lda     #$FF
         jsr     bank_switch_enqueue
         lda     #$1F
-        sta     $FE
+        sta     general_ptr_lo
 credits_fade_outer:  lda     #$0A
-        sta     $FF
+        sta     general_ptr_hi
 credits_fade_inner:  ldx     $FE
         lda     credits_fade_brightness,x
         sta     palette_ram + $01
@@ -3009,13 +3009,13 @@ credits_fade_inner:  ldx     $FE
 
 credits_fade_next:  dec     $FF
         bne     credits_fade_inner
-        dec     $FE
+        dec     general_ptr_lo
         bpl     credits_fade_outer
         lda     #$00
         sta     col_update_count
         jsr     disable_nmi_and_rendering
         lda     #$00
-        sta     $AE
+        sta     sprite_8x16_flag
         lda     #$07
         sta     current_stage
         lda     #$00
@@ -3101,11 +3101,11 @@ credits_clear_entities:  sta     ent_x_screen,x
         lda     #$00
         sta     ent_y_vel
         lda     #$00
-        sta     $AE
+        sta     sprite_8x16_flag
         lda     #$00
         sta     scroll_y
         lda     #$00
-        sta     $FD
+        sta     general_counter
         lda     #$08
 
 ; =============================================================================
@@ -3115,8 +3115,8 @@ ending_fade_speed:  sta     $FE
 ending_fade_loop:  dec     $FE
         bne     ending_fade_frame
         lda     #$08
-        sta     $FE
-        ldx     $FD
+        sta     general_ptr_lo
+        ldx     general_counter
         ldy     #$00
 ending_fade_pal_load:  lda     ending_fade_pal_frames,x
         sta     palette_ram,y
@@ -3126,7 +3126,7 @@ ending_fade_pal_load:  lda     ending_fade_pal_frames,x
         bne     ending_fade_pal_load
         cpx     #$60
         beq     ending_column_init
-        stx     $FD
+        stx     general_counter
 ending_fade_frame:  jsr     ending_render_all_sprites
         jsr     wait_for_vblank_0D
         lda     p1_new_presses
@@ -3140,8 +3140,8 @@ ending_fade_frame:  jsr     ending_render_all_sprites
 ending_column_init:  lda     #$0E
         jsr     bank_switch_enqueue
         lda     #$00
-        sta     $FD
-        sta     $C8
+        sta     general_counter
+        sta     indirect_page
 ending_column_main:  lda     $FD
         cmp     #$36
         bne     ending_column_load
@@ -3162,17 +3162,17 @@ ending_column_second:  jsr     ending_column_data_load
         lda     #$43
         sta     col_update_addr_lo
         lda     #$1F
-        sta     $FE
+        sta     general_ptr_lo
         lda     #$0A
-        sta     $FF
+        sta     general_ptr_hi
 ending_text_fade_loop:  dec     $FF
         bne     ending_text_frame
         lda     #$0A
-        sta     $FF
-        ldx     $FE
+        sta     general_ptr_hi
+        ldx     general_ptr_lo
         lda     credits_fade_brightness,x
         sta     palette_ram + $05
-        dec     $FE
+        dec     general_ptr_lo
         bmi     ending_column_check
 ending_text_frame:  jsr     wait_for_vblank_0D
         lda     p1_new_presses
@@ -3184,7 +3184,7 @@ ending_column_check:  lda     $FD
         cmp     #$0E
         bne     ending_column_main
         lda     #$02
-        sta     $AE
+        sta     sprite_8x16_flag
         lda     #$F0
         sta     scroll_y
 
@@ -3217,7 +3217,7 @@ ending_fall_decel_init:  lda     #$F0
         sta     scroll_y
         lda     #$00
         sta     scroll_y_page
-        sta     $AE
+        sta     sprite_8x16_flag
 ending_fall_decel_loop:  sec
         lda     scroll_y_page
         sbc     #$80
@@ -3271,14 +3271,14 @@ ending_landing_scroll:  sec
 ; Ending — Scroll Columns (grass fills from bottom)
 ; =============================================================================
 ending_scroll_columns:  lda     #$50
-        sta     $FD
+        sta     general_counter
         lda     #$00
         sta     col_update_addr_lo
-        sta     $FE
+        sta     general_ptr_lo
         lda     #$10
         sta     col_update_addr_hi
         lda     #$B0
-        sta     $FF
+        sta     general_ptr_hi
 ending_scroll_col_loop:  jsr     ending_advance_anim
         jsr     ending_render_all_sprites
         jsr     ending_render_boss_sprite
@@ -3292,21 +3292,21 @@ ending_scroll_col_loop:  jsr     ending_advance_anim
         adc     #$00
         sta     col_update_addr_hi
         clc
-        lda     $FE
+        lda     general_ptr_lo
         adc     #$20
-        sta     $FE
-        lda     $FF
+        sta     general_ptr_lo
+        lda     general_ptr_hi
         adc     #$00
-        sta     $FF
-        dec     $FD
+        sta     general_ptr_hi
+        dec     general_counter
         bne     ending_scroll_col_loop
         lda     #$20
-        sta     $FD
+        sta     general_counter
 ending_scroll_idle_loop:  jsr     ending_advance_anim
         jsr     ending_render_all_sprites
         jsr     ending_render_boss_sprite
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     ending_scroll_idle_loop
         ldx     #$0F
 ending_load_ground_pal:  lda     ending_ground_palette,x
@@ -3320,10 +3320,10 @@ ending_load_ground_pal:  lda     ending_ground_palette,x
 ending_main_loop_init:  lda     #$0D
         jsr     bank_switch_enqueue
         lda     #$0B
-        sta     $C1
+        sta     ending_timer_hi
         lda     #$00
-        sta     $C0
-        sta     $CB                     ; default to Normal (0) for next playthrough
+        sta     ending_timer_lo
+        sta     difficulty                     ; default to Normal (0) for next playthrough
 ending_main_loop:  lda     p1_new_presses
         and     #$08                    ; Start button = skip
         bne     ending_skip_pressed
@@ -3335,7 +3335,7 @@ ending_draw_cursor:  lda     ending_cursor_oam_data,x
         sta     oam_buffer + $81,x
         dex
         bpl     ending_draw_cursor
-        ldx     $CB                     ; 0=Normal cursor, 1=Difficult cursor
+        ldx     difficulty                     ; 0=Normal cursor, 1=Difficult cursor
         ldy     #$F8
         lda     frame_counter
         and     #$08
@@ -3347,27 +3347,27 @@ ending_cursor_y:  sty     oam_buffer + $80
         beq     ending_timer_tick
         txa
         eor     #$01                    ; flip between Normal (0) and Difficult (1)
-        sta     $CB
+        sta     difficulty
         lda     #$2F
         jsr     bank_switch_enqueue
         lda     #$0B
-        sta     $C1
+        sta     ending_timer_hi
         lda     #$00
-        sta     $C0
+        sta     ending_timer_lo
 ending_timer_tick:  jsr     wait_for_vblank_0D
         sec
-        lda     $C0
+        lda     ending_timer_lo
         sbc     #$01
-        sta     $C0
-        lda     $C1
+        sta     ending_timer_lo
+        lda     ending_timer_hi
         sbc     #$00
-        sta     $C1
+        sta     ending_timer_hi
         bcs     ending_main_loop
-        inc     $BE
+        inc     ending_state
 ending_skip_pressed:  lda     #$FF
         jsr     bank_switch_enqueue
         lda     #$19
-        sta     $FD
+        sta     general_counter
 
 ; =============================================================================
 ; Ending — Teleport Animation (Mega Man beams away)
@@ -3375,7 +3375,7 @@ ending_skip_pressed:  lda     #$FF
 ending_teleport_loop:  lda     frame_counter
         and     #$01                    ; Animate every other frame
         bne     ending_teleport_frame
-        lda     $FD
+        lda     general_counter
         cmp     #$04
         bne     ending_teleport_dec
         lda     #$3A
@@ -3413,16 +3413,16 @@ ending_fly_render:  jsr     ending_render_all_sprites
 
 ending_fly_done:  jsr     ending_render_all_sprites
         lda     #$3E
-        sta     $FD
+        sta     general_counter
 ending_fly_wait:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     ending_fly_wait
         jsr     disable_nmi_and_rendering
         lda     #$00
-        sta     $AE
+        sta     sprite_8x16_flag
         lda     #$0E
         jsr     banked_entry
-        lda     $BE
+        lda     ending_state
         beq     password_screen_init
         rts
 
@@ -3472,9 +3472,9 @@ password_tile_inner:  lda     password_ppu_layout_data,x
 ; Password Grid Init — reset cursor and enter selection loop
 ; =============================================================================
 password_grid_init:  lda     #$00
-        sta     $FD
-        sta     $9A
-        sta     $9B
+        sta     general_counter
+        sta     beaten_bosses
+        sta     beaten_bosses_hi
 password_cursor_loop:  ldx     #$03
 password_load_cursor_oam:  lda     password_cursor_oam,x
         sta     oam_buffer,x
@@ -3484,7 +3484,7 @@ password_load_cursor_oam:  lda     password_cursor_oam,x
         and     #$08
         bne     password_check_input
         ldx     #$60
-        lda     $FD
+        lda     general_counter
         beq     password_cursor_x_pos
         ldx     #$70
 password_cursor_x_pos:  stx     oam_buffer
@@ -3495,9 +3495,9 @@ password_check_input:  lda     p1_new_presses
         bne     password_start_pressed
         lda     #$2F
         jsr     bank_switch_enqueue
-        lda     $FD
+        lda     general_counter
         eor     #$01
-        sta     $FD
+        sta     general_counter
 password_no_input:  jsr     wait_for_vblank_0D
         jmp     password_cursor_loop
 
@@ -3528,7 +3528,7 @@ password_clear_dots:  sta     ent_flags,x
         lda     #$09
         sta     ent_anim_frame
         lda     #$00
-        sta     $FE
+        sta     general_ptr_lo
 
 ; =============================================================================
 ; Password Entry Loop — D-pad movement, dot placement, A/B input
@@ -3542,12 +3542,12 @@ password_entry_loop:  lda     p1_new_presses
         lda     p1_prev_buttons
         cmp     controller_1
         bne     password_clear_repeat
-        inc     $FE
-        lda     $FE
+        inc     general_ptr_lo
+        lda     general_ptr_lo
         cmp     #$18                    ; Auto-repeat delay (24 frames)
         bcc     password_check_ab
         lda     #$08
-        sta     $FE
+        sta     general_ptr_lo
 password_dpad_pressed:  lda     #$2F
         jsr     bank_switch_enqueue
         ldx     ent_anim_id
@@ -3573,7 +3573,7 @@ password_store_position:  sta     ent_anim_id
         jmp     password_check_ab
 
 password_clear_repeat:  lda     #$00
-        sta     $FE
+        sta     general_ptr_lo
 password_check_ab:  lda     p1_new_presses
         and     #$03
         beq     password_render_grid
@@ -3656,9 +3656,9 @@ password_decode_inc:  inc     temp_01
 password_invalid:  ldx     #$02
         jsr     ppu_column_data_upload
         lda     #$7D
-        sta     $FD
+        sta     general_counter
 password_invalid_wait:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     password_invalid_wait
         ldx     #$03
         jsr     ppu_column_data_upload
@@ -3667,9 +3667,9 @@ password_invalid_wait:  jsr     wait_for_vblank_0D
         jsr     scroll_left_until_zero
         jsr     palette_fade_in
         lda     #$7D
-        sta     $FD
+        sta     general_counter
 password_invalid_wait_2:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     password_invalid_wait_2
         jsr     palette_fade_out
         ldx     #$00
@@ -3685,34 +3685,34 @@ password_invalid_wait_2:  jsr     wait_for_vblank_0D
 ; Password Valid — decode stage data, show beaten bosses
 ; =============================================================================
 password_valid:  lda     temp_02         ; temp_02 = beaten boss flags (8 bits in $9A)
-        sta     $9A
+        sta     beaten_bosses
         and     #$03                    ; extract $9B: bits 0-1 from $9A
-        sta     $9B
-        lda     $9A
+        sta     beaten_bosses_hi
+        lda     beaten_bosses
         and     #$20                    ; bit 5 of $9A → bit 2 of $9B
         lsr     a
         lsr     a
         lsr     a
-        ora     $9B
-        sta     $9B                     ; $9B = derived boss flags (3 bits)
+        ora     beaten_bosses_hi
+        sta     beaten_bosses_hi                     ; $9B = derived boss flags (3 bits)
         lda     temp_04
         sta     current_etanks          ; restore E-tank count from password
         lda     #$C0
-        sta     $FD
+        sta     general_counter
         lda     #$8D
-        sta     $FE
+        sta     general_ptr_lo
         jsr     metatile_full_screen_render
         lda     #$3C
-        sta     $FD
+        sta     general_counter
 password_valid_wait:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     password_valid_wait
         jsr     palette_fade_out
         jsr     clear_oam_buffer
         jsr     scroll_right_until_wrap
-        lda     $9A
+        lda     beaten_bosses
         sta     temp_01
-        lda     $9B
+        lda     beaten_bosses_hi
         sta     temp_02
         ldx     #$00
         beq     password_beaten_sprite
@@ -3734,9 +3734,9 @@ password_beaten_check:  cpx     #$30
         bne     password_show_beaten
         jsr     palette_fade_in
         lda     #$7D
-        sta     $FD
+        sta     general_counter
 password_beaten_wait:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     password_beaten_wait
 password_exit:  jsr     disable_nmi_and_rendering
         rts
@@ -3788,25 +3788,25 @@ ppu_buffer_and_increment:  lda     jump_ptr
 ending_column_data_load:  ldy     $FD
         ldx     #$00
 ending_column_inner:  lda     #$46
-        sta     $C9
+        sta     indirect_ptr_lo
         lda     #$AD
         clc
-        adc     $C8
-        sta     $CA
+        adc     indirect_page
+        sta     indirect_ptr_hi
         lda     ($C9),y
         sta     col_update_tiles,x
         tya
         clc
         adc     #$01
         tay
-        lda     $C8
+        lda     indirect_page
         adc     #$00
-        sta     $C8
+        sta     indirect_page
         inx
         cpx     #$1B
         bne     ending_column_inner
         stx     col_update_count
-        sty     $FD
+        sty     general_counter
         rts
 
 ; =============================================================================
@@ -3930,7 +3930,7 @@ ending_entity_next:  ldx     current_entity_slot
         inx
         cpx     #$0F
         bne     ending_entity_loop
-        lda     $AE
+        lda     sprite_8x16_flag
         bne     ending_player_gravity
         lda     scroll_y
         cmp     #$A8
@@ -4112,14 +4112,14 @@ ending_boss_sprite_rts:  rts
 ; =============================================================================
 credits_skip_init:  jsr     disable_nmi_and_rendering
         lda     #$50
-        sta     $FD
+        sta     general_counter
         lda     #$00
         sta     col_update_addr_lo
-        sta     $FE
+        sta     general_ptr_lo
         lda     #$10
         sta     col_update_addr_hi
         lda     #$B0
-        sta     $FF
+        sta     general_ptr_hi
 credits_skip_scroll_loop:  jsr     ppu_column_fill
         jsr     ppu_scroll_column_update
         clc
@@ -4130,13 +4130,13 @@ credits_skip_scroll_loop:  jsr     ppu_column_fill
         adc     #$00
         sta     col_update_addr_hi
         clc
-        lda     $FE
+        lda     general_ptr_lo
         adc     #$20
-        sta     $FE
-        lda     $FF
+        sta     general_ptr_lo
+        lda     general_ptr_hi
         adc     #$00
-        sta     $FF
-        dec     $FD
+        sta     general_ptr_hi
+        dec     general_counter
         bne     credits_skip_scroll_loop
         lda     #$D1
         sta     jump_ptr
@@ -4201,7 +4201,7 @@ credits_skip_clear_ents:  sta     ent_x_screen,x
         lda     #$00
         sta     p1_new_presses
         sta     scroll_y
-        sta     $AE
+        sta     sprite_8x16_flag
         jmp     ending_main_loop_init
 
 ; =============================================================================
@@ -4224,12 +4224,12 @@ metatile_col_pair_render:  jsr     metatile_column_render
 ; Palette Fade Out — gradually darken all palette entries
 ; =============================================================================
 palette_fade_out:  lda     #$04
-        sta     $FD
+        sta     general_counter
 palette_fade_out_loop:  lda     frame_counter
         and     #$03
         bne     palette_fade_out_frame
         jsr     palette_fade_out_step
-        dec     $FD
+        dec     general_counter
         bmi     palette_fade_out_rts
 palette_fade_out_frame:  jsr     wait_for_vblank_0D
         jmp     palette_fade_out_loop
@@ -4260,12 +4260,12 @@ palette_dec_store:  sta     palette_ram,x
 ; Palette Fade In — gradually brighten palette to target
 ; =============================================================================
 palette_fade_in:  lda     #$04
-        sta     $FD
+        sta     general_counter
 palette_fade_in_loop:  lda     frame_counter
         and     #$03
         bne     palette_fade_in_frame
         jsr     palette_fade_in_step
-        dec     $FD
+        dec     general_counter
         bmi     palette_fade_in_rts
 palette_fade_in_frame:  jsr     wait_for_vblank_0D
         jmp     palette_fade_in_loop
@@ -4423,13 +4423,13 @@ metatile_full_screen_render:  lda     #$00
         sta     column_index
 metatile_render_loop:  lda     $FD
         sta     jump_ptr
-        lda     $FE
+        lda     general_ptr_lo
         sta     jump_ptr_hi
         jsr     metatile_column_render
-        inc     $FD
+        inc     general_counter
         inc     column_index
         jsr     wait_for_vblank_0D
-        lda     $FD
+        lda     general_counter
         and     #$3F
         bne     metatile_render_loop
         rts
@@ -4554,10 +4554,10 @@ boss_sprite_def_ptr_hi:  .byte   $AB,$AB,$AB,$AB,$AB,$AC,$AC,$AC
         .byte   $10,$06
         .byte   $00
         .byte   $C8,$10,$07,$00,$D0
-boss_sprite_data_AB66:  .byte   $10,$08
+        .byte   $10,$08
         .byte   $00
         .byte   $D8,$0B,$00,$09,$01,$C8,$00
-boss_sprite_data_AB70:  .byte   $0A
+        .byte   $0A
         .byte   $01,$D0
         .byte   $00
         .byte   $0B,$01,$D8,$08,$03,$00,$C8,$08
@@ -4567,10 +4567,10 @@ boss_sprite_data_AB70:  .byte   $0A
         .byte   $10,$06
         .byte   $00
         .byte   $C8,$10,$07,$00,$D0
-boss_sprite_data_AB93:  .byte   $10,$08
+        .byte   $10,$08
         .byte   $00
         .byte   $D8,$0C,$00,$0C,$01,$C8,$00
-boss_sprite_data_AB9D:  .byte   $0D,$01,$D0
+        .byte   $0D,$01,$D0
         .byte   $00
         .byte   $02,$01,$D8,$00,$21,$00,$D0,$08
         .byte   $03
@@ -4589,8 +4589,8 @@ boss_sprite_data_AB9D:  .byte   $0D,$01,$D0
         .byte   $10,$07
         .byte   $00
         .byte   $D0,$10,$08,$00,$D8,$0C
-boss_sprite_data_ABC9:  .byte   $00,$0C,$01,$C8
-boss_sprite_data_ABCD:  .byte   $00,$0E,$01,$D0,$00,$02,$01,$D8
+        .byte   $00,$0C,$01,$C8
+        .byte   $00,$0E,$01,$D0,$00,$02,$01,$D8
         .byte   $00,$22,$00,$D0,$08,$03,$00,$C8
         .byte   $08,$04,$00,$D0,$08
         .byte   $05,$00
@@ -4604,8 +4604,8 @@ boss_sprite_data_ABCD:  .byte   $00,$0E,$01,$D0,$00,$02,$01,$D8
         .byte   $10,$07
         .byte   $00
         .byte   $D0,$10,$08,$00,$D8,$0D
-boss_sprite_data_ABFA:  .byte   $00,$0F,$01,$C8
-boss_sprite_data_ABFE:  .byte   $00,$10,$01,$D0
+        .byte   $00,$0F,$01,$C8
+        .byte   $00,$10,$01,$D0
         .byte   $00
         .byte   $11,$01
         .byte   $D8
@@ -4620,17 +4620,17 @@ boss_sprite_data_ABFE:  .byte   $00,$10,$01,$D0
         .byte   $10,$06
         .byte   $00
         .byte   $C8,$10,$07,$00,$D0
-boss_sprite_data_AC2A:  .byte   $10,$08
+        .byte   $10,$08
         .byte   $00
         .byte   $D8,$0A,$00,$12,$00,$C8,$00
-boss_sprite_data_AC34:  .byte   $13,$00,$D0,$00,$14,$00,$D8,$08
+        .byte   $13,$00,$D0,$00,$14,$00,$D8,$08
         .byte   $03,$00,$C8,$08,$15,$00,$D0,$08
         .byte   $05,$00,$D8,$10,$06,$00,$C8,$10
         .byte   $07,$00,$D0
         .byte   $10,$08
         .byte   $00
         .byte   $D8,$06,$27,$01,$CF,$0A,$00
-boss_sprite_data_AC59:  .byte   $12,$00,$C8,$00,$16,$00,$D0,$00
+        .byte   $12,$00,$C8,$00,$16,$00,$D0,$00
         .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
         .byte   $18,$00,$D0,$08,$19,$00,$D8,$10
         .byte   $06,$00,$C8,$10,$07,$00,$D0
@@ -4641,7 +4641,7 @@ boss_sprite_data_AC59:  .byte   $12,$00,$C8,$00,$16,$00,$D0,$00
         .byte   $01,$CF
         .byte   $0A
         .byte   $00
-boss_sprite_data_AC82:  .byte   $12,$00,$C8,$00,$1A,$00,$D0,$00
+        .byte   $12,$00,$C8,$00,$1A,$00,$D0,$00
         .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
         .byte   $1B,$00,$D0,$08,$05,$00,$D8,$10
         .byte   $06,$00,$C8,$10,$07,$00,$D0
@@ -4652,7 +4652,7 @@ boss_sprite_data_AC82:  .byte   $12,$00,$C8,$00,$1A,$00,$D0,$00
         .byte   $01,$CF
         .byte   $0A
         .byte   $00
-boss_sprite_data_ACAB:  .byte   $1C,$00,$C8,$00,$1D,$00,$D0,$00
+        .byte   $1C,$00,$C8,$00,$1D,$00,$D0,$00
         .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
         .byte   $18,$00,$D0,$08,$05,$00,$D8,$10
         .byte   $06,$00,$C8,$10,$07,$00,$D0
@@ -4663,13 +4663,13 @@ boss_sprite_data_ACAB:  .byte   $1C,$00,$C8,$00,$1D,$00,$D0,$00
         .byte   $01,$CF
         .byte   $0A
         .byte   $00
-boss_sprite_data_ACD4:  .byte   $1C,$00,$C8,$00,$1E,$00,$D0,$00
+        .byte   $1C,$00,$C8,$00,$1E,$00,$D0,$00
         .byte   $17,$00,$D8,$08
 
 ; =============================================================================
 ; Boss Sprite Data — raw OAM for each Wily machine animation frame
 ; =============================================================================
-boss_sprite_data_ACE0:  .byte   $03,$00,$C8,$08,$18,$00,$D0,$08
+        .byte   $03,$00,$C8,$08,$18,$00,$D0,$08
         .byte   $05,$00,$D8,$10,$06,$00,$C8,$10
         .byte   $07,$00,$D0
         .byte   $10,$08
@@ -4678,7 +4678,7 @@ boss_sprite_data_ACE0:  .byte   $03,$00,$C8,$08,$18,$00,$D0,$08
         .byte   $28
         .byte   $01,$CF
         .byte   $04,$F8
-boss_sprite_data_ACFD:  .byte   $2A
+        .byte   $2A
         .byte   $00
         .byte   $D0
         .byte   $00
@@ -4957,14 +4957,14 @@ credits_game_over_text:  lda     game_over_text_data,x
         lda     #$00
         jsr     init_scroll_and_palette
         lda     #$04
-        sta     $FE
+        sta     general_ptr_lo
         lda     #$7D
-        sta     $FD
-        ldx     $FE
+        sta     general_counter
+        ldx     general_ptr_lo
         cpx     #$07
         beq     credits_ppu_upload
         jsr     ppu_column_data_upload
-        inc     $FE
+        inc     general_ptr_lo
 credits_ppu_upload:  .byte   $20
         .byte   $AB
 
@@ -4976,9 +4976,9 @@ credits_init_scroll:  cpy     #$C6
         jsr     palette_fade_out
         jsr     scroll_right_until_wrap
         lda     #$80
-        sta     $FD
+        sta     general_counter
         lda     #$8E
-        sta     $FE
+        sta     general_ptr_lo
         jsr     metatile_full_screen_render
         lda     #$10
         jsr     bank_switch_enqueue
@@ -4988,7 +4988,7 @@ credits_init_scroll:  cpy     #$C6
 ; =============================================================================
 credits_select_loop_start:  jsr     palette_fade_in
         lda     #$00
-        sta     $FD
+        sta     general_counter
 credits_select_input:  lda     p1_new_presses
         and     #$3C
         beq     credits_select_draw
@@ -4999,17 +4999,17 @@ credits_select_input:  lda     p1_new_presses
         lda     p1_new_presses
         and     #$24
         bne     credits_select_next
-        dec     $FD
+        dec     general_counter
         bpl     credits_select_draw
         lda     #$02
-        sta     $FD
+        sta     general_counter
         bne     credits_select_draw
 credits_select_next:  inc     $FD
-        lda     $FD
+        lda     general_counter
         cmp     #$03
         bne     credits_select_draw
         lda     #$00
-        sta     $FD
+        sta     general_counter
 credits_select_draw:  ldx     #$03
 credits_select_oam_load:  lda     credits_cursor_oam,x
         sta     oam_buffer,x
@@ -5018,7 +5018,7 @@ credits_select_oam_load:  lda     credits_cursor_oam,x
         lda     frame_counter
         and     #$08
         bne     credits_select_vblank
-        ldx     $FD
+        ldx     general_counter
         lda     credits_cursor_y_table,x
         sta     oam_buffer
 credits_select_vblank:  jsr     wait_for_vblank_0D
@@ -5064,7 +5064,7 @@ password_clear_dots_loop:  sta     ent_flags,x
         bpl     password_clear_dots_loop
         ; Encode current progress into 9 dots on the 5x5 grid:
         ; temp_00 = beaten boss flags, temp_01 = complement (for validation).
-        lda     $9A
+        lda     beaten_bosses
         sta     temp_00
         eor     #$FF
         sta     temp_01
@@ -5107,11 +5107,11 @@ password_copy_header_oam:  lda     credits_header_oam,x
         sta     oam_buffer + $28,x
         dex
         bpl     password_copy_header_oam
-        lda     $9A
+        lda     beaten_bosses
         asl     a
         ora     #$01
         sta     temp_00
-        lda     $9B
+        lda     beaten_bosses_hi
         rol     a
         sta     temp_01
         ldx     #$00
@@ -5331,16 +5331,16 @@ ending_clear_pal_loop:  sta     palette_ram,x
         jsr     clear_oam_buffer
         jsr     enable_nmi_and_rendering
         lda     #$BB
-        sta     $FD
+        sta     general_counter
 ending_wait_loop:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     ending_wait_loop
         lda     #$13
         jsr     bank_switch_enqueue
         lda     #$04
-        sta     $FD
+        sta     general_counter
         lda     #$3F
-        sta     $FE
+        sta     general_ptr_lo
 
 ; =============================================================================
 ; Ending Scene Fade — palette fade loop with sprite rendering
@@ -5348,12 +5348,12 @@ ending_wait_loop:  jsr     wait_for_vblank_0D
 ending_scene_fade_loop:  dec     $FE
         bne     ending_scene_render
         lda     #$3F
-        sta     $FE
+        sta     general_ptr_lo
         ldx     #$1B
         ldy     #$3B
         lda     #$0F
         jsr     palette_inc_range
-        dec     $FD
+        dec     general_counter
         beq     ending_scene_next
 ending_scene_render:  jsr     ending_scene_sprite_render
         jsr     wait_for_vblank_0D
@@ -5364,18 +5364,18 @@ ending_scene_render:  jsr     ending_scene_sprite_render
 ; =============================================================================
 ending_scene_next:  ldx     ent_anim_id
         lda     ending_scene_timer_lo,x
-        sta     $FD
+        sta     general_counter
         lda     ending_scene_timer_hi,x
-        sta     $FE
+        sta     general_ptr_lo
         lda     #$3F
-        sta     $FF
+        sta     general_ptr_hi
 ending_scene_timer:  lda     $FF
         beq     ending_scene_check_type
-        dec     $FF
+        dec     general_ptr_hi
 ending_scene_check_type:  lda     ent_anim_id
         cmp     #$05
         bne     ending_scene_scroll_pal
-        lda     $FF
+        lda     general_ptr_hi
         and     #$01
         sta     nametable_select
         jmp     ending_scene_check_stars
@@ -5394,12 +5394,12 @@ ending_scene_check_stars:  lda     ent_anim_id
 ending_scene_frame:  jsr     ending_scene_sprite_render
         jsr     wait_for_vblank_0D
         sec
-        lda     $FD
+        lda     general_counter
         sbc     #$01
-        sta     $FD
-        lda     $FE
+        sta     general_counter
+        lda     general_ptr_lo
         sbc     #$00
-        sta     $FE
+        sta     general_ptr_lo
         bcs     ending_scene_timer
         inc     ent_anim_id
         lda     ent_anim_id
@@ -5436,9 +5436,9 @@ ending_nt_clear_inner:  sta     PPUDATA
         lda     #$AC
         sta     col_update_addr_lo
         lda     #$A2
-        sta     $FD
+        sta     general_counter
         lda     #$00
-        sta     $FE
+        sta     general_ptr_lo
         sta     ent_anim_id
 
 ; =============================================================================
@@ -5447,17 +5447,17 @@ ending_nt_clear_inner:  sta     PPUDATA
 ending_health_bar_loop:  lda     $FD
         and     #$03
         bne     ending_health_bar_frame
-        ldx     $FE
+        ldx     general_ptr_lo
         cpx     #$05
         beq     ending_health_bar_frame
         lda     ending_health_tile_data,x
         sta     col_update_tiles
         inc     col_update_count
-        inc     $FE
+        inc     general_ptr_lo
         inc     col_update_addr_lo
 ending_health_bar_frame:  jsr     render_player_sprites
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     ending_health_bar_loop
         lda     #$A0
         sta     col_update_addr_lo
@@ -5468,9 +5468,9 @@ ending_health_bar_frame:  jsr     render_player_sprites
 ; Ending Walk Main — scroll columns while Mega Man walks right
 ; =============================================================================
 ending_walk_main_init:  lda     #$49
-        sta     $FD
+        sta     general_counter
         lda     #$01
-        sta     $FE
+        sta     general_ptr_lo
         lda     #$00
         sta     ent_anim_frame
         lda     #$25
@@ -5481,14 +5481,14 @@ ending_walk_frame_loop:  jsr     ending_scroll_update
         jsr     render_player_sprites
         jsr     wait_for_vblank_0D
         sec
-        lda     $FD
+        lda     general_counter
         sbc     #$01
-        sta     $FD
-        lda     $FE
+        sta     general_counter
+        lda     general_ptr_lo
         sbc     #$00
-        sta     $FE
+        sta     general_ptr_lo
         bne     ending_walk_frame_loop
-        lda     $FD
+        lda     general_counter
         beq     ending_walk_next_column
         cmp     #$D0
         bne     ending_walk_frame_loop
@@ -5551,7 +5551,7 @@ ending_scene_sprite_render:  jsr     clear_oam_buffer
         bne     ending_scene_normal
         ldy     #$04
         ldx     #$30
-        lda     $FF
+        lda     general_ptr_hi
         and     #$01
         bne     ending_scene_helmet_off
         ldy     #$05
@@ -5584,7 +5584,7 @@ ending_scene_check_phase:  lda     ent_anim_id
         cmp     #$04
         bcc     ending_scene_walk_render
         ldy     ent_type
-        lda     $FF
+        lda     general_ptr_hi
         and     #$01
         bne     ending_scene_anim_call
         ldy     #$04
@@ -5616,12 +5616,12 @@ ending_scene_anim_frame:  lda     ent_anim_id
         tax
         lda     ending_sprite_tile_table,x
         sta     temp_02
-        lda     $FF
+        lda     general_ptr_hi
         beq     ending_scene_oam_write
         ldx     ent_anim_id
         beq     ending_scene_oam_write
         dex
-        lda     $FF
+        lda     general_ptr_hi
         beq     ending_scene_oam_write
         lsr     a
         lsr     a
@@ -5659,7 +5659,7 @@ ending_scene_oam_loop:  clc
 ; Ending Set Sky Palette — sky color based on scene index
 ; =============================================================================
 ending_set_sky_palette:  ldx     ent_anim_id
-        lda     $FF
+        lda     general_ptr_hi
         and     #$01
         bne     ending_sky_pal_index
         inx
@@ -5681,7 +5681,7 @@ ending_sky_pal_copy:  lda     ending_sky_color_table,x
 ; =============================================================================
 ending_set_ground_palette:  ldx     ent_anim_id
         beq     ending_ground_pal_rts
-        lda     $FF
+        lda     general_ptr_hi
         and     #$01
         beq     ending_ground_pal_index
         dex
@@ -5795,7 +5795,7 @@ stage_intro_clear_pal:  sta     palette_sprite,x
         sta     ent_type
         jsr     ending_player_render
         lda     #$05
-        sta     $FD
+        sta     general_counter
 stage_intro_fade_loop:  lda     frame_counter
         and     #$07
         bne     stage_intro_vblank
@@ -5803,7 +5803,7 @@ stage_intro_fade_loop:  lda     frame_counter
         ldy     #$3B
         lda     #$0F
         jsr     palette_inc_range
-        dec     $FD
+        dec     general_counter
         beq     stage_intro_draw_name
 stage_intro_vblank:  jsr     wait_for_vblank_0D
         jmp     stage_intro_fade_loop
@@ -5840,9 +5840,9 @@ stage_intro_draw_name:  jsr     weapon_get_wait_frame
 ; Stage Intro — Blink Name in Stage Colors
 ; =============================================================================
 stage_intro_blink_loop:  lda     #$9C
-        sta     $FD
+        sta     general_counter
 stage_intro_blink_frame:  ldx     #$00
-        lda     $FD
+        lda     general_counter
         and     #$01
         beq     stage_intro_set_colors
         ldx     current_stage
@@ -5857,7 +5857,7 @@ stage_intro_set_colors:  lda     stage_intro_pal_lo,x
         sta     palette_sprite + $03
         sta     palette_sprite + $0B
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     stage_intro_blink_frame
         ldx     current_stage
         lda     $C281,x
@@ -5881,7 +5881,7 @@ stage_intro_cursor_load:  lda     stage_intro_cursor_oam,x
         lda     #$30
         sta     palette_sprite + $0E
         lda     #$00
-        sta     $FD
+        sta     general_counter
 stage_intro_select_loop:  ldx     $FD
         lda     stage_intro_cursor_y,x
         sta     oam_buffer + $FC
@@ -5897,9 +5897,9 @@ stage_intro_check_input:  lda     p1_new_presses
         bne     stage_intro_start
         lda     #$2F
         jsr     bank_switch_enqueue
-        lda     $FD
+        lda     general_counter
         eor     #$01
-        sta     $FD
+        sta     general_counter
 stage_intro_no_input:  jsr     wait_for_vblank_0D
         jmp     stage_intro_select_loop
 
@@ -5918,7 +5918,7 @@ stage_intro_save_pal_loop:  lda     palette_ram,x
         jsr     password_show_grid
         jsr     ending_player_render
         lda     #$05
-        sta     $FD
+        sta     general_counter
 stage_intro_restore_loop:  lda     frame_counter
         and     #$03
         bne     stage_intro_restore_frame
@@ -5939,7 +5939,7 @@ stage_intro_restore_add:  clc
 stage_intro_restore_store:  sta     palette_ram,x
 stage_intro_restore_next:  dex
         bpl     stage_intro_restore_inner
-        dec     $FD
+        dec     general_counter
         beq     stage_intro_restore_done
 stage_intro_restore_frame:  jsr     wait_for_vblank_0D
         jmp     stage_intro_restore_loop
@@ -5966,15 +5966,15 @@ weapon_get_load_pal:  lda     weapon_get_extra_pal,x
         jsr     clear_oam_buffer
         jsr     weapon_get_clear_nt
         lda     #$7D
-        sta     $FD
+        sta     general_counter
 weapon_get_blink_loop:  ldx     #$0F
-        lda     $FD
+        lda     general_counter
         and     #$08                    ; Blink every 8 frames
         beq     weapon_get_set_blink
         ldx     #$15
 weapon_get_set_blink:  stx     palette_sprite
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     weapon_get_blink_loop
         lda     #$07
         sta     ent_type
@@ -6016,9 +6016,9 @@ weapon_get_set_blink:  stx     palette_sprite
         adc     #$0F
         jsr     weapon_get_text_upload
         lda     #$7D
-        sta     $FD
+        sta     general_counter
 weapon_get_show_loop:  ldx     #$12
-        lda     $FD
+        lda     general_counter
         and     #$01
         bne     weapon_get_set_colors
         ldx     current_stage
@@ -6033,7 +6033,7 @@ weapon_get_set_colors:  lda     stage_intro_pal_lo,x
         sta     palette_sprite + $03
         sta     palette_sprite + $0B
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     weapon_get_show_loop
         rts
 
@@ -6069,36 +6069,36 @@ weapon_get_text_upload:  sty     temp_00
         tay
         lda     #$00
         adc     #$00
-        sta     $C8
+        sta     indirect_page
         lda     #$1A
-        sta     $C9
+        sta     indirect_ptr_lo
         lda     #$BE
         clc
-        adc     $C8
-        sta     $CA
+        adc     indirect_page
+        sta     indirect_ptr_hi
         lda     ($C9),y
         sta     col_update_addr_hi
         tya
         clc
         adc     #$01
         tay
-        lda     $CA
+        lda     indirect_ptr_hi
         adc     #$00
-        sta     $CA
+        sta     indirect_ptr_hi
         lda     ($C9),y
         sta     col_update_addr_lo
         tya
         clc
         adc     #$01
         tay
-        lda     $CA
+        lda     indirect_ptr_hi
         adc     #$00
-        sta     $CA
-        sty     $FE
+        sta     indirect_ptr_hi
+        sty     general_ptr_lo
         lda     #$0E
-        sta     $FD
+        sta     general_counter
 weapon_get_text_inner:  jsr     weapon_get_wait_frame
-        ldy     $FE
+        ldy     general_ptr_lo
         cpy     #$F7                    ; Special marker: use item tile
         bne     weapon_get_text_byte
         lda     ent_flags
@@ -6107,14 +6107,14 @@ weapon_get_text_byte:  lda     ($C9),y
 weapon_get_text_store:  sta     col_update_tiles
         inc     col_update_count
         inc     col_update_addr_lo
-        lda     $FE
+        lda     general_ptr_lo
         clc
         adc     #$01
-        sta     $FE
-        lda     $CA
+        sta     general_ptr_lo
+        lda     indirect_ptr_hi
         adc     #$00
-        sta     $CA
-        dec     $FD
+        sta     indirect_ptr_hi
+        dec     general_counter
         bne     weapon_get_text_inner
         ldy     temp_00
         jsr     wait_for_vblank_0D
@@ -6124,9 +6124,9 @@ weapon_get_text_store:  sta     col_update_tiles
 ; Weapon Get Long Wait — 125-frame delay
 ; =============================================================================
 weapon_get_long_wait:  lda     #$7D
-        sta     $FD
+        sta     general_counter
 weapon_get_wait_loop:  jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bne     weapon_get_wait_loop
         rts
 
@@ -6139,7 +6139,7 @@ weapon_get_clear_loop:  sta     col_update_tiles,x
         dex
         bpl     weapon_get_clear_loop
         lda     #$09
-        sta     $FD
+        sta     general_counter
         lda     #$24
         sta     col_update_addr_hi
         lda     #$AB
@@ -6154,7 +6154,7 @@ weapon_get_clear_cols:  clc
         lda     #$0F
         sta     col_update_count
         jsr     wait_for_vblank_0D
-        dec     $FD
+        dec     general_counter
         bpl     weapon_get_clear_cols
         rts
 
@@ -6214,14 +6214,14 @@ weapon_name_data:  pha
         .byte   $EB,$49,$54,$45,$4D,$94,$40,$40
         .byte   $40,$40,$40,$40,$40,$40,$40,$25
         .byte   $8B,$40,$40,$49,$54
-        eor     $4D
-        sty     $A1,x
+        eor     spawn_scan_sec_fwd
+        sty     weapon_energy + 1,x
         rti
 
         .byte   $40,$40,$40,$40,$40,$25,$8B,$40
         .byte   $40,$49,$54
 weapon_name_data_2:  eor     $4D
-        sty     $A2,x
+        sty     weapon_energy + 2,x
         rti
 
         .byte   $40,$40,$40,$40,$40,$25,$8B,$40

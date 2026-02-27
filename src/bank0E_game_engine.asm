@@ -110,9 +110,9 @@ clear_ram_loop:  sta     (temp_00),y        ; zero out RAM page
 ; game_init -- Game Initialization — set up PPU, load stage data, fill palettes ($805F)
 ; =============================================================================
 game_init:  jsr     nametable_init      ; initialize nametable data
-        lda     $BE
+        lda     ending_state
         bne     game_init
-        lda     $9A
+        lda     beaten_bosses
         cmp     #$FF
         bne     game_init_set_scroll_bank
         lda     #$08
@@ -145,11 +145,11 @@ game_init_fill_timers:  sta     ent_child_hp,x
         dex
         bpl     game_init_fill_timers
         lda     #$00
-        sta     $BC
+        sta     boss_mode_flag
         lda     #$00
-        sta     $46
+        sta     palette_toggle_b
         lda     #$40
-        sta     $45
+        sta     palette_toggle_a
         lda     #$10
         sta     ppuctrl_shadow
         sta     PPUCTRL
@@ -168,15 +168,15 @@ game_init_fill_timers:  sta     ent_child_hp,x
         sta     scroll_x
         sta     scroll_subpixel
         sta     scroll_y
-        sta     $B5
+        sta     camera_y_sub
         sta     camera_y_offset
-        sta     $B7
+        sta     camera_x_sub
         sta     camera_x_offset
         sta     camera_x_offset_hi
         sta     ent_x_px
         sta     ent_x_sub
-        sta     $43
-        sta     $44
+        sta     palette_cycle_idx
+        sta     palette_cycle_timer
         sta     boss_phase
         lda     nametable_select
         jsr     render_full_nametable
@@ -197,9 +197,9 @@ game_init_fill_timers:  sta     ent_child_hp,x
         sta     PPUCTRL
         sta     vblank_done
         lda     #$40
-        sta     $30
+        sta     gravity_sub_lo
         lda     #$00
-        sta     $31
+        sta     gravity_sub_hi
         ldx     current_stage
         lda     stage_bank_table,x
         jsr     bank_switch_enqueue
@@ -209,10 +209,10 @@ game_init_copy_stage_sprites:  lda     stage_intro_oam_data,x
         dex
         bpl     game_init_copy_stage_sprites
         lda     #$C0
-        sta     $FD
+        sta     general_counter
 game_init_blink_loop:  ldy     #$60
         ldx     #$10
-        lda     $FD
+        lda     general_counter
         and     #$08
         bne     blink_sprite_store
         ldy     #$F8
@@ -224,13 +224,13 @@ blink_sprite_store:  tya
         dex
         bpl     blink_sprite_store
         jsr     wait_for_vblank
-        dec     $FD
+        dec     general_counter
         bne     game_init_blink_loop
         jsr     clear_oam_buffer
         lda     #$DF
-        sta     $3B
+        sta     player_jump_sub
         lda     #$04
-        sta     $3C
+        sta     player_jump_hi
         jsr     reset_entity_slots
         jsr     boss_entrance_setup
         lda     current_stage
@@ -260,13 +260,13 @@ main_loop_update_entities:  jsr     build_active_list ; scan entities within scr
         jsr     check_screen_transition
 main_loop_check_scroll:  lda     $FB
         beq     main_loop_wait_frame
-        inc     $FC
-        cmp     $FC
+        inc     frame_skip_hi
+        cmp     frame_skip_hi
         beq     main_loop_frame_skip
         bcs     main_loop_wait_frame
 main_loop_frame_skip:  jsr     wait_one_rendering_frame
         lda     #$00
-        sta     $FC
+        sta     frame_skip_hi
 main_loop_wait_frame:  jsr     wait_for_vblank ; wait for NMI
         jmp     main_game_loop
 
@@ -309,7 +309,7 @@ wily_spawn_gate_entities:  lda     $BC
 wily_spawn_gate_loop:  lda     #$00
         sta     current_entity_slot
         sta     temp_02
-        lda     $BC
+        lda     boss_mode_flag
         sta     temp_03
 wily_spawn_shift_flags:  lsr     temp_03
 wily_spawn_check_done:  bcs     wily_spawn_next_bit
@@ -348,13 +348,13 @@ wily_loop_update_entities:  jsr     build_active_list
         jsr     check_screen_transition
 wily_loop_check_scroll:  lda     $FB
         beq     wily_loop_wait_frame
-        inc     $FC
-        cmp     $FC
+        inc     frame_skip_hi
+        cmp     frame_skip_hi
         beq     wily_loop_frame_skip
         bcs     wily_loop_wait_frame
 wily_loop_frame_skip:  jsr     wait_one_rendering_frame
         lda     #$00
-        sta     $FC
+        sta     frame_skip_hi
 wily_loop_wait_frame:  jsr     wait_for_vblank ; wait for NMI
         jmp     wily_loop_main
 
@@ -422,11 +422,11 @@ scroll_right_mask_table:  .byte   $20,$80,$20,$40,$00 ; bitmask for right scroll
 ; item_collection_handler -- Item Collection Handler — dispatch item pickup via pointer table ($82D5)
 ; =============================================================================
 item_collection_handler:  sec
-        lda     $AD
+        lda     weapon_counter_3
         sbc     #$76
         tay
         lda     #$00
-        sta     $AD
+        sta     weapon_counter_3
         lda     item_handler_ptr_lo,y
         sta     jump_ptr
         lda     item_handler_ptr_hi,y
@@ -439,7 +439,7 @@ health_refill_large:
 health_refill_small:
         lda     #$02              ; small pickup: 2 ticks
 health_refill_set:
-        sta     $FD
+        sta     general_counter
         lda     ent_hp
         cmp     #MAX_HP
         bcs     health_refill_full_rts
@@ -452,7 +452,7 @@ health_refill_loop:  ldx     current_weapon
         lda     frame_counter
         and     #$07
         bne     health_refill_render
-        dec     $FD
+        dec     general_counter
         bmi     health_refill_done_jmp
         inc     ent_hp
         lda     #$28
@@ -471,25 +471,25 @@ weapon_refill_large:
 weapon_refill_small:
         lda     #$02              ; small pickup: 2 ticks
 weapon_refill_set:
-        sta     $FD
+        sta     general_counter
         lda     current_weapon
         beq     refill_exit
         ldx     current_weapon
-        lda     $9B,x
+        lda     beaten_bosses_hi,x
         cmp     #MAX_HP
         beq     refill_exit
         lda     #$07
         sta     game_mode
 weapon_refill_loop:  ldx     current_weapon
-        lda     $9B,x
+        lda     beaten_bosses_hi,x
         cmp     #MAX_HP                    ; $1C = max energy (28)
         bcs     refill_complete
         lda     frame_counter
         and     #$07
         bne     weapon_refill_render
-        dec     $FD
+        dec     general_counter
         bmi     refill_complete
-        inc     $9B,x
+        inc     beaten_bosses_hi,x
         lda     #$28
         jsr     bank_switch_enqueue
 weapon_refill_render:  jsr     render_all_sprites
@@ -497,7 +497,7 @@ weapon_refill_render:  jsr     render_all_sprites
         jmp     weapon_refill_loop
 
 refill_complete:  lda     #$00
-        sta     $FD
+        sta     general_counter
         sta     game_mode
         lda     #$03
         sta     game_substate
@@ -526,17 +526,17 @@ extra_life_done:
 
         jsr     wily_teleport_sequence
         lda     #$00
-        sta     $FD
-        ldx     $BA
+        sta     general_counter
+        ldx     wily_stage_index
         lda     wily_door_bank_table,x
-        sta     $FE
+        sta     general_ptr_lo
         dex
         stx     current_stage
         jsr     wait_screen_fade
         lda     #$0C
         sta     current_stage
         ldx     #$05
-        lda     $BA
+        lda     wily_stage_index
         cmp     #$04
         bne     wily_door_transition
         ldx     #$02
@@ -553,7 +553,7 @@ wily_door_transition:  jsr     set_palette_colors
         jsr     reset_player_state
         lda     #$0B
         jsr     bank_switch_enqueue
-        lda     $BA
+        lda     wily_stage_index
         sta     boss_id
         dec     boss_id
         jsr     boss_wily_entrance
@@ -581,14 +581,14 @@ wily_teleport_done:  lda     #$00
 reset_player_state:  lda     #$C0
         sta     ent_flags
         lda     #$00
-        sta     $36
+        sta     general_timer
         sta     game_substate
         jsr     weapon_set_base_type
         rts
 
 wait_screen_fade:  jsr     scroll_column_render
         jsr     wait_for_vblank
-        lda     $FD
+        lda     general_counter
         cmp     #$60
         bne     wait_screen_fade
         rts
@@ -596,15 +596,15 @@ wait_screen_fade:  jsr     scroll_column_render
 wily_gate_mark_beaten:
         jsr     wily_teleport_sequence
         ldx     boss_id
-        lda     $BC               ; boss beaten bitmask
+        lda     boss_mode_flag               ; boss beaten bitmask
         ora     boss_beaten_mask_lo,x
-        sta     $BC
+        sta     boss_mode_flag
         cmp     #$FF              ; all bosses beaten?
         bne     wily_fade_reverse
         lda     #$00
-        sta     $FD
+        sta     general_counter
         lda     #$14
-        sta     $FE
+        sta     general_ptr_lo
         jsr     wait_screen_fade
         lda     #$28
         jsr     render_full_nametable
@@ -661,9 +661,9 @@ palette_color_data:                      ; NES palette indices (PPU $3F00 values
         sta     scroll_screen_lo
         sta     scroll_screen_hi
         lda     #$00
-        sta     $FD
+        sta     general_counter
         lda     #$15
-        sta     $FE
+        sta     general_ptr_lo
         jsr     wait_screen_fade
         lda     #$2A
         jsr     render_full_nametable
@@ -716,15 +716,15 @@ entity_dispatch_setup:  lda     #$00
         lda     ent_x_screen
         sta     jump_ptr_hi
         lda     ent_y_px
-        sta     $0A
+        sta     temp_0A
         lda     #$00
-        sta     $0B
+        sta     temp_0B
         jsr     lookup_tile_from_map
         lda     temp_00
         cmp     #$04
         bne     player_state_rts
         lda     #$04
-        sta     $FB
+        sta     frame_skip_lo
 player_state_rts:  rts
 
         rts
@@ -732,7 +732,7 @@ player_state_gun_update:
         lda     ent_flags             ; player entity flags
         and     #$40              ; check flip bit
         eor     #$40              ; toggle
-        sta     $42
+        sta     scroll_dir_flags
         jsr     player_horiz_movement
         jsr     player_vertical_physics
         lda     ent_anim_id
@@ -768,9 +768,9 @@ player_state_skip_facing:
 player_state_common_exit:  lda     p1_new_presses
         and     #$01
         beq     player_state_set_weapon
-        lda     $3B
+        lda     player_jump_sub
         sta     ent_y_vel_sub
-        lda     $3C
+        lda     player_jump_hi
         sta     ent_y_vel
         lda     #$06
         sta     game_substate
@@ -824,30 +824,30 @@ player_state_check_dir:  jmp     player_state_common_exit
         lda     controller_1               ; controller input
         and     #$C0
         bne     player_state_update_face
-        lda     $3E
-        ora     $3F
+        lda     max_speed_sub
+        ora     max_speed_hi
         bne     player_state_decel_speed
-        lda     $40
+        lda     conveyor_type
         and     #$0F
         beq     player_state_run_movement
         jsr     player_handle_conveyor
         jmp     player_state_run_movement
 
 player_state_decel_speed:  sec
-        lda     $3E
+        lda     max_speed_sub
         sbc     #$80
-        sta     $3E
+        sta     max_speed_sub
         tax
-        lda     $3F
+        lda     max_speed_hi
         sbc     #$00
-        sta     $3F
+        sta     max_speed_hi
         bmi     player_state_speed_zero
         bne     player_state_run_movement
         cpx     #$80
         bcs     player_state_run_movement
 player_state_speed_zero:  lda     #$00
-        sta     $3E
-        sta     $3F
+        sta     max_speed_sub
+        sta     max_speed_hi
         beq     player_state_run_movement
 player_state_update_face:  jsr     player_update_facing
         jsr     player_set_max_speed
@@ -917,7 +917,7 @@ player_state_ladder_idle:  lda     #$09
         jmp     player_ladder_fire_weapon
 
 player_ladder_clear_ab:  lda     #$00
-        sta     $AB
+        sta     weapon_counter_1
 player_ladder_check_input:  lda     controller_1
         and     #$31
         bne     player_ladder_check_updown
@@ -929,7 +929,7 @@ player_ladder_check_updown:  and     #$30
         beq     player_ladder_move_down
         ldy     #$00
         ldx     #$C0
-        lda     $35
+        lda     is_on_ground
         and     #$0C
         bne     player_ladder_check_left
         lda     ent_y_px
@@ -937,9 +937,9 @@ player_ladder_check_updown:  and     #$30
         sec
         sbc     #$0C
         sta     ent_y_px
-        lda     $F9
+        lda     boss_fight_flag
         sbc     #$00
-        sta     $F9
+        sta     boss_fight_flag
         ldx     #$03
         jmp     player_ladder_set_state
 
@@ -955,12 +955,12 @@ player_ladder_move_down:  lda     $35
         clc
         adc     #$0C
         sta     ent_y_px
-        lda     $F9
+        lda     boss_fight_flag
         adc     #$00
-        sta     $F9
+        sta     boss_fight_flag
 player_ladder_set_vel:  ldy     #$FF
         ldx     #$40
-        lda     $35
+        lda     is_on_ground
         and     #$0C
         bne     player_ladder_check_solid
         lda     #$0A
@@ -972,7 +972,7 @@ player_ladder_check_solid:  lda     $3D
 player_ladder_store_vel:  sty     ent_y_vel
         stx     ent_y_vel_sub
         jsr     player_ground_collision
-        lda     $35
+        lda     is_on_ground
         beq     player_ladder_to_idle
         jsr     player_vertical_physics
         lda     temp_00
@@ -982,7 +982,7 @@ player_ladder_store_vel:  sty     ent_y_vel
 player_ladder_to_idle:  ldx     #$06
 player_ladder_set_state:  stx     game_substate
         lda     #$00
-        sta     $35
+        sta     is_on_ground
         lda     #$C0
         sta     ent_y_vel_sub
         lda     #$FF
@@ -1024,7 +1024,7 @@ player_check_fire_weapon:  lda     controller_1
         and     #$02
         bne     player_fire_weapon
         lda     #$00
-        sta     $AB
+        sta     weapon_counter_1
         beq     player_check_ladder_rts
 player_fire_weapon:  jsr     fire_weapon_dispatch ; call weapon fire handler
 player_check_ladder_rts:  lda     $35
@@ -1034,18 +1034,18 @@ player_fire_rts:  rts
 player_check_ladder_snap:  lda     controller_1
         and     #$30
         beq     player_fire_rts
-        ora     $35
+        ora     is_on_ground
         cmp     #$11
         beq     player_fire_rts
         cmp     #$2E
         beq     player_fire_rts
         lda     ent_x_px
-        sta     $2E
+        sta     current_ent_x
         and     #$F0
         ora     #$08
         sec
         sta     ent_x_px
-        sbc     $2E
+        sbc     current_ent_x
         bcc     player_snap_left
         sta     temp_00
         jsr     scroll_right_handler
@@ -1088,7 +1088,7 @@ player_set_max_speed:  ldx     game_substate      ; player state index for speed
         sta     ent_x_vel
         lda     max_speed_lo_table,x
         sta     ent_x_vel_sub
-        lda     $3D
+        lda     weapon_fire_dir
         cmp     #$03
         bne     player_check_accel_start
         lda     game_substate
@@ -1099,13 +1099,13 @@ player_set_max_speed:  ldx     game_substate      ; player state index for speed
         sta     ent_x_vel
 player_check_accel_start:  lda     $40
         bmi     player_check_facing_change
-        lda     $3E
-        ora     $3F
+        lda     max_speed_sub
+        ora     max_speed_hi
         beq     player_handle_conveyor
         bne     player_decelerate
 player_check_facing_change:  lda     ent_flags
         and     #$40
-        cmp     $42
+        cmp     scroll_dir_flags
         beq     player_accelerate
 player_decelerate:  ldx     #$00
         lda     game_substate
@@ -1117,40 +1117,40 @@ player_decelerate:  ldx     #$00
         beq     player_apply_decel
         inx
 player_apply_decel:  sec
-        lda     $3E
+        lda     max_speed_sub
         sbc     decel_rate_table,x
-        sta     $3E
+        sta     max_speed_sub
         tax
-        lda     $3F
+        lda     max_speed_hi
         sbc     #$00
-        sta     $3F
+        sta     max_speed_hi
         bmi     player_speed_zero
         bne     player_store_max_speed
         cpx     #$80
         bcs     player_store_max_speed
 player_speed_zero:  lda     #$00
-        sta     $3E
-        sta     $3F
+        sta     max_speed_sub
+        sta     max_speed_hi
         beq     player_set_face_dir
 player_store_max_speed:  lda     $3E
         sta     ent_x_vel_sub
-        lda     $3F
+        lda     max_speed_hi
         sta     ent_x_vel
         jmp     player_handle_conveyor
 
 player_accelerate:  sec
         lda     ent_x_vel_sub
-        sbc     $3E
+        sbc     max_speed_sub
         lda     ent_x_vel
-        sbc     $3F
+        sbc     max_speed_hi
         bcc     player_decelerate
         lda     ent_x_vel_sub
-        sta     $3E
+        sta     max_speed_sub
         lda     ent_x_vel
-        sta     $3F
+        sta     max_speed_hi
 player_set_face_dir:  lda     ent_flags
         and     #$40
-        sta     $42
+        sta     scroll_dir_flags
 player_handle_conveyor:  lda     $40
         bpl     player_conveyor_check
         rts
@@ -1159,19 +1159,19 @@ player_conveyor_check:  and     #$0F
         beq     player_no_conveyor
         lda     ent_flags
         and     #$40
-        cmp     $AF
+        cmp     platform_facing
         beq     player_conveyor_forward
         sec
         lda     ent_x_vel_sub
-        sbc     $4F
+        sbc     scroll_lock_lo
         sta     ent_x_vel_sub
         lda     ent_x_vel
-        sbc     $50
+        sbc     scroll_lock_hi
         sta     ent_x_vel
         bcc     player_conveyor_reverse
         lda     ent_flags
         and     #$40
-        sta     $42
+        sta     scroll_dir_flags
         rts
 
 player_conveyor_reverse:  lda     ent_x_vel_sub
@@ -1182,29 +1182,29 @@ player_conveyor_reverse:  lda     ent_x_vel_sub
         eor     #$FF
         adc     #$00
         sta     ent_x_vel
-        lda     $AF
-        sta     $42
+        lda     platform_facing
+        sta     scroll_dir_flags
         rts
 
 player_conveyor_forward:  clc
         lda     ent_x_vel_sub
-        adc     $4F
+        adc     scroll_lock_lo
         sta     ent_x_vel_sub
         lda     ent_x_vel
-        adc     $50
+        adc     scroll_lock_hi
         sta     ent_x_vel
-        lda     $AF
-        sta     $42
+        lda     platform_facing
+        sta     scroll_dir_flags
         rts
 
 player_no_conveyor:  lda     $3F
-        ora     $3E
+        ora     max_speed_sub
         beq     player_conveyor_idle
         rts
 
 player_conveyor_idle:  lda     ent_flags
         and     #$40
-        sta     $42
+        sta     scroll_dir_flags
         rts
 
 decel_rate_table:  .byte   $80,$02,$04  ; deceleration rate per state
@@ -1218,14 +1218,14 @@ max_speed_lo_table:  .byte   $00,$00,$90,$00 ; max speed low byte per state
 ; player_horiz_movement -- Player Horizontal Movement — X position update with scroll ($8922)
 ; =============================================================================
 player_horiz_movement:  ldx     ent_x_screen
-        stx     $2D
+        stx     player_screen_x
         ldy     ent_x_px
-        sty     $2E
+        sty     current_ent_x
         lda     ent_x_sub
-        sta     $2F
+        sta     offscreen_flag
         lda     #$00
         sta     temp_00
-        lda     $42
+        lda     scroll_dir_flags
         and     #$40
         beq     player_move_left_check
         cpx     scroll_screen_hi
@@ -1270,7 +1270,7 @@ player_move_right:  clc
         sta     ent_x_screen
 player_right_check_delta:  sec
         lda     ent_x_px
-        sbc     $2E
+        sbc     current_ent_x
         sta     temp_00
         bpl     player_scroll_right
         clc
@@ -1317,7 +1317,7 @@ player_move_left:  sec
         adc     #$00
         sta     ent_x_screen
 player_left_check_delta:  sec
-        lda     $2E
+        lda     current_ent_x
         sbc     ent_x_px
         sta     temp_00
         bpl     player_scroll_left
@@ -1339,14 +1339,14 @@ tile_check_loop:  ldx     temp_01
         clc
         lda     ent_y_px
         adc     tile_y_offset_table,x
-        sta     $0A
-        lda     $F9
+        sta     temp_0A
+        lda     boss_fight_flag
         adc     tile_y_page_table,x
-        sta     $0B
+        sta     temp_0B
         jsr     lookup_cached_tile
         ldx     temp_01
         lda     temp_00
-        sta     $32,x
+        sta     floor_tile_type,x
         dec     temp_01
         bpl     tile_check_loop
         lda     #$00
@@ -1394,14 +1394,14 @@ ground_tile_loop:  ldx     temp_01
         clc
         lda     ent_y_px
         adc     tile_y_offset_table,x
-        sta     $0A
-        lda     $F9
+        sta     temp_0A
+        lda     boss_fight_flag
         adc     tile_y_page_table,x
-        sta     $0B
+        sta     temp_0B
         jsr     lookup_tile_from_map
         ldx     temp_01
         lda     temp_00
-        sta     $32,x
+        sta     floor_tile_type,x
         dec     temp_01
         bpl     ground_tile_loop
         ldx     #$00
@@ -1413,7 +1413,7 @@ ground_tile_loop:  ldx     temp_01
 ground_check_lava:  lda     $33
         cmp     #$04
         bne     ground_store_params
-        lda     $FB
+        lda     frame_skip_lo
         bne     ground_spawn_item
         lda     ent_y_vel
         bpl     ground_spawn_item
@@ -1430,14 +1430,14 @@ ground_check_lava:  lda     $33
         and     #$F0
         sta     ent_y_px + $0E
 ground_spawn_item:  inc     $39
-        lda     $39
+        lda     column_attr_byte
         cmp     #$60
         bcc     ground_set_params
         beq     ground_spawn_random_item
         cmp     #$80
         bcc     ground_set_params
         lda     #$00
-        sta     $39
+        sta     column_attr_byte
 ground_spawn_random_item:  lda     $F9
         bne     ground_set_params
         stx     current_entity_slot
@@ -1450,15 +1450,15 @@ ground_spawn_random_item:  lda     $F9
 ground_set_params:  ldx     #$00
         inx
 ground_store_params:  lda     gravity_hi_table,x
-        sta     $30
+        sta     gravity_sub_lo
         lda     frame_skip_table,x
-        sta     $FB
+        sta     frame_skip_lo
         lda     scroll_speed_table,x
-        sta     $3C
+        sta     player_jump_hi
         lda     player_bounds_table,x
-        sta     $3B
+        sta     player_jump_sub
         lda     #$00
-        sta     $35
+        sta     is_on_ground
         lda     #$02
         sta     temp_01
         ldx     #$02
@@ -1466,8 +1466,8 @@ ground_calc_platform_dir:  lda     $32,x
         cmp     #$02
         bne     ground_shift_platform
         lda     temp_01
-        ora     $35
-        sta     $35
+        ora     is_on_ground
+        sta     is_on_ground
 ground_shift_platform:  asl     temp_01
         dex
         bpl     ground_calc_platform_dir
@@ -1480,15 +1480,15 @@ ground_shift_platform:  asl     temp_01
         bmi     ground_check_above
         sec
         sbc     #$0C
-        sta     $0A
-        lda     $F9
+        sta     temp_0A
+        lda     boss_fight_flag
         sbc     #$00
         jmp     ground_store_above
 
 ground_check_above:  clc
         adc     #$0C
-        sta     $0A
-        lda     $F9
+        sta     temp_0A
+        lda     boss_fight_flag
         adc     #$00
 ground_store_above:  sta     $0B
         jsr     lookup_tile_from_map
@@ -1501,16 +1501,16 @@ ground_store_above:  sta     $0B
         bne     ground_store_dir
 ground_above_left:  lda     #$01
 ground_store_dir:  ora     $35
-        sta     $35
+        sta     is_on_ground
 ground_collision_rts:  rts
 
 ; =============================================================================
 ; player_vertical_physics -- Player Vertical Physics — gravity, fall limit, ceiling snap ($8B83)
 ; =============================================================================
 player_vertical_physics:  lda     ent_y_px
-        sta     $2E
+        sta     current_ent_x
         lda     ent_y_sub
-        sta     $2F
+        sta     offscreen_flag
         lda     #$00
         sta     temp_00
         lda     ent_y_vel
@@ -1524,9 +1524,9 @@ player_apply_gravity:  sec
         sbc     ent_y_vel
         sta     ent_y_px
         tax
-        lda     $F9
+        lda     boss_fight_flag
         sbc     temp_00
-        sta     $F9
+        sta     boss_fight_flag
         cpx     #$04
         bcs     player_check_fall_limit
         lda     game_substate
@@ -1539,7 +1539,7 @@ player_set_scroll_trigger:  lda     #$01
         bne     player_gravity_falling
 player_check_fall_limit:  cpx     #$E8
         bcc     player_gravity_falling
-        lda     $F9
+        lda     boss_fight_flag
         bmi     player_gravity_falling
         lda     #$03
         sta     transition_type
@@ -1548,16 +1548,16 @@ player_gravity_falling:  lda     ent_y_vel
         sec
         lda     ent_y_px
         sbc     #$0C
-        sta     $0A
-        lda     $F9
+        sta     temp_0A
+        lda     boss_fight_flag
         sbc     #$00
-        sta     $0B
+        sta     temp_0B
         jsr     player_floor_tile_check
         lda     temp_00
         beq     player_apply_gravity_sub
         lda     #$00
         sta     ent_y_sub
-        lda     $0A
+        lda     temp_0A
         and     #$0F
         eor     #$0F
         sec
@@ -1568,10 +1568,10 @@ player_gravity_stop:  lda     #$00
         sta     ent_y_vel
 player_apply_gravity_sub:  sec
         lda     ent_y_vel_sub
-        sbc     $30
+        sbc     gravity_sub_lo
         sta     ent_y_vel_sub
         lda     ent_y_vel
-        sbc     $31
+        sbc     gravity_sub_hi
         sta     ent_y_vel
         bpl     player_gravity_rts
         cmp     #$F4
@@ -1585,10 +1585,10 @@ player_gravity_rts:  rts
 player_gravity_rising:  clc
         lda     ent_y_px
         adc     #$0C
-        sta     $0A
-        lda     $F9
+        sta     temp_0A
+        lda     boss_fight_flag
         adc     #$00
-        sta     $0B
+        sta     temp_0B
         jsr     player_floor_tile_check
         jsr     check_platform_collision
         lda     temp_00
@@ -1599,16 +1599,16 @@ player_ceiling_snap:  lda     #$00
         sta     ent_y_sub
         lda     ent_y_px
         pha
-        lda     $0A
+        lda     temp_0A
         and     #$0F
         sta     ent_y_px
         pla
         sec
         sbc     ent_y_px
         sta     ent_y_px
-        lda     $F9
+        lda     boss_fight_flag
         sbc     #$00
-        sta     $F9
+        sta     boss_fight_flag
         jmp     player_gravity_stop
 
 player_ceiling_set_flag:  lda     #$01
@@ -1631,11 +1631,11 @@ floor_tile_loop:  ldx     temp_01
         jsr     lookup_cached_tile
         ldx     temp_01
         lda     temp_00
-        sta     $32,x
+        sta     floor_tile_type,x
         dec     temp_01
         bpl     floor_tile_loop
         lda     #$00
-        sta     $40
+        sta     conveyor_type
         ldx     #$01
 floor_tile_eval:  lda     $32,x
         cmp     #$08
@@ -1645,15 +1645,15 @@ floor_tile_eval:  lda     $32,x
         sbc     #$05
         tay
         lda     floor_conveyor_type_table,y
-        sta     $40
+        sta     conveyor_type
         bmi     floor_set_solid
         tay
-        lda     $44,y
-        sta     $AF
+        lda     palette_cycle_timer,y
+        sta     platform_facing
         lda     #$01
-        sta     $50
+        sta     scroll_lock_hi
         lda     #$00
-        sta     $4F
+        sta     scroll_lock_lo
 floor_set_solid:  lda     #$01
         bne     floor_store_result
 floor_check_spike:  cmp     #$03
@@ -1666,15 +1666,15 @@ floor_check_spike:  cmp     #$03
 
 floor_check_done:  dex
         bpl     floor_tile_eval
-        lda     $32
-        ora     $33
+        lda     floor_tile_type
+        ora     floor_collision_result
         and     #$01
 floor_store_result:  sta     temp_00
-        lda     $35
+        lda     is_on_ground
         beq     floor_tile_rts
         cmp     #$01
         beq     floor_set_scroll_trigger
-        ldx     $F9
+        ldx     boss_fight_flag
         bpl     floor_tile_rts
         lda     controller_1
         and     #$30
@@ -1696,7 +1696,7 @@ check_platform_collision:  sec
         sbc     scroll_x
         sta     jump_ptr
         clc
-        lda     $2E
+        lda     current_ent_x
         adc     #$0C
         sta     jump_ptr_hi
         lda     current_weapon
@@ -1721,7 +1721,7 @@ platform_check_y:  lda     $F9
         sec
         lda     ent_x_spawn_px,x
         sbc     scroll_x
-        sta     $0C
+        sta     temp_0C
         sec
         sbc     jump_ptr
         bcs     platform_check_range
@@ -1733,7 +1733,7 @@ platform_check_range:  cmp     ent_plat_y,x
         cmp     jump_ptr_hi
         bcc     platform_skip_primary
         lda     ent_plat_type,x
-        cmp     $0A
+        cmp     temp_0A
         beq     platform_check_type
         bcs     platform_skip_primary
 platform_check_type:  lda     ent_spawn_type,x
@@ -1744,23 +1744,23 @@ platform_land_on:  sec
         lda     ent_plat_type,x
         sbc     #$0C
         sta     ent_y_px
-        lda     $F9
+        lda     boss_fight_flag
         sbc     #$00
-        sta     $F9
+        sta     boss_fight_flag
         lda     #$00
         sta     ent_y_sub
         sta     ent_y_vel_sub
         lda     #$FF
         sta     ent_y_vel
         lda     #$01
-        sta     $40
+        sta     conveyor_type
         lda     ent_spawn_flags,x
         and     #$40
-        sta     $AF
+        sta     platform_facing
         lda     ent_hitbox_w_hi,x
-        sta     $4F
+        sta     scroll_lock_lo
         lda     ent_hitbox_w_lo,x
-        sta     $50
+        sta     scroll_lock_hi
         sec
         rts
 
@@ -1769,7 +1769,7 @@ platform_check_secondary:  lda     $F9
         sec
         lda     ent_x_px + $02,x
         sbc     scroll_x
-        sta     $0C
+        sta     temp_0C
         sec
         sbc     jump_ptr
         bcs     platform_sec_check_range
@@ -1781,7 +1781,7 @@ platform_sec_check_range:  cmp     ent_hitbox_width + $02,x
         cmp     jump_ptr_hi
         bcc     platform_not_found
         lda     ent_hitbox_width + $05,x
-        cmp     $0A
+        cmp     temp_0A
         beq     platform_sec_check_type
         bcs     platform_not_found
 platform_sec_check_type:  lda     ent_type + $02,x
@@ -1794,23 +1794,23 @@ platform_sec_land_on:  sec
         lda     ent_hitbox_width + $05,x
         sbc     #$0C
         sta     ent_y_px
-        lda     $F9
+        lda     boss_fight_flag
         sbc     #$00
-        sta     $F9
+        sta     boss_fight_flag
         lda     #$00
         sta     ent_y_sub
         sta     ent_y_vel_sub
         lda     #$FF
         sta     ent_y_vel
         lda     #$01
-        sta     $40
+        sta     conveyor_type
         lda     ent_flags + $02,x
         and     #$40
-        sta     $AF
+        sta     platform_facing
         lda     ent_x_vel_sub + $02,x
-        sta     $4F
+        sta     scroll_lock_lo
         lda     ent_x_vel + $02,x
-        sta     $50
+        sta     scroll_lock_hi
         sec
         rts
 
@@ -1991,7 +1991,7 @@ transition_screen_left:  jsr     reset_entity_slots ; clear all entities for new
         jsr     render_full_nametable   ; render destination nametable (off-screen)
         dec     ent_x_screen            ; player shifts one screen left
         lda     current_screen
-        sta     $FE
+        sta     general_ptr_lo
         jsr     transition_scroll_setup ; execute smooth scroll animation
         dec     nametable_select
         sec
@@ -2014,9 +2014,9 @@ transition_screen_left:  jsr     reset_entity_slots ; clear all entities for new
         sbc     #$01
         jsr     render_full_nametable   ; render adjacent nametable
         lda     #$00
-        sta     $F9
+        sta     boss_fight_flag
         lda     #$00
-        sta     $42
+        sta     scroll_dir_flags
         jsr     entity_spawn_scan       ; repopulate enemies for new room
         rts
 
@@ -2041,14 +2041,14 @@ transition_screen_right:  jsr     reset_entity_slots ; clear all entities for ne
         and     #$01                    ; bit 0 set = vertical transition (skip attr fill)
         bne     transition_right_scroll
         lda     #$18                    ; 25 columns to pre-render attributes ($00-$18)
-        sta     $FD
+        sta     general_counter
         lda     #$00
-        sta     $FE
+        sta     general_ptr_lo
 transition_right_attr_loop:  ldx     current_stage
         lda     nametable_select
         cmp     stage_min_screen_table,x ; skip attr fill if before stage start
         bcc     transition_right_scroll
-        lda     $FD
+        lda     general_counter
         and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_attr_step
         lda     #$34
@@ -2057,23 +2057,23 @@ transition_right_attr_loop:  ldx     current_stage
         sta     jump_ptr_hi
         lda     #$F0
         sta     jump_ptr
-        lda     $FD
+        lda     general_counter
         asl     a
         adc     stage_attr_base_table,x ; compute attribute table offset
-        sta     $0A
+        sta     temp_0A
         jsr     metatile_render
         jsr     metatile_attr_update
         lda     #$80
         sta     attr_update_mode                     ; attr_update_mode = read-modify-write
         inc     attr_update_count                     ; queue attribute PPU write
 transition_right_attr_step:  jsr     wait_for_vblank ; let NMI process queued PPU writes
-        dec     $FD
+        dec     general_counter
         bpl     transition_right_attr_loop
         lda     #$FE
         jsr     bank_switch_enqueue     ; restore bank
 transition_right_scroll:  lda     current_screen
-        sta     $FE
-        inc     $FE                     ; $FE = destination screen index
+        sta     general_ptr_lo
+        inc     general_ptr_lo                     ; $FE = destination screen index
         jsr     transition_scroll_setup ; execute smooth scroll animation
         inc     nametable_select
         jsr     wait_for_vblank
@@ -2108,13 +2108,13 @@ transition_right_scroll:  lda     current_screen
         adc     #$00
         sta     metatile_ptr_hi
         lda     #$00
-        sta     $F9
+        sta     boss_fight_flag
         lda     transition_type
         and     #$01                    ; vertical transition? skip post-fill
         bne     transition_right_done
         lda     #$00                    ; post-scroll attribute fill for destination
-        sta     $FD
-        sta     $FE
+        sta     general_counter
+        sta     general_ptr_lo
 transition_right_col_loop:  ldx     current_stage
         lda     nametable_select
         cmp     stage_min_screen_table,x
@@ -2137,10 +2137,10 @@ transition_right_col_step:  lda     $FD
         sta     jump_ptr_hi
         lda     #$00
         sta     jump_ptr
-        lda     $FD
+        lda     general_counter
         asl     a
         adc     stage_attr_base_table,x
-        sta     $0A
+        sta     temp_0A
         jsr     metatile_render
         ldx     current_stage
         lda     stage_attr_mode_table,x
@@ -2148,14 +2148,14 @@ transition_right_col_step:  lda     $FD
         inc     attr_update_mode                     ; queue attribute update
         inc     attr_update_count
 transition_right_wait_frame:  jsr     wait_for_vblank
-        inc     $FD
-        lda     $FD
+        inc     general_counter
+        lda     general_counter
         cmp     #$19                    ; 25 columns rendered?
         bne     transition_right_col_loop
         lda     #$FE
         jsr     bank_switch_enqueue     ; restore bank
 transition_right_done:  lda     #$40
-        sta     $42
+        sta     scroll_dir_flags
         jsr     entity_spawn_scan       ; repopulate enemies for new room
         rts
 
@@ -2242,9 +2242,9 @@ transition_scroll_setup:  lda     transition_type
 ; -----------------------------------------------------------------------------
 transition_scroll_horizontal:  jsr     transition_load_palette
         lda     #$00
-        sta     $3E
-        sta     $3F
-        sta     $FD
+        sta     max_speed_sub
+        sta     max_speed_hi
+        sta     general_counter
         ldy     #$3F                    ; 63 frames ($3F)
 transition_scroll_frame_loop:  tya
         pha
@@ -2283,7 +2283,7 @@ transition_load_palette:  ldx     current_stage
 transition_palette_check:  ldy     stage_palette_offset_table,x
         beq     transition_palette_rts
         lda     stage_palette_count,x
-        sta     $FD
+        sta     general_counter
         lda     stage_palette_src_index,x
         tax
 transition_palette_copy:  lda     stage_palette_data,x
@@ -2294,7 +2294,7 @@ transition_palette_copy:  lda     stage_palette_data,x
         sta     palette_anim_frames + $30,y
         dex
         dey
-        dec     $FD
+        dec     general_counter
         bne     transition_palette_copy
 transition_palette_rts:  rts
 
@@ -2327,11 +2327,11 @@ transition_scroll_vertical:  lda     transition_type
         pla
 vert_scroll_setup:  tax                     ; X = direction index (0=up, 1=down)
         lda     vert_scroll_y_start,x  ; initial frame counter value
-        sta     $39
+        sta     column_attr_byte
         lda     vert_scroll_y_init,x   ; initial scroll_y position
         sta     scroll_y
         lda     #$00
-        sta     $FD
+        sta     general_counter
 vert_scroll_frame_loop:  txa
         pha
         jsr     render_all_sprites
@@ -2351,17 +2351,17 @@ vert_scroll_update_pos:  clc
         lda     ent_y_px                ; update player Y pixel
         adc     vert_scroll_pixel_step,x ; up: +$03 (up=+3), down: +$FC (down=-4)
         sta     ent_y_px
-        lda     $F9
+        lda     boss_fight_flag
         adc     vert_scroll_page_step,x ; up: +$00, down: +$FF (page decrement)
-        sta     $F9
+        sta     boss_fight_flag
         clc
         lda     scroll_y                ; update scroll Y position
         adc     vert_scroll_y_delta,x   ; up: -4, down: +4
         sta     scroll_y
         clc
-        lda     $39                     ; update frame counter
+        lda     column_attr_byte                     ; update frame counter
         adc     vert_scroll_y_step,x    ; up: -1 ($FF), down: +1
-        sta     $39
+        sta     column_attr_byte
         bmi     vert_scroll_finish      ; up: counter went negative → done
         cmp     #$3C
         beq     vert_scroll_finish      ; down: counter reached $3C → done
@@ -2430,7 +2430,7 @@ reset_entity_clear_spawn:  lda     #$FF
 entity_ai_dispatch:  sec
         lda     ent_x_px
         sbc     scroll_x
-        sta     $2D
+        sta     player_screen_x
         lda     game_mode
         beq     entity_ai_normal_loop
         cmp     #$04
@@ -2442,10 +2442,10 @@ entity_ai_normal_step:  lda     ent_flags,x ; check entity active flag (bit 7)
         sec
         lda     ent_x_px,x
         sbc     scroll_x
-        sta     $2E
+        sta     current_ent_x
         lda     ent_x_screen,x
         sbc     nametable_select
-        sta     $2F
+        sta     offscreen_flag
         ldy     ent_type,x
         lda     entity_ai_ptr_lo,y
         sta     jump_ptr
@@ -2470,10 +2470,10 @@ entity_ai_special_step:  lda     ent_flags,x ; check entity active flag
         sec
         lda     ent_x_px,x
         sbc     scroll_x
-        sta     $2E
+        sta     current_ent_x
         lda     ent_x_screen,x
         sbc     nametable_select
-        sta     $2F
+        sta     offscreen_flag
         lda     #$92
         pha
         lda     #$E6
@@ -3001,18 +3001,18 @@ tanishi_facing_left:  sec
         sbc     #$00
 tanishi_store_position:  sta     jump_ptr_hi
         lda     ent_y_px,x
-        sta     $0A
+        sta     temp_0A
         lda     #$00
-        sta     $0B
+        sta     temp_0B
         jsr     lookup_tile_from_map
         ldx     current_entity_slot
         lda     temp_00
         and     #$01
         bne     tanishi_flip_facing
         clc
-        lda     $0A
+        lda     temp_0A
         adc     temp_02
-        sta     $0A
+        sta     temp_0A
         jsr     lookup_tile_from_map
         ldx     current_entity_slot
         lda     temp_00
@@ -3558,7 +3558,7 @@ woodman_walk_step:  lda     ent_x_screen,x
         sta     jump_ptr
         lda     ent_y_px,x
         and     #$F0
-        sta     $0A
+        sta     temp_0A
         jsr     metatile_render
         ldy     #$74
         lda     col_update_tiles + $04,x
@@ -3976,7 +3976,7 @@ airman_landing_reached:
         lda     ent_y_px,x
         adc     airman_y_offset_table,y
         and     #$E0
-        sta     $0A
+        sta     temp_0A
         clc
         lda     ent_x_px,x
         adc     airman_x_offset_table,y
@@ -4827,10 +4827,10 @@ mecha_dragon_walk:  lda     #$07
         sta     jump_ptr_hi
         clc
         lda     #$00
-        sta     $0B
+        sta     temp_0B
         lda     ent_y_px,x
         adc     #$20
-        sta     $0A
+        sta     temp_0A
         jsr     lookup_tile_from_map
         ldx     current_entity_slot
         ldy     temp_00
@@ -4926,7 +4926,7 @@ guts_tank_track_parent:  lda     ent_x_px,y
         lda     ent_state,x
         beq     picopico_stop_movement
         lda     #$00
-        sta     $4E
+        sta     death_context
         jmp     apply_collision_physics
 
 ; =============================================================================
@@ -5101,17 +5101,17 @@ buebeam_physics:  jsr     apply_entity_physics
 ; =============================================================================
 matasaburo_wind_push:
         sec
-        lda     $2D
-        sbc     $2E
+        lda     player_screen_x
+        sbc     current_ent_x
         bcs     matasaburo_apply_physics
         lda     #$01
-        sta     $40
+        sta     conveyor_type
         lda     #$00
-        sta     $AF
+        sta     platform_facing
         lda     #$A3
-        sta     $4F
+        sta     scroll_lock_lo
         lda     #$00
-        sta     $50
+        sta     scroll_lock_hi
 matasaburo_apply_physics:
         jsr     apply_entity_physics_alt
         rts
@@ -5634,7 +5634,7 @@ springer_ai:
 
 scworm_tile_check:
         ldy     #$00
-        sty     $0B
+        sty     temp_0B
         lda     ent_flags,x
         and     #$40
         bne     scworm_calc_tile
@@ -5649,13 +5649,13 @@ scworm_calc_tile:  clc
         clc
         lda     ent_y_px,x
         adc     #$09
-        sta     $0A
+        sta     temp_0A
         jsr     lookup_tile_from_map
         ldx     current_entity_slot
         lda     temp_00
         beq     scworm_flip
         lda     ent_y_px,x
-        sta     $0A
+        sta     temp_0A
         jsr     lookup_tile_from_map
         ldx     current_entity_slot
         lda     temp_00
@@ -5800,7 +5800,7 @@ mole_shot_y_table:  .byte   $10,$D0,$10,$D0,$10,$D0 ; Mole shot Y-position looku
         adc     #$0C
 sniper_joe_store_a:  sta     $0A
         lda     #$00
-        sta     $0B
+        sta     temp_0B
         lda     ent_x_px,x
         sta     jump_ptr
         lda     ent_x_screen,x
@@ -5901,12 +5901,12 @@ boss_proj_mgr_fire:  ldx     temp_01
         and     boss_fire_rng_mask,x
         clc
         adc     boss_fire_rng_base,x
-        sta     $0B
+        sta     temp_0B
         lda     boss_fire_rng_divisor,x
-        sta     $0D
+        sta     temp_0D
         lda     #$00
-        sta     $0A
-        sta     $0C
+        sta     temp_0A
+        sta     temp_0C
         jsr     divide_16bit
         ldx     current_entity_slot
         lda     #$25
@@ -5919,9 +5919,9 @@ boss_proj_mgr_fire:  ldx     temp_01
         sta     ent_hitbox_h_hi,y
         lda     boss_fire_vel_y_hi,x
         sta     ent_hitbox_h_lo,y
-        lda     $0E
+        lda     temp_0E
         sta     ent_hitbox_w_hi,y
-        lda     $0F
+        lda     temp_0F
         sta     ent_hitbox_w_lo,y
         sec
         lda     ent_y_spawn_px,y
@@ -6676,13 +6676,13 @@ wily4_entity_init_loop:  jsr     find_entity_scan ; find unused entity slot
 wily4_entity_init_rts:  rts
 
 wily4_boss_active:  lda     #$01
-        sta     $40
+        sta     conveyor_type
         lda     #$00
-        sta     $AF
+        sta     platform_facing
         lda     #$00
-        sta     $4F
+        sta     scroll_lock_lo
         lda     #$01
-        sta     $50
+        sta     scroll_lock_hi
         lda     ent_state,x
         cmp     #$01
         bne     wily4_boss_phase_2
@@ -7208,8 +7208,8 @@ boss_indicator_palette:  sty     palette_sprite + $0B
         beq     boss_indicator_rts
         txa
         and     #$0F
-        sta     $BA
-        inc     $BA
+        sta     wily_stage_index
+        inc     wily_stage_index
 boss_indicator_rts:  rts
 
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF

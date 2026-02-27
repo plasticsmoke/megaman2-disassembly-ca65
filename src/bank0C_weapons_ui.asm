@@ -30,17 +30,17 @@ sound_temp      := $00F4
 weapon_dispatch_check_fd:  cmp     #$FE
         bne     weapon_dispatch_check_ff
         lda     #$01
-        sta     $E4
+        sta     hud_busy_flag
         lda     #$00
-        sta     $EC
+        sta     sound_slot_lo
         jmp     weapon_secondary_init
 
 weapon_dispatch_check_ff:  cmp     #$FF
         bne     weapon_select_handler
         lda     #$01
-        sta     $E4
+        sta     hud_busy_flag
         lda     #$00
-        sta     $EC
+        sta     sound_slot_lo
         jmp     weapon_clear_display
 
 
@@ -51,43 +51,43 @@ weapon_dispatch_check_ff:  cmp     #$FF
 weapon_select_handler:  asl     a       ; Handle weapon selection (A = weapon index)
         tax
         lda     weapon_data_ptr_lo,x
-        sta     $E2
+        sta     weapon_data_lo
         lda     weapon_data_ptr_hi,x
-        sta     $E3
+        sta     weapon_data_hi
         ldy     #$00
         lda     ($E2),y
         tax
         and     #$0F
         beq     weapon_select_high_nybble
-        lda     $E0
+        lda     weapon_select_state
         and     #$0F
-        sta     $E5
-        cpx     $E5
+        sta     slot_counter
+        cpx     slot_counter
         bcs     weapon_select_store_type
         rts
 
 weapon_select_store_type:  stx     $E5   ; store weapon type in temp
-        lda     $E0
+        lda     weapon_select_state
         and     #$F0
-        ora     $E5
-        sta     $E0
+        ora     slot_counter
+        sta     weapon_select_state
         lda     #$01
-        sta     $E4
+        sta     hud_busy_flag
         lda     #$00
-        sta     $EC
+        sta     sound_slot_lo
         lda     #$00
-        sta     $E7
-        sta     $E8
+        sta     frame_repeat_count
+        sta     lives_timer
         lda     #$04
-        sta     $E5
+        sta     slot_counter
         lda     #$01
 chr_ram_data_transfer:  clc              ; advance pointer to next tile data
-        adc     $E2
-        sta     $E2
+        adc     weapon_data_lo
+        sta     weapon_data_lo
         lda     #$00
-        adc     $E3
-        sta     $E3
-        ldx     $EC
+        adc     weapon_data_hi
+        sta     weapon_data_hi
+        ldx     sound_slot_lo
         ldy     #$00
 chr_ram_tile_copy:  lda     ($E2),y     ; Copy tile data to CHR-RAM shadow at $0500
         sta     chr_ram_shadow,x
@@ -101,7 +101,7 @@ chr_ram_padding_byte:  sta     chr_ram_shadow,x
         inx
 chr_ram_padding_loop:  dey
         bne     chr_ram_padding_byte
-        lda     $E1
+        lda     weapon_display_bits
         lsr     a
         bcs     weapon_select_advance_slot
         jsr     draw_energy_bar_template
@@ -119,73 +119,73 @@ weapon_select_store_palette:  ldy     #$02
         sta     sound_data_ptr_hi
         jsr     weapon_shift_e1_right4
         lda     #$00
-        sta     $E4
+        sta     hud_busy_flag
         rts
 
 weapon_select_high_nybble:  lda     $E0  ; check high nybble path
         and     #$F0
-        sta     $E5
-        cpx     $E5
+        sta     slot_counter
+        cpx     slot_counter
         bcs     weapon_select_high_store
         rts
 
 weapon_select_high_store:  stx     $E5   ; store high nybble weapon type
-        lda     $E0
+        lda     weapon_select_state
         and     #$0F
-        ora     $E5
-        sta     $E0
+        ora     slot_counter
+        sta     weapon_select_state
         lda     #$01
-        sta     $E4
+        sta     hud_busy_flag
         lda     #$00
-        sta     $EC
+        sta     sound_slot_lo
         ldx     #$00
         lda     #$02
         clc
-        adc     $E2
-        sta     $F0
+        adc     weapon_data_lo
+        sta     sound_stream_lo
         txa
-        adc     $E3
-        sta     $F1
-        stx     $F2
-        stx     $F3
+        adc     weapon_data_hi
+        sta     sound_stream_hi
+        stx     instrument_type
+        stx     stream_update_flag
         ldy     #$01
         lda     ($E2),y
         and     #$0F
         tax
-        ora     $E1
+        ora     weapon_display_bits
         pha
-        stx     $E1
+        stx     weapon_display_bits
         lda     #$04
-        sta     $E5
+        sta     slot_counter
         lda     #$02
-        sta     $E6
+        sta     slot_tile_offset
 weapon_select_bit_loop:  pla
         lsr     a
         pha
         bcc     weapon_bit_advance_slot
         jsr     draw_energy_bar_template
-        lda     $E1
+        lda     weapon_display_bits
         lsr     a
         bcs     weapon_bit_advance_slot
         jsr     weapon_check_sound_slot
 weapon_bit_advance_slot:  jsr     display_offset_next_slot
         lda     #$04
         clc
-        adc     $E6
-        sta     $E6
-        dec     $E5
+        adc     slot_tile_offset
+        sta     slot_tile_offset
+        dec     slot_counter
         bne     weapon_select_bit_loop
         jsr     weapon_shift_e1_right4
-        lda     $E1
-        sta     $EF
+        lda     weapon_display_bits
+        sta     channel_active_flags
         pla
         lda     #$00
-        sta     $E4
+        sta     hud_busy_flag
         rts
 
 weapon_cmd_fc_handler:
         iny
-        sty     $E7
+        sty     frame_repeat_count
         rts
 
 
@@ -194,10 +194,10 @@ weapon_cmd_fc_handler:
 ; =============================================================================
 password_mode_init:  sty     $E8        ; Enter password screen mode
         lda     #$01
-        sta     $E9
-        lda     $EA
+        sta     lives_animate_timer
+        lda     hud_frame_counter
         and     #$01
-        sta     $EA
+        sta     hud_frame_counter
         rts
 
 
@@ -206,11 +206,11 @@ password_mode_init:  sty     $E8        ; Enter password screen mode
 ; =============================================================================
 weapon_secondary_init:  lda     $E0
         and     #$0F
-        sta     $E0
+        sta     weapon_select_state
         lda     #$04
-        sta     $E5
+        sta     slot_counter
         lda     #$02
-        sta     $E6
+        sta     slot_tile_offset
 weapon_secondary_loop:  lda     $E1
         lsr     a
         bcc     weapon_secondary_advance
@@ -219,15 +219,15 @@ weapon_secondary_loop:  lda     $E1
 weapon_secondary_advance:  jsr     display_offset_next_slot
         lda     #$04
         clc
-        adc     $E6
-        sta     $E6
-        dec     $E5
+        adc     slot_tile_offset
+        sta     slot_tile_offset
+        dec     slot_counter
         bne     weapon_secondary_loop
         lda     #$00
-        sta     $E1
-        sta     $EF
+        sta     weapon_display_bits
+        sta     channel_active_flags
         lda     #$00
-        sta     $E4
+        sta     hud_busy_flag
         rts
 
 
@@ -241,10 +241,10 @@ weapon_check_sound_slot:  lda     $EC
         lda     chr_ram_shadow,x
         ora     chr_ram_shadow + $01,x
         bne     weapon_sound_copy_data
-        ldy     $E5
-        ldx     $E6
+        ldy     slot_counter
+        ldx     slot_tile_offset
         jsr     apu_sound_control
-        ldx     $EC
+        ldx     sound_slot_lo
         lda     chr_ram_shadow,x
         ora     chr_ram_shadow + $01,x
         bne     weapon_sound_copy_data
@@ -256,21 +256,21 @@ weapon_check_sound_slot:  lda     $EC
 ; =============================================================================
 weapon_clear_display:  lda     $E0       ; clear weapon display slots
         and     #$F0
-        sta     $E0
+        sta     weapon_select_state
         lda     #$00
-        sta     $E7
-        sta     $E8
+        sta     frame_repeat_count
+        sta     lives_timer
         lda     #$04
-        sta     $E5
+        sta     slot_counter
 weapon_clear_loop:  lda     #$00
-        ldx     $EC
+        ldx     sound_slot_lo
         sta     chr_ram_shadow,x
         sta     chr_ram_shadow + $01,x
         jsr     display_offset_skip
-        dec     $E5
+        dec     slot_counter
         bne     weapon_clear_loop
         lda     #$00
-        sta     $E4
+        sta     hud_busy_flag
         rts
 
 
@@ -280,7 +280,7 @@ weapon_clear_loop:  lda     #$00
 draw_energy_bar_template:  ldy     #$0F ; Draw empty 16-tile energy bar
         lda     #$10
         clc
-        adc     $EC
+        adc     sound_slot_lo
         tax
         lda     #$00
 energy_bar_clear_loop:  sta     chr_ram_shadow,x
@@ -295,13 +295,13 @@ energy_bar_clear_loop:  sta     chr_ram_shadow,x
 ; =============================================================================
 weapon_sound_copy_data:  lda     $E5
         pha
-        lda     $E6
+        lda     slot_tile_offset
         pha
         lda     sound_data_ptr_lo
-        sta     $E5
+        sta     slot_counter
         lda     sound_data_ptr_hi
-        sta     $E6
-        lda     $EC
+        sta     slot_tile_offset
+        lda     sound_slot_lo
         clc
         adc     #$06
         tax
@@ -330,9 +330,9 @@ weapon_sound_copy_loop:  pha
         sbc     #$01
         bne     weapon_sound_copy_loop
         pla
-        sta     $E6
+        sta     slot_tile_offset
         pla
-        sta     $E5
+        sta     slot_counter
         rts
 
 
@@ -341,19 +341,19 @@ weapon_sound_copy_loop:  pha
 ; =============================================================================
 display_offset_next_slot:  lsr     $E1
         bcc     display_offset_skip
-        lda     $E1
+        lda     weapon_display_bits
         ora     #$80
-        sta     $E1
+        sta     weapon_display_bits
 display_offset_skip:  lda     #$1F
         clc
-        adc     $EC
-        sta     $EC
+        adc     sound_slot_lo
+        sta     sound_slot_lo
         rts
 
 weapon_shift_e1_right4:  lsr     $E1
-        lsr     $E1
-        lsr     $E1
-        lsr     $E1
+        lsr     weapon_display_bits
+        lsr     weapon_display_bits
+        lsr     weapon_display_bits
         rts
 
 
@@ -377,18 +377,18 @@ apu_enable_channels:  lda     #$07       ; enable pulse 1+2 + triangle
 ; Called each frame to update weapon energy bars and lives display.
 ; =============================================================================
 hud_update_main:  inc     $EA           ; Main HUD update (energy bars, lives)
-        lda     $E4
+        lda     hud_busy_flag
         beq     hud_init_slot_vars
         rts
 
 hud_init_slot_vars:  ldx     #$00        ; initialize 4 HUD slot variables
         ldy     #$05
-        stx     $EC
-        sty     $ED
+        stx     sound_slot_lo
+        sty     sound_slot_hi
         lda     #$00
-        sta     $EB
+        sta     apu_channel_offset
         lda     #$04
-        sta     $EE
+        sta     active_channel_count
 hud_slot_loop:  lda     #$01
         ldy     #$18
         clc
@@ -399,7 +399,7 @@ hud_slot_loop:  lda     #$01
         clc
         adc     ($EC),y
         sta     ($EC),y
-        lda     $EF
+        lda     channel_active_flags
         lsr     a
         bcc     hud_check_pause_flag
         jsr     sound_stream_check
@@ -424,56 +424,56 @@ hud_check_slot_active:  ldy     #$00
 hud_slot_silent_check:  lda     $EF
         lsr     a
         bcs     hud_shift_ef_flag
-        ldx     $EB
+        ldx     apu_channel_offset
         inx
         inx
-        ldy     $EE
+        ldy     active_channel_count
         jsr     apu_sound_control
 hud_shift_ef_flag:  lsr     $EF
         bcc     hud_next_slot
-        lda     $EF
+        lda     channel_active_flags
         ora     #$80
-        sta     $EF
+        sta     channel_active_flags
 hud_next_slot:  dec     $EE
         beq     hud_lives_display
         lda     #$04
         clc
-        adc     $EB
-        sta     $EB
+        adc     apu_channel_offset
+        sta     apu_channel_offset
         lda     #$1F
         clc
-        adc     $EC
-        sta     $EC
+        adc     sound_slot_lo
+        sta     sound_slot_lo
         lda     #$00
-        adc     $ED
-        sta     $ED
+        adc     sound_slot_hi
+        sta     sound_slot_hi
         jmp     hud_slot_loop
 
 hud_lives_display:  lda     $E8          ; check lives counter display flag
         and     #$7F
         beq     hud_check_refill_timer
-        cmp     $EA
+        cmp     hud_frame_counter
         bne     hud_check_refill_timer
-        lda     $EA
+        lda     hud_frame_counter
         and     #$01
-        sta     $EA
-        inc     $E9
+        sta     hud_frame_counter
+        inc     lives_animate_timer
         lda     #$10
-        cmp     $E9
+        cmp     lives_animate_timer
         bne     hud_check_refill_timer
-        lda     $E8
+        lda     lives_timer
         bmi     hud_lives_reset_timer
         lda     #$00
-        sta     $E8
+        sta     lives_timer
 hud_lives_reset_timer:  lda     #$0F
-        sta     $E9
+        sta     lives_animate_timer
 hud_check_refill_timer:  lda     $F2     ; check refill animation timer
         beq     hud_final_shift_ef
-        dec     $F2
+        dec     instrument_type
 hud_final_shift_ef:  lsr     $EF
-        lsr     $EF
-        lsr     $EF
-        lsr     $EF
+        lsr     channel_active_flags
+        lsr     channel_active_flags
+        lsr     channel_active_flags
         rts
 
 
@@ -483,24 +483,24 @@ hud_final_shift_ef:  lsr     $EF
 hud_energy_bar_update:  ldy     #$0C
         lda     ($EC),y
         ldy     #$02
-        cpy     $EE
+        cpy     active_channel_count
         beq     hud_energy_store_f4
         and     #$0F
 hud_energy_store_f4:  sta     sound_temp
-        lda     $E8
+        lda     lives_timer
         and     #$7F
         beq     hud_energy_clamp_check
-        lda     $E9
+        lda     lives_animate_timer
         ldy     #$02
-        cpy     $EE
+        cpy     active_channel_count
         bne     hud_energy_check_drain
         ldx     #$0C
 hud_energy_timer_add:  clc
-        adc     $E9
+        adc     lives_animate_timer
         dex
         bne     hud_energy_timer_add
 hud_energy_check_drain:  tay
-        lda     $E8
+        lda     lives_timer
         bmi     hud_energy_refill_loop
         ldx     #$FF
 hud_energy_drain_loop:  inx
@@ -516,7 +516,7 @@ hud_energy_refill_loop:  dec     sound_temp
         dey
         bne     hud_energy_refill_loop
 hud_energy_clamp_check:  lda     #$02
-        cmp     $EE
+        cmp     active_channel_count
         beq     hud_energy_check_sweep
         ldy     #$0D
         lda     ($EC),y
@@ -539,17 +539,17 @@ hud_energy_reset_counter:  lda     #$00
         lsr     a
         lsr     a
         lsr     a
-        sta     $F5
+        sta     freq_register_hi
         txa
         bpl     hud_energy_delta_read
         lda     #$00
         sec
-        sbc     $F5
-        sta     $F5
+        sbc     freq_register_hi
+        sta     freq_register_hi
 hud_energy_delta_read:  lda     ($EC),y
         and     #$0F
         clc
-        adc     $F5
+        adc     freq_register_hi
         bpl     hud_energy_clamp_max
         lda     #$00
         jmp     hud_energy_store_result
@@ -566,11 +566,11 @@ hud_energy_check_sweep:  lda     $EF
         lsr     a
         bcs     hud_sound_sweep_init
         lda     #$0C
-        sta     $F5
+        sta     freq_register_hi
         jmp     hud_sound_sweep_check
 
 hud_sound_sweep_init:  lda     #$09
-        sta     $F5
+        sta     freq_register_hi
         jmp     hud_sound_envelope_run
 
 
@@ -615,9 +615,9 @@ hud_sweep_read_current:  ldy     #$1E
         bcs     hud_sweep_compare_slot
         sta     sound_temp
 hud_sweep_compare_slot:  ldy     #$02
-        cpy     $EE
+        cpy     active_channel_count
         beq     hud_sound_write_volume
-        lda     $F5
+        lda     freq_register_hi
         and     #$7F
         tay
         lda     ($EC),y
@@ -627,14 +627,14 @@ hud_sweep_compare_slot:  ldy     #$02
 hud_sound_write_volume:  ldx     $EB
         lda     sound_temp
         sta     SQ1_VOL,x
-        lda     $F5
+        lda     freq_register_hi
         bpl     hud_sound_sweep_mode_b
         lda     #$90
-        sta     $F5
+        sta     freq_register_hi
         jmp     hud_sound_envelope_run
 
 hud_sound_sweep_mode_b:  lda     #$09
-        sta     $F5
+        sta     freq_register_hi
 hud_sound_envelope_run:  lda     $F5
         and     #$7F
         tay
@@ -653,7 +653,7 @@ hud_envelope_add_delta:  iny
         sta     ($EC),y
 hud_envelope_check_mode:  lda     $F5
         bmi     hud_vibrato_check
-        lda     $EF
+        lda     channel_active_flags
         lsr     a
         bcc     hud_vibrato_check
         rts
@@ -740,30 +740,30 @@ hud_vibrato_toggle_dir:  lda     ($EC),y
 ; =============================================================================
 hud_frequency_calc:  lda     $F5
         and     #$7F
-        sta     $F5
-        inc     $F5
+        sta     freq_register_hi
+        inc     freq_register_hi
         ldy     #$1A
         lda     ($EC),y
-        ldy     $F5
+        ldy     freq_register_hi
         clc
         adc     ($EC),y
         tax
         ldy     #$1B
         lda     ($EC),y
-        inc     $F5
-        ldy     $F5
+        inc     freq_register_hi
+        ldy     freq_register_hi
         adc     ($EC),y
         tay
         lda     #$01
-        cmp     $EE
+        cmp     active_channel_count
         bne     hud_frequency_write
         lda     #$0F
         sta     SND_CHN
         txa
         and     #$0F
         tax
-        inc     $F5
-        ldy     $F5
+        inc     freq_register_hi
+        ldy     freq_register_hi
         lda     ($EC),y
         and     #$80
         sta     sound_temp
@@ -772,7 +772,7 @@ hud_frequency_calc:  lda     $F5
         tax
         ldy     #$00
 hud_frequency_write:  txa
-        ldx     $EB
+        ldx     apu_channel_offset
         inx
         inx
         sta     SQ1_VOL,x
@@ -792,14 +792,14 @@ hud_frequency_update_hi:  sta     ($EC),y
 ; hud_sound_channel_off — Sound Channel Off — disable APU channel if not noise channel ($84FD)
 ; =============================================================================
 hud_sound_channel_off:  ldy     #$01
-        cpy     $EE
+        cpy     active_channel_count
         bne     hud_sound_silence_pair
         lda     #$07
         sta     SND_CHN
         rts
 
 hud_sound_silence_pair:  lda     #$00
-        ldx     $EB
+        ldx     apu_channel_offset
         inx
         inx
         sta     SQ1_VOL,x
@@ -821,7 +821,7 @@ sound_state_init_slot:  ldy     #$14
         ldy     sound_temp
         lda     ($EC),y
         ldx     #$02
-        cpx     $EE
+        cpx     active_channel_count
         beq     sound_state_store_value
         and     #$0F
 sound_state_store_value:  ldy     #$1E
@@ -858,12 +858,12 @@ sound_dispatch_table:  txa
         pla
         sta     sound_temp
         pla
-        sta     $F5
+        sta     freq_register_hi
         lda     (sound_temp),y
         tax
         iny
         lda     (sound_temp),y
-        sta     $F5
+        sta     freq_register_hi
         stx     sound_temp
         jmp     (sound_temp)
 
@@ -885,12 +885,12 @@ sound_stream_refill_check:  ldy     #$11
 sound_stream_refill_read:  iny
         lda     ($EC),y
         ldy     #$02
-        cpy     $EE
+        cpy     active_channel_count
         beq     sound_stream_set_mode
         and     #$0F
 sound_stream_set_mode:  sta     sound_temp
         lda     #$93
-        sta     $F5
+        sta     freq_register_hi
         jmp     hud_sound_sweep_check
 
 sound_stream_fetch:  jsr     sound_data_read_byte ; fetch next sound command byte
@@ -922,7 +922,7 @@ sound_stream_dispatch:  jsr     sound_dispatch_table
         .byte   $D3,$85,$DB,$85,$E5,$85,$F5,$85
         .byte   $0F,$86,$40,$86,$56,$86
         jsr     sound_data_read_byte    ; handler 0: set instrument type
-        sta     $F2
+        sta     instrument_type
         jmp     sound_stream_fetch
 
         jsr     sound_data_read_byte    ; handler 1: set channel output reg
@@ -939,7 +939,7 @@ sound_stream_dispatch:  jsr     sound_dispatch_table
 
         jsr     sound_data_read_byte
         ldy     #$02
-        cpy     $EE
+        cpy     active_channel_count
         beq     sound_cmd_store_param
         sta     sound_temp
         ldy     #$13
@@ -953,27 +953,27 @@ sound_cmd_store_param:  ldy     #$13
         jsr     sound_data_read_byte    ; handler 4: set stream pointer
         txa
         beq     :+
-        cpx     $F3
+        cpx     stream_update_flag
         beq     sound_stream_skip_update
-        inc     $F3
+        inc     stream_update_flag
 :       jsr     sound_data_read_byte
         sta     sound_temp
         jsr     sound_data_read_byte
-        sta     $F1
+        sta     sound_stream_hi
         lda     sound_temp
-        sta     $F0
+        sta     sound_stream_lo
         jmp     sound_stream_fetch
 
 sound_stream_skip_update:
         lda     #$00
-        sta     $F3
+        sta     stream_update_flag
         lda     #$02
         clc
-        adc     $F0
-        sta     $F0
+        adc     sound_stream_lo
+        sta     sound_stream_lo
         lda     #$00
-        adc     $F1
-        sta     $F1
+        adc     sound_stream_hi
+        sta     sound_stream_hi
         jmp     sound_stream_fetch
 
         lda     #$14
@@ -987,30 +987,30 @@ sound_cmd_load_regs:  jsr     sound_data_read_byte
         bne     sound_cmd_load_regs
         jmp     sound_stream_fetch
 
-        lda     $F0
+        lda     sound_stream_lo
         sec
         sbc     #$01
-        sta     $F0
-        lda     $F1
+        sta     sound_stream_lo
+        lda     sound_stream_hi
         sbc     #$00
-        sta     $F1
-        lda     $E0
+        sta     sound_stream_hi
+        lda     weapon_select_state
         and     #$0F
-        sta     $E0
+        sta     weapon_select_state
         lda     #$00
-        sta     $E1
-        lda     $EF
+        sta     weapon_display_bits
+        lda     channel_active_flags
         and     #$FE
-        sta     $EF
+        sta     channel_active_flags
         ldy     #$0A
         lda     ($EC),y
         iny
         ora     ($EC),y
         bne     sound_cmd_load_instrument
-        ldx     $EB
+        ldx     apu_channel_offset
         inx
         inx
-        ldy     $EE
+        ldy     active_channel_count
         jsr     apu_sound_control
         ldy     #$00
         lda     ($EC),y
@@ -1037,11 +1037,11 @@ sound_data_read_byte:  ldy     #$00      ; read byte and advance pointer
         tax
         lda     #$01
         clc
-        adc     $F0
-        sta     $F0
+        adc     sound_stream_lo
+        sta     sound_stream_lo
         lda     #$00
-        adc     $F1
-        sta     $F1
+        adc     sound_stream_hi
+        sta     sound_stream_hi
         txa
         rts
 
@@ -1063,7 +1063,7 @@ sound_note_tick:  ldy     #$05           ; tick note timer, handle double-speed
         lda     ($EC),y
         asl     a
         bcc     sound_note_check_active
-        lda     $EA
+        lda     hud_frame_counter
         and     #$01
         beq     sound_note_check_active
         jsr     sound_note_check_active
@@ -1144,7 +1144,7 @@ sound_pattern_volume_dec:  ldy     #$06
         and     #$1F
         ora     sound_temp
         sta     ($EC),y
-        lda     $EF
+        lda     channel_active_flags
         lsr     a
         bcc     sound_pattern_goto_save
         rts
@@ -1158,7 +1158,7 @@ sound_pattern_lookup_freq:  txa
         jmp     sound_pattern_store_freq
 
 sound_pattern_noise_check:  ldy     #$01
-        cpy     $EE
+        cpy     active_channel_count
         bne     sound_pattern_freq_table
         ldx     #$00
         jmp     sound_pattern_store_freq
@@ -1171,7 +1171,7 @@ sound_pattern_freq_table:  asl     a
         lda     #$00
         iny
         adc     ($EC),y
-        sta     $F5
+        sta     freq_register_hi
         ldy     #$01
         lda     (sound_temp),y
         tax
@@ -1242,7 +1242,7 @@ sound_cmd_dispatch:  jsr     sound_dispatch_table
         jmp     sound_cmd_store_duty
         jsr     sound_stream_read_next  ; cmd 3: set envelope type
         ldy     #$02
-        cpy     $EE
+        cpy     active_channel_count
         beq     sound_cmd_store_duty
         sta     sound_temp
         ldy     #$0C
@@ -1297,14 +1297,14 @@ sound_cmd_skip_note:  lda     ($EC),y
         ldx     #$85
         ldy     #$89
         stx     sound_temp
-        sty     $F5
+        sty     freq_register_hi
         asl     a
         ldy     #$07
         clc
         adc     sound_temp
         sta     ($EC),y
         lda     #$00
-        adc     $F5
+        adc     freq_register_hi
         iny
         sta     ($EC),y
         jmp     sound_pattern_fetch
@@ -1361,7 +1361,7 @@ sound_portamento_store:  sta     sound_temp
         and     #$E0
         ora     sound_temp
         sta     ($EC),y
-        lda     $EF
+        lda     channel_active_flags
         lsr     a
         bcs     sound_cmd_volume_done
         jsr     sound_instrument_load
@@ -1383,7 +1383,7 @@ sound_instrument_copy:  clc
         sta     sound_temp
         lda     #$00
         adc     sound_data_ptr_hi
-        sta     $F5
+        sta     freq_register_hi
         ldx     #$00
         ldy     #$14
 sound_instrument_byte:  lda     (sound_temp,x)
@@ -1398,8 +1398,8 @@ sound_instrument_next:  lda     #$01
         adc     sound_temp
         sta     sound_temp
         lda     #$00
-        adc     $F5
-        sta     $F5
+        adc     freq_register_hi
+        sta     freq_register_hi
         jmp     sound_instrument_byte
 
         ldy     #$00
@@ -1407,17 +1407,17 @@ sound_instrument_next:  lda     #$01
         sta     ($EC),y
         iny
         sta     ($EC),y
-        lda     $E0
+        lda     weapon_select_state
         and     #$F0
-        sta     $E0
-        lda     $EF
+        sta     weapon_select_state
+        lda     channel_active_flags
         lsr     a
         bcc     :+
         rts
 :       ldx     $EB
         inx
         inx
-        ldy     $EE
+        ldy     active_channel_count
         jmp     apu_sound_control
 
 
@@ -1429,7 +1429,7 @@ sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
         sta     sound_temp
         iny
         lda     ($EC),y
-        sta     $F5
+        sta     freq_register_hi
         dey
         lda     (sound_temp),y
         tax
@@ -1438,7 +1438,7 @@ sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
         adc     sound_temp
         sta     ($EC),y
         lda     #$00
-        adc     $F5
+        adc     freq_register_hi
         iny
         sta     ($EC),y
         txa
@@ -1450,7 +1450,7 @@ sound_stream_read_next:  ldy     #$00    ; read byte from ($EC) stream
 ; =============================================================================
 sound_freq_multiply:  sta     sound_temp      ; multiply freq by period count
         lda     #$00
-        sta     $F5
+        sta     freq_register_hi
         ldy     #$04
         lda     ($EC),y
         tay
@@ -1458,13 +1458,13 @@ sound_freq_multiply:  sta     sound_temp      ; multiply freq by period count
 sound_freq_mult_loop:  clc
         adc     sound_temp
         bcc     sound_freq_mult_dec
-        inc     $F5
+        inc     freq_register_hi
 sound_freq_mult_dec:  dey
         bne     sound_freq_mult_loop
         ldy     #$02
         sta     ($EC),y
         iny
-        lda     $F5
+        lda     freq_register_hi
         sta     ($EC),y
         rts
 
