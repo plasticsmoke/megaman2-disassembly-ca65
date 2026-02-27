@@ -4,7 +4,19 @@
 ; Entity arrays are indexed by slot (X register), 16 slots $00-$0F.
 ; Slots $00-$0F: player/weapons ($00-$0F), enemies ($10-$1F).
 
-; ─── Entity Arrays ──────────────────────────────────────────────────────────
+; ─── Entity Arrays (page $01) ──────────────────────────────────────────────
+; These share the 6502 stack page ($0100-$01FF). Safe because the game
+; uses very little stack depth; entity slots $00-$0F occupy $0100-$017F.
+ent_hit_count       = $0100  ; collision hit guard — prevents multi-hit same frame ($0100,x)
+ent_parent_slot     = $0110  ; parent entity slot index for child despawn ($0110,x)
+ent_despawn         = $0120  ; despawn marker ($FF=despawned) / spawn type ($0120,x)
+ent_parent_ref      = $0130  ; secondary spawn duplicate guard ($0130,x)
+ent_child_hp        = $0140  ; secondary entity HP/timer ($0140,x)
+ent_plat_height     = $0150  ; platform collision height ($0150,x)
+ent_plat_y          = $0160  ; platform collision Y offset ($0160,x)
+ent_plat_type       = $0170  ; platform type reference ($0170,x)
+
+; ─── Entity Arrays (page $04+) ─────────────────────────────────────────────
 ent_type            = $0400  ; entity type ID ($0400,x)
 ent_spawn_type      = $0410  ; spawn type from stage data ($0410,x)
 ent_flags           = $0420  ; entity flags ($0420,x) — bit 7=active, 6=facing, 5=priority
@@ -23,7 +35,9 @@ ent_x_vel_sub       = $0620  ; X velocity sub-pixel ($0620,x)
 ent_y_vel           = $0640  ; Y velocity whole, signed ($0640,x)
 ent_y_vel_sub       = $0660  ; Y velocity sub-pixel ($0660,x)
 ent_anim_frame      = $0680  ; animation frame counter ($0680,x)
+ent_anim_backup     = $0690  ; animation state backup ($0690,x)
 ent_anim_id         = $06A0  ; animation sequence index ($06A0,x)
+ent_misc            = $06B0  ; general-purpose entity variable ($06B0,x)
 ent_hp              = $06C0  ; hit points ($06C0,x — player=$06C0, boss=$06C1)
 
 ; ─── Entity Arrays (extended) ─────────────────────────────────────────────
@@ -31,6 +45,7 @@ ent_x_spawn_sub     = $0490  ; spawn X sub-pixel ($0490,x)
 ent_y_spawn_sub     = $04D0  ; spawn Y sub-pixel ($04D0,x)
 ent_drop_flag       = $04F0  ; item drop / spawn parameter ($04F0,x)
 ent_weapon_type     = $0590  ; weapon/damage type ($0590,x)
+ent_hitbox_width    = $059E  ; hitbox width for collision ($059E,x)
 ent_hitbox_w_lo     = $0610  ; hitbox width mask low ($0610,x)
 ent_hitbox_w_hi     = $0630  ; hitbox width mask high ($0630,x)
 ent_hitbox_h_lo     = $0650  ; hitbox height mask low ($0650,x)
@@ -67,7 +82,10 @@ boss_hit_count      = $05AA  ; weapon hit counter (inc per hit in boss_check_wea
 ; ─── RAM Buffers ────────────────────────────────────────────────────────────
 oam_buffer          = $0200  ; OAM sprite buffer, 256 bytes ($0200-$02FF)
 ppu_update_buf      = $0300  ; PPU nametable update buffer ($0300)
+palette_anim_target = $0354  ; palette animation target frame ($0354)
+palette_anim_counter = $0355 ; palette animation current frame ($0355)
 palette_ram         = $0356  ; palette mirror, 32 bytes ($0356-$0375 → $3F00)
+palette_sprite      = $0366  ; sprite palette 0 base ($0366 = palette_ram+$10 → $3F10)
 col_update_addr_hi  = $03B6  ; column update VRAM addr high ($03B6)
 col_update_addr_lo  = $03B7  ; column update VRAM addr low ($03B7)
 col_update_tiles    = $03B8  ; column update tile data, 32 bytes ($03B8-$03D7)

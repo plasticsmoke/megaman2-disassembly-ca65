@@ -534,17 +534,17 @@ reset_sound_state:  lda     #$00
         lda     #$00
         sta     $FD
         lda     #$02
-        sta     $0354
+        sta     palette_anim_target
         lda     #$04
-        sta     $0355
+        sta     palette_anim_counter
         lda     #$BB
         sta     $FD
 nametable_init_loop:  jsr     clear_entities_and_run
         dec     $FD
         bne     nametable_init_loop
         lda     #$00
-        sta     $0355
-        sta     $0354
+        sta     palette_anim_counter
+        sta     palette_anim_target
         ldx     #$02
 nametable_copy_initial:  lda     nametable_init_data,x
         sta     $0357,x
@@ -696,7 +696,7 @@ explosion_flags_tbl:  .byte   $00,$40,$00,$00,$40,$40,$00,$00 ; explosion facing
 ; =============================================================================
 palette_anim_update:  lda     game_mode       ; check special mode flag
         bne     palette_anim_done
-        lda     $0355                   ; check palette anim frame count
+        lda     palette_anim_counter                   ; check palette anim frame count
         beq     palette_anim_done
         inc     $44
         cmp     $44
@@ -705,7 +705,7 @@ palette_anim_update:  lda     game_mode       ; check special mode flag
         sta     $44
         inc     $43
         lda     $43
-        cmp     $0354
+        cmp     palette_anim_target
         bcc     palette_anim_advance
         lda     #$00
         sta     $43
@@ -777,7 +777,7 @@ chr_upload_byte_loop:  lda     (jump_ptr),y ; read CHR byte from bank
         inc     $0B
         ldy     #$61
 chr_upload_palette_copy:  lda     ($0A),y
-        sta     $0354,y
+        sta     palette_anim_target,y
         dey
         bpl     chr_upload_palette_copy
         jsr     upload_palette
@@ -2150,7 +2150,7 @@ render_weapon_begin_write:  tay
         sta     jump_ptr
         lda     $8300,y
         sta     jump_ptr_hi
-        lda     $0100,x
+        lda     ent_hit_count,x
         sta     temp_03
         jmp     render_sprite_loop
 
@@ -2658,7 +2658,7 @@ weapon_palette_copy_indexed:
         inx
         ldy     #$01
 weapon_palette_copy_loop:  lda     weapon_palette_data,x
-        sta     $0366,y
+        sta     palette_sprite,y
         iny
         inx
         cpy     #$04
@@ -3054,7 +3054,7 @@ spawn_right_sec_forward:  ldy     $4D
         lda     jump_ptr
         cmp     $BA40,y
         bcc     spawn_right_sec_backward
-spawn_right_sec_check:  lda     $0140,y
+spawn_right_sec_check:  lda     ent_child_hp,y
         beq     spawn_right_sec_next
         jsr     activate_secondary_entity
 spawn_right_sec_next:  inc     $4D
@@ -3079,14 +3079,14 @@ spawn_scan_done:  lda     #$0E          ; switch back to game engine
 ; =============================================================================
 activate_primary_entity:  tya
         ldx     #$0F
-activate_check_dup:  cmp     $0100,x    ; check for duplicate spawn
+activate_check_dup:  cmp     ent_hit_count,x    ; check for duplicate spawn
         beq     entity_activate_done
         dex
         bpl     activate_check_dup
         jsr     find_empty_entity_slot
         bcs     entity_activate_done
         tya
-        sta     $0100,x
+        sta     ent_hit_count,x
         lda     $B600,y
         sta     ent_x_spawn_scr,x
         lda     $B700,y
@@ -3118,13 +3118,13 @@ entity_init_from_type:  sta     ent_spawn_type,x ; store enemy type ID
         lda     hitbox_height_hi_tbl,y
         sta     ent_hitbox_h_hi,x
         lda     #$00
-        sta     $06B0,x
-        sta     $0690,x
+        sta     ent_misc,x
+        sta     ent_anim_backup,x
         sta     ent_drop_flag,x
-        sta     $0120,x
+        sta     ent_despawn,x
         sta     ent_x_spawn_sub,x
         sta     ent_y_spawn_sub,x
-        sta     $0110,x
+        sta     ent_parent_slot,x
 entity_activate_done:  rts
 
 ; =============================================================================
@@ -3132,7 +3132,7 @@ entity_activate_done:  rts
 ; =============================================================================
 activate_secondary_entity:  tya
         ldx     #$0F
-activate_sec_check_dup:  cmp     $0130,x
+activate_sec_check_dup:  cmp     ent_parent_ref,x
         beq     entity_activate_done
         dex
         bpl     activate_sec_check_dup
@@ -3140,7 +3140,7 @@ activate_sec_check_dup:  cmp     $0130,x
         bcs     entity_activate_done
         tya
         pha
-        sta     $0130,x
+        sta     ent_parent_ref,x
         lda     $BA00,y
         sta     ent_x_spawn_scr,x
         lda     $BA40,y
@@ -3150,9 +3150,9 @@ activate_sec_check_dup:  cmp     $0130,x
         lda     $BAC0,y
         jsr     entity_init_from_type
         pla
-        sta     $0120,x
+        sta     ent_despawn,x
         tay
-        lda     $0140,y
+        lda     ent_child_hp,y
         sta     ent_timer,x
         rts
 
@@ -4116,7 +4116,7 @@ air_shooter_collision:  sec
         sbc     #$04
         sta     $05A1,x
         lda     #$14
-        sta     $059E,x
+        sta     ent_hitbox_width,x
         lda     #$0B
         sta     temp_01
         lda     #$1D
@@ -4134,11 +4134,11 @@ air_shooter_end_phase:  lda     #$02
         sta     ent_anim_id,x
         lda     #$00
         sta     ent_anim_frame,x
-        sta     $059E,x
+        sta     ent_hitbox_width,x
 air_shooter_physics:  jsr     apply_entity_physics
         bcc     air_shooter_done
         lda     #$00
-        sta     $059E,x
+        sta     ent_hitbox_width,x
 air_shooter_done:  rts
 
         lda     ent_state,x
@@ -4222,7 +4222,7 @@ leaf_shield_hitbox:  sec
         sbc     #$04
         sta     $05A1,x
         lda     #$18
-        sta     $059E,x
+        sta     ent_hitbox_width,x
         lda     ent_anim_id,x
         cmp     #$04
         bne     leaf_shield_physics
@@ -4231,7 +4231,7 @@ leaf_shield_hitbox:  sec
 leaf_shield_physics:  jsr     apply_entity_physics
         bcc     leaf_shield_done
         lda     #$00
-        sta     $059E,x
+        sta     ent_hitbox_width,x
 leaf_shield_done:  rts
 
         .byte   $BD,$E0,$04,$D0
@@ -4286,7 +4286,7 @@ time_stopper_physics_jmp:  jmp     time_stopper_physics
         sbc     #$08
         sta     $05A1,x
         lda     #$14
-        sta     $059E,x
+        sta     ent_hitbox_width,x
         lda     #$0C
         sta     temp_01
         lda     #$21
@@ -4324,7 +4324,7 @@ time_stopper_finish:  lda     #$0A
         sta     ent_y_vel,x
         sta     ent_y_vel_sub,x
         sta     ent_anim_frame,x
-        sta     $059E,x
+        sta     ent_hitbox_width,x
         lda     #$80
         sta     ent_flags,x
         rts
@@ -4351,7 +4351,7 @@ time_stopper_set_vel:  lda     #$9E
 time_stopper_physics:  jsr     apply_entity_physics
         bcc     time_stopper_done
         lda     #$00
-        sta     $059E,x
+        sta     ent_hitbox_width,x
 time_stopper_done:  rts
 
 check_wall_collision:  lda     ent_flags,x
@@ -4580,11 +4580,11 @@ player_collision_item:  lda     $AD
         lda     ent_state,x
         bne     player_collision_return
         lda     #$FF
-        sta     $0120,x
-        lda     $0110,x
+        sta     ent_despawn,x
+        lda     ent_parent_slot,x
         tay
         lda     #$00
-        sta     $0140,y
+        sta     ent_child_hp,y
 player_collision_return:  rts
 
 ; =============================================================================
@@ -4630,7 +4630,7 @@ weapon_coll_next_slot:  dex
         bcs     weapon_coll_check_slot
         ldx     current_entity_slot
         lda     #$00
-        sta     $0100,x
+        sta     ent_hit_count,x
         clc
         rts
 
@@ -4655,9 +4655,9 @@ weapon_collision_dispatch:  ldy     current_weapon ; current weapon ID for handl
         lda     #$2B
         jsr     bank_switch_enqueue
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     @no_match
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -4716,9 +4716,9 @@ weapon_damage_apply:  sta     temp_00
         pla
         tay
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     weapon_damage_done
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -4759,9 +4759,9 @@ weapon_damage_done:  ldx     current_entity_slot
         pla
         tay
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     weapon_damage_return
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -4805,9 +4805,9 @@ weapon_damage_return:  clc
         pla
         tay
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     weapon_coll_handler_done_no_match
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -4858,9 +4858,9 @@ weapon_coll_deactivate:  lda     #$00
         pla
         tay
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     weapon_coll_rebound_done
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -4903,9 +4903,9 @@ weapon_coll_rebound_done:  clc
         pla
         tay
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     weapon_coll_handler_2_done_no_match
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -4962,9 +4962,9 @@ weapon_coll_deactivate_2:  lda     #$00
         pla
         tay
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     weapon_coll_stun_done
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -5012,9 +5012,9 @@ weapon_coll_stun_done:  ldx     current_entity_slot
         pla
         tay
         ldx     current_entity_slot
-        lda     $0100,x
+        lda     ent_hit_count,x
         bne     weapon_coll_handler_3_done_no_match
-        inc     $0100,x
+        inc     ent_hit_count,x
         sec
         lda     ent_hp,x
         sbc     temp_00
@@ -5200,38 +5200,38 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         jsr     apply_entity_physics_alt
         bcc     @in_range
         lda     #$00
-        sta     $0150,x
+        sta     ent_plat_height,x
 @in_range:
         sec
         lda     ent_y_px,x
         sbc     #$04
-        sta     $0160,x
+        sta     ent_plat_y,x
         rts
 
         lda     #$18
-        sta     $0150,x
+        sta     ent_plat_height,x
         jsr     apply_entity_physics_alt
         bcc     @in_range_2
         lda     #$00
-        sta     $0150,x
+        sta     ent_plat_height,x
 @in_range_2:
         sec
         lda     ent_y_px,x
         sbc     #$08
-        sta     $0160,x
+        sta     ent_plat_y,x
         rts
 
         lda     #$18
-        sta     $0150,x
+        sta     ent_plat_height,x
         jsr     apply_entity_physics_alt
         bcc     @in_range_3
         lda     #$00
-        sta     $0150,x
+        sta     ent_plat_height,x
 @in_range_3:
         sec
         lda     ent_y_px,x
         sbc     #$08
-        sta     $0160,x
+        sta     ent_plat_y,x
         rts
 
         jsr     $EFEE
@@ -5414,11 +5414,11 @@ physics_despawn_return:  sec
         rts
 
 physics_despawn_secondary:  lda     #$FF
-        sta     $0120,x
-        lda     $0110,x
+        sta     ent_despawn,x
+        lda     ent_parent_slot,x
         tay
         lda     ent_hp,x
-        sta     $0140,y
+        sta     ent_child_hp,y
         sec
         rts
 
