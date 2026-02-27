@@ -12,8 +12,8 @@
 .include "include/ram.inc"
 .include "include/zeropage.inc"
 .include "include/constants.inc"
+.include "include/fixed_bank.inc"
 
-bank_switch_enqueue           := $C051
 banked_entry           := $C05D
 wait_for_vblank_0D           := $C0AB
 ppu_fill_from_ptr           := $C628
@@ -22,13 +22,9 @@ scroll_column_prep           := $C70C
 ppu_set_scroll_state           := $C723
 ppu_column_fill           := $C747
 metatile_render_column           := $C760
-divide_8bit           := $C84E
 attr_table_write           := $C8B1
-metatile_column_render           := $CA0B
 clear_oam_buffer_fixed     := $CC6C
-ppu_buffer_transfer           := $D11B
 ppu_scroll_column_update           := $D1DF
-weapon_palette_copy           := $D2ED
 weapon_palette_copy_indexed     := $D2EF
 ending_player_render           := $D624
 ending_player_anim           := $D627
@@ -234,7 +230,7 @@ intro_finish_palette:  ldx     #$1F
         sta     $0359
         ldy     #$07
 intro_copy_weapon_palette:  lda     weapon_palette_base,y
-        sta     $0366,y
+        sta     palette_sprite,y
         dey
         bpl     intro_copy_weapon_palette
         lda     current_stage
@@ -644,8 +640,8 @@ reset_scroll_state:  lda     #$00
         sta     $B7
         sta     camera_x_offset
         sta     camera_x_offset_hi
-        sta     $0354
-        sta     $0355
+        sta     palette_anim_target
+        sta     palette_anim_counter
         rts
 
 ; =============================================================================
@@ -1478,7 +1474,7 @@ main_stage_render:
 ; =============================================================================
 ; Weapon Select Screen — save state, calculate scroll, draw columns
 ; =============================================================================
-wselect_save_palette_loop:  lda     $0354,x
+wselect_save_palette_loop:  lda     palette_anim_target,x
         sta     $0700,x
         dex
         bpl     wselect_save_palette_loop
@@ -1792,7 +1788,7 @@ wselect_wily10_restore:  lda     wselect_wily10_pal_data,x
         bpl     wselect_wily10_restore
 wselect_restore_palette:  ldx     #$11
 wselect_restore_pal_loop:  lda     $0700,x
-        sta     $0354,x
+        sta     palette_anim_target,x
         dex
         bpl     wselect_restore_pal_loop
         pla
@@ -2472,7 +2468,7 @@ boss_get_flash_loop:  ldx     #$0F
         and     #$08                    ; Flash every 8 frames
         beq     boss_get_flash_set_color
         ldx     #$30
-boss_get_flash_set_color:  stx     $0366
+boss_get_flash_set_color:  stx     palette_sprite
         jsr     wait_for_vblank_0D
         dec     $FD
         bpl     boss_get_flash_loop
@@ -3261,7 +3257,7 @@ ending_landing_pal_load:  lda     ending_black_palette,x
         lda     #$00
         sta     ent_spawn_type
         lda     #$08
-        sta     $0690
+        sta     ent_anim_backup
         lda     #$FF
         sta     ent_x_spawn_scr
         lda     #$B7
@@ -3898,10 +3894,10 @@ ending_column_copy_loop:  lda     (jump_ptr),y
 ; =============================================================================
 ; Ending Advance Animation — tick boss walk animation counter
 ; =============================================================================
-ending_advance_anim:  dec     $0690
+ending_advance_anim:  dec     ent_anim_backup
         bne     ending_anim_rts
         lda     #$05
-        sta     $0690
+        sta     ent_anim_backup
         inc     ent_spawn_type
         lda     ent_spawn_type
         cmp     #$02
@@ -4203,7 +4199,7 @@ credits_skip_clear_ents:  sta     ent_x_screen,x
         lda     #$00
         sta     ent_spawn_type
         lda     #$08
-        sta     $0690
+        sta     ent_anim_backup
         lda     #$01
         sta     $0402
         lda     #$CC
@@ -4403,7 +4399,7 @@ init_scroll_and_palette:  sta     nametable_select
         sta     scroll_y
         ldx     #$21
 init_scroll_pal_loop:  lda     init_scroll_palette_data,x
-        sta     $0354,x
+        sta     palette_anim_target,x
         dex
         bpl     init_scroll_pal_loop
         jsr     clear_oam_buffer
@@ -5803,7 +5799,7 @@ ending_walk_init:
 ; =============================================================================
 ; Stage Intro — CHR load, metatile render, palette fade, name draw
 ; =============================================================================
-stage_intro_clear_pal:  sta     $0366,x
+stage_intro_clear_pal:  sta     palette_sprite,x
         dex
         bpl     stage_intro_clear_pal
         lda     #$06
@@ -5987,7 +5983,7 @@ weapon_get_blink_loop:  ldx     #$0F
         and     #$08                    ; Blink every 8 frames
         beq     weapon_get_set_blink
         ldx     #$15
-weapon_get_set_blink:  stx     $0366
+weapon_get_set_blink:  stx     palette_sprite
         jsr     wait_for_vblank_0D
         dec     $FD
         bne     weapon_get_blink_loop

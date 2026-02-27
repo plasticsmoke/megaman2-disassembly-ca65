@@ -12,19 +12,12 @@
 .include "include/ram.inc"
 .include "include/zeropage.inc"
 .include "include/constants.inc"
+.include "include/fixed_bank.inc"
 
-bank_switch_enqueue           := $C051
-boss_death_sequence           := $C10B
 explosion_array_setup_inner           := $C3A8
 sound_column_copy           := $C5F1
-divide_8bit           := $C84E
-divide_16bit           := $C874
-metatile_render           := $C8EF
-metatile_column_render           := $CA0B
-scroll_column_render           := $CB0C
 tile_lookup           := $CC63
 fire_weapon_buster           := $D332
-weapon_spawn_projectile           := $D3E0
 entity_init_from_type           := $D77C
 find_empty_entity_slot           := $DA43
         jmp     boss_init
@@ -1124,7 +1117,7 @@ flashman_rts:  rts
         lda     #$04
         sta     game_mode
         lda     #$20
-        sta     $0366
+        sta     palette_sprite
         lda     #$06
         sta     boss_ai_state
         lda     #$1F
@@ -1141,7 +1134,7 @@ flashman_frame_update:  jsr     flashman_update_with_sound
         rts
 
         lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         lda     boss_anim_id
         beq     flashman_frame_update
 flashman_data_overlap:cmp     #$02
@@ -1398,7 +1391,7 @@ metalman_frame_rts:  rts
 metalman_flash_timer_lo  := $05A7  ; 16-bit lightning effect timer (low byte)
 metalman_flash_timer_hi  := $05A9  ; 16-bit lightning effect timer (high byte)
 metalman_palette_flash:  lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         clc
         lda     metalman_flash_timer_lo
         adc     #$01
@@ -1417,7 +1410,7 @@ metalman_palette_flash:  lda     #$0F
         cmp     #$0C
         beq     metalman_update_with_sound
         lda     #$30
-        sta     $0366
+        sta     palette_sprite
         ldx     #$00
         ldy     #$00
         lda     $45
@@ -1985,7 +1978,7 @@ dragon_no_fire:  clc
         lda     boss_action_timer
         bne     @skip
         lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         jmp     fortress_post_defeat
 @skip:
         jsr     picopico_palette_flash
@@ -2027,7 +2020,7 @@ dragon_update_position:  lda     ent_y_px
         sta     boss_y_vel_sub
         sta     boss_y_vel
 dragon_update_palette_and_hit:  lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         jsr     weapon_boss_collision_check
         bcc     dragon_check_hit_flash
         lda     #$0D
@@ -2045,7 +2038,7 @@ dragon_check_hit_flash:  lda     temp_02
         cmp     #$01
         bne     dragon_apply_movement
         lda     #$30
-        sta     $0366
+        sta     palette_sprite
 dragon_apply_movement:  jsr     boss_apply_movement_physics
         sec
         lda     $B5
@@ -2169,7 +2162,7 @@ picopico_spawn_entity_loop:  stx     temp_02
         lda     $0C,x
         sta     ent_spawn_flags,y
         lda     $0E,x
-        sta     $0120,y
+        sta     ent_despawn,y
         inc     temp_01
         inx
         cpx     #$02
@@ -2262,7 +2255,7 @@ picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
         sta     fortress_explode_timer
 @skip_2:
         lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         jmp     fortress_post_defeat
 
 
@@ -2276,7 +2269,7 @@ picopico_palette_flash:  ldx     #$0F
         lda     #$2B
         jsr     bank_switch_enqueue
         ldx     #$30
-picopico_palette_store:  stx     $0366
+picopico_palette_store:  stx     palette_sprite
         rts
 
         .byte   $21,$45,$57,$92,$92,$93,$CA,$BD
@@ -2290,9 +2283,9 @@ picopico_palette_store:  stx     $0366
         lda     boss_ai_state
         bne     @skip
         lda     #$02
-        sta     $0354
+        sta     palette_anim_target
         lda     #$04
-        sta     $0355
+        sta     palette_anim_counter
         lda     #$B2
         sta     gutsdozer_column_tile
         lda     #$00
@@ -2591,12 +2584,12 @@ gutsdozer_check_anim_state:  lda     boss_anim_id
         bne     gutsdozer_palette_and_hit
         sta     boss_anim_frame
 gutsdozer_palette_and_hit:  lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         jsr     weapon_boss_collision_check
         bcc     gutsdozer_check_hit_flash
 gutsdozer_death_fade:  lda     #$00
-        sta     $0354
-        sta     $0355
+        sta     palette_anim_target
+        sta     palette_anim_counter
         lda     #$0D
         sta     boss_action_timer
         lda     #$00
@@ -2612,7 +2605,7 @@ gutsdozer_check_hit_flash:  lda     temp_02
         cmp     #$01
         bne     gutsdozer_apply_facing
         lda     #$30
-        sta     $0366
+        sta     palette_sprite
 gutsdozer_apply_facing:  lda     gutsdozer_saved_flags
         sta     boss_flags
         jsr     dragon_apply_movement
@@ -2671,15 +2664,15 @@ boobeam_turret_flags_table:  .byte   $C3,$C3,$83,$83,$83,$7C,$57,$96
         lda     boss_ai_state
         bne     boobeam_fill_palette_loop_skip
         lda     #$02
-        sta     $0354
+        sta     palette_anim_target
         lda     #$04
-        sta     $0355
+        sta     palette_anim_counter
         lda     #$B0
         sta     boobeam_column_tile
         lda     #$00
         sta     $05A9
-        sta     $0354
-        sta     $0355
+        sta     palette_anim_target
+        sta     palette_anim_counter
         lda     #$0F
         ldx     #$0B
 
@@ -3086,7 +3079,7 @@ wily_machine_palette_loop:  sta     palette_ram,x
 ; Wily Machine Damage — weapon invincibility and hit detection ($9A10)
 ; =============================================================================
 wily_machine_hit_check:  lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         lda     boss_phase
         cmp     #$04
         bcs     wily_machine_invincible_check
@@ -3139,7 +3132,7 @@ wily_machine_check_flash:  lda     temp_02
         cmp     #$01
         bne     wily_machine_jmp_movement
         lda     #$30
-        sta     $0366
+        sta     palette_sprite
 wily_machine_jmp_movement:  jsr     dragon_apply_movement
         rts
 
@@ -3211,8 +3204,8 @@ alien_jmp_dispatch:  jmp     (jump_ptr)
         lda     #$7D
         sta     boss_action_timer
         lda     #$00
-        sta     $0354
-        sta     $0355
+        sta     palette_anim_target
+        sta     palette_anim_counter
         inc     boss_ai_state
 @skip:
         lda     boss_ai_state
@@ -3316,7 +3309,7 @@ alien_part_setup_loop:  lda     alien_part_y_table,x
         sta     ent_x_spawn_px,x
         pla
         and     #$0F
-        sta     $06B0,x
+        sta     ent_misc,x
         dex
         bpl     alien_spawn_part_loop
         rts
@@ -3650,13 +3643,13 @@ alien_vel_y_hi_data:  .byte   $03,$02
         and     #$04
         bne     alien_palette_flash_store
         ldx     #$30
-alien_palette_flash_store:  stx     $0366
+alien_palette_flash_store:  stx     palette_sprite
         dec     boss_action_timer
         rts
 
 alien_palette_flash_store_skip:
         lda     #$0F
-        sta     $0366
+        sta     palette_sprite
         inc     alien_phase_counter
         lda     alien_phase_counter
         cmp     #$41
@@ -3788,7 +3781,7 @@ fortress_spawn_entity_loop:  stx     temp_01
         adc     $C1D8,x
         sta     ent_y_spawn_px,y
         lda     #$01
-        sta     $06B0,y
+        sta     ent_misc,y
         inx
         stx     temp_02
         ldx     temp_01
