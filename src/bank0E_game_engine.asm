@@ -303,9 +303,9 @@ wily_spawn_gate_entities:  lda     $BC
         ldx     #$0E
         jsr     spawn_entity_init
         lda     #$3B
-        sta     $04BE
+        sta     ent_y_spawn_px + $0E
         lda     #$80
-        sta     $047E
+        sta     ent_x_spawn_px + $0E
 wily_spawn_gate_loop:  lda     #$00
         sta     current_entity_slot
         sta     temp_02
@@ -640,11 +640,11 @@ wily_set_palette:
 
 set_palette_colors:  ldy     #$02
 set_palette_loop:  lda     palette_color_data,x
-        sta     $035F,y
-        sta     $037F,y
-        sta     $038F,y
-        sta     $039F,y
-        sta     $03AF,y
+        sta     palette_ram + $09,y
+        sta     palette_anim_frames + $09,y
+        sta     palette_anim_frames + $19,y
+        sta     palette_anim_frames + $29,y
+        sta     palette_anim_frames + $39,y
         dex
         dey
         bpl     set_palette_loop
@@ -1419,16 +1419,16 @@ ground_check_lava:  lda     $33
         bpl     ground_spawn_item
         lda     #$3B
         jsr     bank_switch_enqueue
-        lda     $042E
+        lda     ent_flags + $0E
         bmi     ground_spawn_item
         ldy     #$0E
         ldx     #$0E
         jsr     weapon_spawn_projectile
         sec
-        lda     $04AE
+        lda     ent_y_px + $0E
         sbc     #$04
         and     #$F0
-        sta     $04AE
+        sta     ent_y_px + $0E
 ground_spawn_item:  inc     $39
         lda     $39
         cmp     #$60
@@ -1703,7 +1703,7 @@ check_platform_collision:  sec
         cmp     #$09                    ; weapon >= Item 1?
         bcc     platform_skip_secondary ; no — skip secondary platform scan
         ldx     #$02
-platform_scan_secondary:  lda     $05A0,x
+platform_scan_secondary:  lda     ent_hitbox_width + $02,x
         bne     platform_check_secondary
 platform_scan_next:  dex
         bpl     platform_scan_secondary
@@ -1767,7 +1767,7 @@ platform_land_on:  sec
 platform_check_secondary:  lda     $F9
         bne     platform_not_found
         sec
-        lda     $0462,x
+        lda     ent_x_px + $02,x
         sbc     scroll_x
         sta     $0C
         sec
@@ -1775,23 +1775,23 @@ platform_check_secondary:  lda     $F9
         bcs     platform_sec_check_range
         eor     #$FF
         adc     #$01
-platform_sec_check_range:  cmp     $05A0,x
+platform_sec_check_range:  cmp     ent_hitbox_width + $02,x
         bcs     platform_not_found
-        lda     $04A2,x
+        lda     ent_y_px + $02,x
         cmp     jump_ptr_hi
         bcc     platform_not_found
-        lda     $05A3,x
+        lda     ent_hitbox_width + $05,x
         cmp     $0A
         beq     platform_sec_check_type
         bcs     platform_not_found
-platform_sec_check_type:  lda     $0402,x
+platform_sec_check_type:  lda     ent_type + $02,x
         cmp     #$3A
         bne     platform_sec_land_on
-        lda     $04E2,x
+        lda     ent_state + $02,x
         ora     #$80
-        sta     $04E2,x
+        sta     ent_state + $02,x
 platform_sec_land_on:  sec
-        lda     $05A3,x
+        lda     ent_hitbox_width + $05,x
         sbc     #$0C
         sta     ent_y_px
         lda     $F9
@@ -1804,12 +1804,12 @@ platform_sec_land_on:  sec
         sta     ent_y_vel
         lda     #$01
         sta     $40
-        lda     $0422,x
+        lda     ent_flags + $02,x
         and     #$40
         sta     $AF
-        lda     $0622,x
+        lda     ent_x_vel_sub + $02,x
         sta     $4F
-        lda     $0602,x
+        lda     ent_x_vel + $02,x
         sta     $50
         sec
         rts
@@ -2288,10 +2288,10 @@ transition_palette_check:  ldy     stage_palette_offset_table,x
         tax
 transition_palette_copy:  lda     stage_palette_data,x
         sta     palette_ram,y
-        sta     $0376,y
-        sta     $0386,y
-        sta     $0396,y
-        sta     $03A6,y
+        sta     palette_anim_frames,y
+        sta     palette_anim_frames + $10,y
+        sta     palette_anim_frames + $20,y
+        sta     palette_anim_frames + $30,y
         dex
         dey
         dec     $FD
@@ -2374,13 +2374,13 @@ vert_scroll_finish:  lda     #$00
         rts
 
 vert_scroll_update_entity:  lda     ent_x_px ; sync Item-1 entity position with player
-        sta     $0462
+        sta     ent_x_px + $02
         lda     ent_x_screen
-        sta     $0442
+        sta     ent_x_screen + $02
         lda     ent_y_px
-        sta     $04A2
+        sta     ent_y_px + $02
         lda     #$00
-        sta     $0682
+        sta     ent_anim_frame + $02
         rts
 
 ; Vertical scroll data tables: index 0 = up, index 1 = down.
@@ -2401,7 +2401,7 @@ reset_entity_slots:  ldx     #$00
         beq     reset_entity_save_boss
         cmp     #$01
         bne     reset_entity_clear
-reset_entity_save_boss:  ldx     $0422
+reset_entity_save_boss:  ldx     ent_flags + $02
 reset_entity_clear:  txa
         pha
         lda     #$00
@@ -2409,11 +2409,11 @@ reset_entity_clear:  txa
 reset_entity_clear_loop:  sta     ent_flags,x ; clear entity flags (deactivate)
         dex
         bne     reset_entity_clear_loop
-        sta     $05A0
-        sta     $05A1
-        sta     $05A2
+        sta     ent_hitbox_width + $02
+        sta     ent_hitbox_width + $03
+        sta     ent_hitbox_width + $04
         pla
-        sta     $0422
+        sta     ent_flags + $02
         ldx     #$0F
 reset_entity_clear_spawn:  lda     #$FF
         sta     ent_hit_count,x
@@ -3149,10 +3149,10 @@ die_spawn_part_next:  ldx     temp_01
         ldx     current_entity_slot
         ldy     ent_parent_slot,x
         lda     #$00
-        sta     $013F,y
-        sta     $0141,y
-        sta     $013E,y
-        sta     $0142,y
+        sta     ent_parent_ref + $0F,y
+        sta     ent_child_hp + $01,y
+        sta     ent_parent_ref + $0E,y
+        sta     ent_child_hp + $02,y
         lda     #$0E
         sta     ent_x_vel_sub,x
         lda     #$06
@@ -3195,10 +3195,10 @@ die_expand_rts:  rts
 ; =============================================================================
 boss_set_palette:  ldx     #$02
 boss_palette_copy_loop:  lda     boss_palette_data,y
-        sta     $035F,x
-        sta     $037F,x
-        sta     $038F,x
-        sta     $039F,x
+        sta     palette_ram + $09,x
+        sta     palette_anim_frames + $09,x
+        sta     palette_anim_frames + $19,x
+        sta     palette_anim_frames + $29,x
         dey
         dex
         bpl     boss_palette_copy_loop
@@ -3561,12 +3561,12 @@ woodman_walk_step:  lda     ent_x_screen,x
         sta     $0A
         jsr     metatile_render
         ldy     #$74
-        lda     $03BC,x
+        lda     col_update_tiles + $04,x
         and     #$01
         beq     woodman_set_tile
         ldy     #$76
 woodman_set_tile:  tya
-        sta     $03C2,x
+        sta     col_update_tiles + $0A,x
         inc     attr_update_count
         ldx     current_entity_slot
         jsr     apply_entity_physics
@@ -3989,14 +3989,14 @@ airman_landing_reached:
         ldy     ppu_buffer_count
         lda     col_update_addr_hi
         sta     ppu_update_buf,y
-        lda     $03BC
-        sta     $0304,y
-        lda     $03C2
-        sta     $0308,y
-        lda     $03C8
-        sta     $030C,y
+        lda     col_update_tiles + $04
+        sta     ppu_update_buf + $04,y
+        lda     col_update_tiles + $0A
+        sta     ppu_update_buf + $08,y
+        lda     col_update_tiles + $10
+        sta     ppu_update_buf + $0C,y
         lda     #$FF
-        sta     $0350,y
+        sta     ppu_update_buf + $50,y
         tya
         asl     a
         asl     a
@@ -4022,7 +4022,7 @@ airman_set_tile_pattern:  lda     temp_00
         lda     #$10
         sta     temp_00
 airman_copy_tiles:  lda     airman_tile_data,x
-        sta     $0310,y
+        sta     ppu_update_buf + $10,y
         inx
         iny
         dec     temp_00
@@ -4389,7 +4389,7 @@ boss_misc_rts:  rts
 
 boss_random_timer_table:  .byte   $12,$1F,$1F,$3D             ; random timer values for boss AI
 blackout_trigger_ai:
-        lda     $0357
+        lda     palette_ram + $01
         cmp     #$0F
         beq     blackout_trigger_ai_done
         lda     #ENTITY_CHANGKEY
@@ -5420,7 +5420,7 @@ goblin_ai_init:
         beq     goblin_check_phase
         ldy     temp_01
         lda     #$15
-        cmp     $0358,y
+        cmp     palette_ram + $02,y
         bne     goblin_check_distance
         lda     #$04
         sta     ent_x_vel_sub,x
@@ -5533,10 +5533,10 @@ goblin_set_palette:  lda     #$03
         sta     temp_02
 goblin_palette_copy_loop:  lda     goblin_palette_data,y
         sta     palette_ram,x                 ; write alien palette
-        sta     $0376,x
-        sta     $0386,x
-        sta     $0396,x
-        sta     $03A6,x
+        sta     palette_anim_frames,x
+        sta     palette_anim_frames + $10,x
+        sta     palette_anim_frames + $20,x
+        sta     palette_anim_frames + $30,x
         iny
         inx
         dec     temp_02
@@ -6318,7 +6318,7 @@ neo_metall_flip_ai:
         tay
         ldx     #$00
 stage_palette_copy_loop:  lda     stage_palette_entries,y
-        sta     $035E,x
+        sta     palette_ram + $08,x
         iny
         inx
         cpx     #$08
@@ -6327,9 +6327,9 @@ stage_palette_copy_loop:  lda     stage_palette_entries,y
 
 stage_palette_clear:
         lda     #$0F
-        sta     $0363
-        sta     $0364
-        sta     $0365
+        sta     palette_ram + $0D
+        sta     palette_ram + $0E
+        sta     palette_ram + $0F
         rts
 
 stage_palette_check_boss:
@@ -6647,10 +6647,10 @@ wily4_timer_positive:
         lda     #$00
         sta     boss_ai_state
         sta     boss_hp
-        sta     $05A9
+        sta     boss_work_var2
         sta     boss_action_timer
         lda     #$B8
-        sta     $05A7
+        sta     boss_work_var1
         lda     #$0F
         ldx     #$0F
 
@@ -6744,7 +6744,7 @@ wily4_shared_velocity:  lda     boss_x_vel
         sta     ent_x_vel,x
         lda     boss_x_vel_sub
         sta     ent_x_vel_sub,x
-        lda     $05A7
+        lda     boss_work_var1
         sta     ent_flags,x
         jsr     apply_entity_physics
         lda     boss_id
@@ -6766,7 +6766,7 @@ wily4_shared_set_flags:  lda     #$8B
 dragon_body_facing_setup:
         lda     #$00
         sta     ent_anim_id,x
-        lda     $05A7
+        lda     boss_work_var1
         and     #$40
         beq     wily4_facing_setup
         inc     ent_anim_id,x
@@ -7202,7 +7202,7 @@ pickup_simple_physics:  jsr     apply_simple_physics ; apply simple movement
 ; =============================================================================
 ; boss_indicator_palette -- Boss Room Indicator — palette flash to signal boss door ($BD12)
 ; =============================================================================
-boss_indicator_palette:  sty     $0371
+boss_indicator_palette:  sty     palette_sprite + $0B
         jsr     apply_entity_physics_alt
         lda     temp_01
         beq     boss_indicator_rts

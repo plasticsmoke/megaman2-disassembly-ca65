@@ -30,7 +30,7 @@ find_empty_entity_slot           := $DA43
         beq     @skip
         lda     enemy_spawn_timer_table,y
         beq     @skip
-        jmp     $8063
+        jmp     boss_spawn_check
 @skip:
         ldx     boss_phase
         bpl     enemy_ai_dispatch
@@ -56,13 +56,13 @@ enemy_ai_routine_lo:  .byte   $C5,$E3,$FB,$56,$9E,$56,$20,$C3
         .byte   $10,$13,$9B,$6E,$C0,$2A
 enemy_ai_routine_hi:  .byte   $80,$82,$84,$86,$87,$89,$8B,$8C
         .byte   $8E,$92,$93,$96,$96,$9B
-        lda     #$00
+boss_spawn_check:  lda     #$00
         sta     boss_anim_frame
         jsr     setup_ppu_normal
         lda     current_weapon
         cmp     #$06
         bne     boss_spawn_done
-        lda     $0422
+        lda     ent_flags + $02
         bpl     boss_spawn_done
         lda     boss_phase
         cmp     #$02
@@ -90,7 +90,7 @@ boss_spawn_inc_timer:  inc     boss_spawn_timer
         beq     boss_spawn_deplete
         bcs     boss_spawn_store_count
 boss_spawn_deplete:  lda     #$00
-        lsr     $0422
+        lsr     ent_flags + $02
         lda     #$00
         sta     game_mode
         lda     #$01
@@ -1100,20 +1100,20 @@ flashman_rts:  rts
         cmp     #$07
         bne     flashman_frame_update
         lda     #$5F
-        sta     $040F
+        sta     ent_type + $0F
         lda     #$80
-        sta     $042F
-        sta     $046F
-        sta     $04AF
+        sta     ent_flags + $0F
+        sta     ent_x_px + $0F
+        sta     ent_y_px + $0F
         lda     boss_x_screen
-        sta     $044F
+        sta     ent_x_screen + $0F
         lda     #$00
-        sta     $066F
-        sta     $064F
-        sta     $060F
-        sta     $062F
-        sta     $068F
-        sta     $06AF
+        sta     ent_y_vel_sub + $0F
+        sta     ent_y_vel + $0F
+        sta     ent_x_vel + $0F
+        sta     ent_x_vel_sub + $0F
+        sta     ent_anim_frame + $0F
+        sta     ent_anim_id + $0F
         lda     #$04
         sta     game_mode
         lda     #$20
@@ -1145,7 +1145,7 @@ flashman_data_overlap:cmp     #$02
         sta     game_mode
         sta     boss_action_timer
         sta     boss_ai_state
-        lsr     $042F
+        lsr     ent_flags + $0F
         lda     #$5C
         jsr     play_sound_and_reset_anim
         jsr     calc_player_boss_distance
@@ -1422,7 +1422,7 @@ metalman_palette_flash:  lda     #$0F
         beq     metalman_palette_copy_loop
         inx
 metalman_palette_copy_loop:  lda     metalman_palette_data,x
-        sta     $037B,y
+        sta     palette_anim_frames + $05,y
         inx
         inx
         iny
@@ -1888,7 +1888,7 @@ dragon_fire_done:  rts
         lda     boss_ai_state
         bne     @skip
         ldy     #$A0
-        jsr     $90C5
+        jsr     dragon_set_target_velocity
         inc     boss_ai_state
 @skip:
         jsr     dragon_check_fire_range
@@ -1927,7 +1927,7 @@ dragon_apply_facing:  lda     dragon_saved_flags
         sta     boss_flags
         rts
 
-        lda     #$00
+dragon_set_target_velocity:  lda     #$00
         sta     jump_ptr_hi
         lda     #$C4
         sta     jump_ptr
@@ -1946,7 +1946,7 @@ dragon_apply_facing:  lda     dragon_saved_flags
         lda     boss_ai_state
         bne     @skip
         ldy     #$58
-        jsr     $90C5
+        jsr     dragon_set_target_velocity
         lda     #$83
         sta     dragon_saved_flags
         inc     boss_ai_state
@@ -1996,11 +1996,11 @@ dragon_palette_store:  sta     palette_ram,x
         bpl     dragon_palette_fade_loop
         ldx     #$07
 dragon_palette_fade_2:  sec
-        lda     $036E,x
+        lda     palette_sprite + $08,x
         sbc     #$10
         bpl     dragon_palette_store_2
         lda     #$0F
-dragon_palette_store_2:  sta     $036E,x
+dragon_palette_store_2:  sta     palette_sprite + $08,x
         dex
         bpl     dragon_palette_fade_2
         dec     boss_action_timer
@@ -2289,7 +2289,7 @@ picopico_palette_store:  stx     palette_sprite
         lda     #$B2
         sta     gutsdozer_column_tile
         lda     #$00
-        sta     $05A9
+        sta     boss_work_var2
         lda     #$10
         sta     col_update_addr_hi
         lda     #$E0
@@ -2670,7 +2670,7 @@ boobeam_turret_flags_table:  .byte   $C3,$C3,$83,$83,$83,$7C,$57,$96
         lda     #$B0
         sta     boobeam_column_tile
         lda     #$00
-        sta     $05A9
+        sta     boss_work_var2
         sta     palette_anim_target
         sta     palette_anim_counter
         lda     #$0F
@@ -2681,7 +2681,7 @@ boobeam_turret_flags_table:  .byte   $C3,$C3,$83,$83,$83,$7C,$57,$96
 ; Boss AI: Wily 4 — Boobeam Trap palette and nametable setup ($96F6)
 ; =============================================================================
 boobeam_column_tile      := $05A7  ; nametable column fill tile value
-boobeam_fill_palette_loop:  sta     $035A,x
+boobeam_fill_palette_loop:  sta     palette_ram + $04,x
         dex
         bpl     boobeam_fill_palette_loop
         lda     #$15
@@ -3198,9 +3198,9 @@ alien_jmp_dispatch:  jmp     (jump_ptr)
         ldx     #$0E
         jsr     weapon_spawn_projectile
         lda     #$08
-        sta     $04AE
+        sta     ent_y_px + $0E
         lda     #$B4
-        sta     $046E
+        sta     ent_x_px + $0E
         lda     #$7D
         sta     boss_action_timer
         lda     #$00
@@ -3211,23 +3211,23 @@ alien_jmp_dispatch:  jmp     (jump_ptr)
         lda     boss_ai_state
         cmp     #$02
         bcs     alien_phase2_check
-        lda     $042E
+        lda     ent_flags + $0E
         bpl     alien_dec_timer
-        lda     $04AE
+        lda     ent_y_px + $0E
         cmp     #$90
         bcc     alien_descent_rts
         ldx     #$83
         stx     boss_flags
         cmp     #$E0
         bcc     alien_descent_rts
-        lsr     $042E
+        lsr     ent_flags + $0E
 alien_descent_rts:  rts
 
 alien_dec_timer:  dec     boss_action_timer
         bne     alien_descent_rts
         ldx     #$02
 alien_palette_copy:  lda     alien_palette_table,x
-        sta     $036F,x
+        sta     palette_sprite + $09,x
         dex
         bpl     alien_palette_copy
         inc     boss_ai_state
@@ -3255,7 +3255,7 @@ alien_palette_threshold:  lda     boss_action_timer
         tax
 alien_palette_anim_range:  ldy     #$07
 alien_palette_copy_loop:  lda     alien_palette_table,x
-        sta     $036E,y
+        sta     palette_sprite + $08,y
         dex
         dey
         bpl     alien_palette_copy_loop
@@ -3291,7 +3291,7 @@ alien_health_check:  jsr     boss_health_bar_tick
         lda     #$00
         sta     alien_pattern_index
         lda     #$30
-        sta     $035F
+        sta     palette_ram + $09
         lda     #$01
         sta     current_entity_slot
         ldx     #$0C
@@ -3331,7 +3331,7 @@ alien_palette_table:  bmi     alien_palette_data_byte
         .byte   $0F,$16,$38,$29,$0F,$16,$38,$29
         .byte   $0F,$16,$29,$19
 alien_palette_block_2:  .byte   $0F,$16,$29,$19
-        jsr     $9CD8
+        jsr     alien_advance_timer
         jsr     boss_check_weapon_hit
         ldx     #$0F
         lda     temp_02
@@ -3374,7 +3374,7 @@ alien_move_y_sub_table:  .byte   $B9,$19,$00,$E7,$47,$E7,$00,$19
 alien_move_y_hi_table:  .byte   $FE,$FF,$00,$00,$01,$00,$00,$FF
 alien_move_x_sub_table:  .byte   $00,$E7,$47,$E7,$00,$E7,$47,$E7
 alien_move_x_hi_table:  .byte   $00,$00,$01,$00,$00,$00,$01,$00
-        dec     boss_action_timer
+alien_advance_timer:  dec     boss_action_timer
         bne     alien_movement_pattern
         inc     alien_pattern_index
         lda     #MAX_HP
@@ -3523,18 +3523,18 @@ alien_load_palette_loop:  lda     alien_stage_palette,x
         ldx     #$0E
         jsr     weapon_spawn_projectile
         lda     #$80
-        sta     $042E
+        sta     ent_flags + $0E
         lda     #$A7
-        sta     $04AE
+        sta     ent_y_px + $0E
         lda     #$E0
-        sta     $046E
+        sta     ent_x_px + $0E
         ldy     #$11
         ldx     #$0D
         jsr     weapon_spawn_projectile
         lda     #$80
-        sta     $046D
+        sta     ent_x_px + $0D
         lda     #$37
-        sta     $04AD
+        sta     ent_y_px + $0D
         lda     #$80
         sta     boss_flags
         lda     #$80
@@ -3558,9 +3558,9 @@ alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
         lda     alien_wait_timer
         cmp     #$24
         beq     @skip
-        jsr     $9CD8
+        jsr     alien_advance_timer
         stx     temp_03
-        jsr     $A157
+        jsr     boss_apply_velocity
         rts
 @skip:
         lda     #$84
@@ -3574,21 +3574,21 @@ alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
         inc     boss_ai_state
         rts
 
-        ldx     #$2C
+alien_sprite_flash:  ldx     #$2C
         lda     frame_counter
         and     #$04
         bne     alien_sprite_flash_store
         ldx     #$00
-alien_sprite_flash_store:  stx     $0370
+alien_sprite_flash_store:  stx     palette_sprite + $0A
         rts
 
 alien_fade_palette_data:  .byte   $0F,$20,$0F,$0F,$0F,$20,$0C,$0F
         .byte   $0F,$20,$1C,$0C,$0F,$20,$11,$0C
         .byte   $0F,$20,$11,$01
-        jsr     $9E6D
+        jsr     alien_sprite_flash
         lda     #$80
         sta     temp_03
-        jsr     $A157
+        jsr     boss_apply_velocity
         lda     #$04
         sta     temp_01
         sta     temp_02
@@ -3605,7 +3605,7 @@ alien_fade_palette_data:  .byte   $0F,$20,$0F,$0F,$0F,$20,$0C,$0F
         inc     boss_action_timer
 alien_aim_rts:  rts
 
-alien_deactivate_sprites:  lsr     $042E
+alien_deactivate_sprites:  lsr     ent_flags + $0E
         lda     #$79
         jsr     play_sound_and_reset_anim
         lda     #$A7
@@ -3617,15 +3617,15 @@ alien_deactivate_sprites:  lsr     $042E
         lda     #$00
         sta     alien_phase_counter
         inc     boss_ai_state
-        lsr     $042D
+        lsr     ent_flags + $0D
         ldx     #$0F
 alien_deactivate_loop:  lsr     ent_spawn_flags,x
         dex
         bpl     alien_deactivate_loop
         lda     #$30
-        sta     $0374
+        sta     palette_sprite + $0E
         lda     #$15
-        sta     $0375
+        sta     palette_sprite + $0F
         rts
 
 alien_vel_y_data:  .byte   $76,$00
@@ -3660,7 +3660,7 @@ alien_palette_flash_store_skip:
         tax
         ldy     #$00
 alien_fade_palette_loop:  lda     alien_fade_palette_data,x
-        sta     $0362,y
+        sta     palette_ram + $0C,y
         inx
         iny
         cpy     #$04
@@ -3684,7 +3684,7 @@ alien_advance_phase:  inc     boss_ai_state
 
         lda     #$84
         sta     temp_03
-        jsr     $A157
+        jsr     boss_apply_velocity
         lda     #$0C
         sta     temp_01
         sta     temp_02
@@ -3812,10 +3812,10 @@ fortress_inc_spawn_timer:  inc     fortress_explode_timer
         ldx     #$0E
         jsr     spawn_entity_init_type
         lda     #$02
-        sta     $065E
+        sta     ent_hitbox_h_lo + $0E
         lda     #$85
-        sta     $043E
-        inc     $04FE
+        sta     ent_spawn_flags + $0E
+        inc     ent_drop_flag + $0E
         lda     $BC
         cmp     #$FF
         beq     fortress_spawn_rts
@@ -3931,7 +3931,7 @@ boss_check_weapon_hit:  jsr     weapon_boss_collision_check
 boss_apply_movement_physics:  lda     boss_flags
         sta     temp_03
 boss_movement_physics_inner:  jsr     setup_ppu_normal
-        sec
+boss_apply_velocity:  sec
         lda     boss_y_sub
         sbc     boss_y_vel_sub
         sta     boss_y_sub

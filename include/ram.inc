@@ -76,16 +76,27 @@ boss_screen_x       = ent_screen_x + 1    ; $06E1
 
 ; ─── Boss State (non-entity-array) ─────────────────────────────────────────
 boss_spawn_timer    = $05A6  ; boss spawn/intro countdown timer
+boss_work_var1      = $05A7  ; boss general-purpose work variable 1 (aliased per-boss in bank0B)
 boss_hit_timer      = $05A8  ; boss hit stun timer (set to $12 on hit, decrements)
+boss_work_var2      = $05A9  ; boss general-purpose work variable 2 (aliased per-boss in bank0B)
 boss_hit_count      = $05AA  ; weapon hit counter (inc per hit in boss_check_weapon_hit)
 
 ; ─── RAM Buffers ────────────────────────────────────────────────────────────
 oam_buffer          = $0200  ; OAM sprite buffer, 256 bytes ($0200-$02FF)
 ppu_update_buf      = $0300  ; PPU nametable update buffer ($0300)
+chr_ram_shadow      = $0500  ; CHR-RAM tile data shadow buffer ($0500)
+sound_data_ptr_lo   = $057C  ; sound/instrument data pointer low ($057C)
+sound_data_ptr_hi   = $057D  ; sound/instrument data pointer high ($057D)
+bank_switch_queue   = $0580  ; bank switch request queue array ($0580)
 palette_anim_target = $0354  ; palette animation target frame ($0354)
 palette_anim_counter = $0355 ; palette animation current frame ($0355)
 palette_ram         = $0356  ; palette mirror, 32 bytes ($0356-$0375 → $3F00)
 palette_sprite      = $0366  ; sprite palette 0 base ($0366 = palette_ram+$10 → $3F10)
+palette_anim_frames = $0376  ; palette animation frame data, 4 frames x 16 bytes ($0376-$03B5)
 col_update_addr_hi  = $03B6  ; column update VRAM addr high ($03B6)
 col_update_addr_lo  = $03B7  ; column update VRAM addr low ($03B7)
 col_update_tiles    = $03B8  ; column update tile data, 32 bytes ($03B8-$03D7)
+attr_update_addr_hi = $03B5  ; attribute update VRAM addr high, 6 entries ($03B5)
+attr_update_addr_lo = $03BB  ; attribute update VRAM addr low, 6 entries ($03BB)
+attr_update_values  = $03C1  ; attribute update values, 6 entries ($03C1)
+palette_save_buf    = $0700  ; palette save buffer for weapon select / stage intro ($0700)
