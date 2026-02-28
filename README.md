@@ -6,7 +6,7 @@ Built with [Claude Code](https://claude.com/claude-code) — starting from raw d
 
 Anyone familiar with Mega Man 2's internals, NES development, or MMC1 mapper conventions is welcome to double-check the annotations and file corrections or improvements.
 
-For a detailed walkthrough of the game engine — boot sequence, entity system, AI dispatch, physics, collision, scrolling, boss AI, and more — see **[ENGINE.md](ENGINE.md)**.
+For a detailed walkthrough of the game engine — boot sequence, entity system, AI dispatch, physics, collision, scrolling, boss AI, and more — see **[ENGINE.md](ENGINE.md)**. For data tables, addresses, and ROM hacking reference — see **[DATA_REFERENCE.md](DATA_REFERENCE.md)**.
 
 ## Building
 
@@ -16,7 +16,7 @@ Requires ca65/ld65 (from [cc65](https://cc65.github.io/)) and GNU Make.
 make
 ```
 
-Produces `build/mm2_built.nes`, verified byte-perfect against the original ROM.
+Produces `build/mm2_built.nes` (verified byte-perfect against the original ROM) and `build/mm2.nsfe` (NSFe soundtrack).
 
 ### Expected Checksums
 
@@ -69,18 +69,22 @@ src/
   bank09_wily_3_5.asm         Wily Stages 3-5 data + scroll code
   bank0A_sound.asm            Music and sound data
   bank0B_boss_ai.asm          Boss AI, enemy AI, collision
-  bank0C_weapons_ui.asm       Weapon system, UI rendering
+  bank0C_weapons_ui.asm       Weapon system, UI rendering, sound engine
   bank0D_stage_engine.asm     Stage engine, player control, OAM
   bank0E_game_engine.asm      Main game engine, entity AI dispatch
   bank0F_fixed.asm            Fixed bank — NMI, PPU, bank switching, controllers
+  nsfe_shim.asm               NSFe init/play driver shim ($C000)
+  nsfe.asm                    NSFe container with metadata
 include/
   zeropage.inc                Zero-page variable definitions
-  ram.inc                     Entity array equates ($0400-$06C0) + RAM buffers
+  ram.inc                     Entity array equates ($0100-$06F0) + RAM buffers
   constants.inc               Named constants (entity types, stage/weapon IDs, flags)
   hardware.inc                NES hardware registers (PPU, APU, controller, MMC1)
   fixed_bank.inc              Cross-bank entry point declarations
 cfg/
-  nes.cfg                     ld65 linker configuration
+  nes.cfg                     ld65 linker configuration (ROM)
+  nsfe_prg.cfg                ld65 linker configuration (NSFe PRG pass)
+  nsfe.cfg                    ld65 linker configuration (NSFe container pass)
 ```
 
 ## Annotation
@@ -157,6 +161,17 @@ For example, bank $00 contains Flash Man's tile data but Heat Man's entity spawn
 | $0C | Wily 5 | $09 | $04 (shared with Quick) |
 
 Wily stages share entity spawn banks with Robot Master stages — both stages' entities coexist in one table, sorted by screen number. Banks $08-$09 contain only tile/layout data. Bank filenames follow the tile data mapping (primary content by volume).
+
+## NSFe Soundtrack
+
+`make` also builds `build/mm2.nsfe`, an [NSFe](https://www.nesdev.org/wiki/NSFe) soundtrack file with track names, per-track durations, fade-out times, and composer credits. Playable in any NSFe-compatible player (NSFPlay, Mesen, etc.).
+
+Bank $0C contains the complete sound engine and all music data — no other ROM banks are needed for music playback. The build uses a two-pass ca65/ld65 pipeline (same approach as [MM3](https://github.com/megamanforever/megaman3-disassembly-ca65)):
+
+1. **Pass 1:** Assemble bank $0C + NSF init/play shim (`nsfe_shim.asm`) into a raw PRG binary
+2. **Pass 2:** Assemble the NSFe container (`nsfe.asm`), which `.incbin`s the PRG and wraps it with metadata chunks
+
+24 tracks covering all music — Opening through Ending, including the Dr. Wily UFO jingle. Track names, durations, and composer attributions are defined in `src/nsfe.asm`.
 
 ## License
 

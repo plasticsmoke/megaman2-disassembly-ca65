@@ -35,9 +35,9 @@ FIXED_SRC = src/bank0F_fixed.asm
 ALL_SRCS = $(HEADER_SRC) $(BANK_SRCS) $(FIXED_SRC)
 ALL_OBJS = $(ALL_SRCS:%.asm=build/%.o)
 
-.PHONY: all verify clean
+.PHONY: all verify nsfe clean
 
-all: verify
+all: verify nsfe
 
 $(ROM_OUT): $(ALL_OBJS) $(CFG)
 	@mkdir -p $(dir $@)
@@ -51,5 +51,33 @@ build/%.o: %.asm
 verify: $(ROM_OUT)
 	@cmp $(ROM_OUT) $(ROM_REF) && echo "BUILD VERIFIED: byte-perfect match!" || (echo "BUILD FAILED: ROM mismatch"; exit 1)
 
+# =============================================================================
+# NSFe build: two-pass ca65/ld65 pipeline (no Python, no ROM extraction)
+# =============================================================================
+# Pass 1: assemble bank $0C + NSF shim → raw PRG binary
+# Pass 2: assemble NSFe wrapper (incbins the PRG) → final .nsfe container
+
+nsfe: build/mm2.nsfe
+
+build/nsfe/bank0C.o: src/bank0C_weapons_ui.asm
+	@mkdir -p $(dir $@)
+	$(CA65) -o $@ $<
+
+build/nsfe/shim.o: src/nsfe_shim.asm
+	@mkdir -p $(dir $@)
+	$(CA65) -o $@ $<
+
+build/nsfe_prg.bin: build/nsfe/bank0C.o build/nsfe/shim.o cfg/nsfe_prg.cfg
+	@mkdir -p $(dir $@)
+	$(LD65) -C cfg/nsfe_prg.cfg -o $@ build/nsfe/bank0C.o build/nsfe/shim.o
+
+build/nsfe/nsfe.o: src/nsfe.asm build/nsfe_prg.bin
+	@mkdir -p $(dir $@)
+	$(CA65) -o $@ $<
+
+build/mm2.nsfe: build/nsfe/nsfe.o cfg/nsfe.cfg
+	@mkdir -p $(dir $@)
+	$(LD65) -C cfg/nsfe.cfg -o $@ $<
+
 clean:
-	rm -rf build/src build/mm2_built.nes
+	rm -rf build/src build/nsfe build/mm2_built.nes build/mm2.nsfe build/nsfe_prg.bin

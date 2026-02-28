@@ -274,6 +274,56 @@ Full X position = screen × 256 + pixel + sub-pixel/256. This gives smooth sub-p
 4. **Death** — HP reaches 0, entity converted to `ENTITY_DEATH_EXPLODE` ($06), item drop RNG runs
 5. **Despawn** — Entity scrolls off-screen or `ent_despawn` set to $FF
 
+### Entity Array Aliasing
+
+Entity arrays are spaced $10 (16) bytes apart, but the slot range spans $00-$1F (32 slots). Arrays at adjacent $10 offsets therefore overlap in memory:
+
+```
+ent_spawn_type[$00-$0F]  at $0410-$041F  =  ent_type[$10-$1F]  at $0410-$041F
+ent_spawn_flags[$00-$0F] at $0430-$043F  =  ent_flags[$10-$1F] at $0430-$043F
+ent_timer[$00-$0F]       at $06D0-$06DF  =  ent_hp[$10-$1F]    at $06D0-$06DF
+```
+
+This aliasing is deliberate. `entity_init_from_type` writes to init-side arrays (slots $00-$0F). When `entity_ai_dispatch` reads the same addresses using AI-side array names (slots $10-$1F), it sees the initialized values:
+
+- **`ent_timer` → `ent_hp`**: Init sets `ent_timer` to `#$14` (20). AI dispatch reads this as `ent_hp` = 20. This is why most enemies have exactly 20 HP — it's the default timer constant.
+- **`ent_spawn_type` → `ent_type`**: Init stores the type ID. AI dispatch reads it to index the pointer table.
+- **`ent_spawn_flags` → `ent_flags`**: Init loads flags from `entity_flags_table`. AI dispatch reads them as collision and rendering flags.
+
+`find_empty_entity_slot` scans from $0F down to $00, checking `ent_spawn_flags` bit 7. A slot is "empty" when bit 7 is clear — which means `ent_flags[$10+N]` (the active flag for the corresponding AI slot) is also clear.
+
+### Multi-Entity Hitbox Pattern
+
+Some enemies are too large to render as sprites (NES: max 8 sprites per scanline) and instead draw as background metatiles (see BG Metatile Enemies below). Since background tiles don't participate in sprite-based bounding box tests, these enemies use a **controller + hitbox child** pattern:
+
+- **Controller entity**: Renders BG metatiles, handles AI logic. Flags have bits 0-1 clear (e.g., $A0) — no collision. Immune to all weapons.
+- **Hitbox child**: Invisible sprite entity spawned at the controller's position via `spawn_entity_from_parent`. Flags have bits 0-1 set (e.g., $83) — full collision. Takes damage on behalf of the parent.
+
+| Enemy | Controller | Flags | Hitbox Child | Flags | Notes |
+|-------|-----------|-------|-------------|-------|-------|
+| Friender | $1C | $A0 | $19 | $83 | BG fire dog, child is invisible hitbox |
+| Mole | $47 | $A0 | $48/$49 | $83 | Controller spawns copies + shot children |
+| Goblin | $40/$41 | $A0 | $44 (horn) | $83 | Indestructible body, horn deals contact damage |
+
+The Friender's controller ($1C) has `weapon_damage_table[$1C] = $00` (immune), while the hitbox child ($19) has `weapon_damage_table[$19] = $01`. With `apply_difficulty_modifier` doubling damage on Normal, this gives `ceil(20 / (1×2))` = 10 buster hits on Normal — matching the expected value.
+
+### BG Metatile Enemies
+
+Large enemies bypass NES sprite limits by rendering directly as background metatiles. The entity's AI handler manipulates PPU buffers to draw tile data into the nametable:
+
+```
+friender_ai (bank0E:4083):
+  1. Look up landing height from airman_height_threshold table
+  2. Compute metatile position from entity X/Y + offset tables
+  3. Call metatile_render / metatile_attr_update for nametable address
+  4. Copy 16 CHR tile indices from airman_tile_data into ppu_update_buf
+  5. NMI handler writes tiles to the nametable
+```
+
+The entity has no sprite representation — its visual appearance is entirely background tiles. Animation frames are selected via `ent_anim_id`, indexing into 128 bytes of tile data (`airman_tile_data` at bank0E:4211 — 8 frames × 16 tiles per frame). When the entity animates, the AI handler overwrites the nametable region with the new frame's tiles.
+
+This technique allows arbitrarily large enemies (Friender fills a 4×4 metatile region) without hitting the 8-sprite-per-scanline limit. The tradeoff: background-tile enemies can't move smoothly (snapped to 16px metatile grid) and require the multi-entity hitbox pattern for collision.
+
 ---
 
 ## 8. Entity AI Dispatch
@@ -385,6 +435,40 @@ eor #$40          ; flip it — face AWAY from enemy
 ora (other bits)  ; merge back
 ```
 
+### Collision Gating (ent_flags bits 0-1)
+
+Before running any collision checks, `apply_entity_physics_alt` tests the low 2 bits of `ent_flags` (bank0F:5457):
+
+```asm
+lda  ent_flags,x
+and  #$03
+beq  apply_entity_physics    ; both clear → skip all collision
+pha
+and  #$01
+beq  @skip_contact           ; bit 0 clear → skip player contact
+jsr  check_player_collision
+@skip_contact:
+pla
+and  #$02
+beq  apply_entity_physics    ; bit 1 clear → skip weapon collision
+jsr  check_weapon_collision
+```
+
+| Bit | When set | Effect |
+|-----|----------|--------|
+| 0 | `check_player_collision` runs | Entity can deal contact damage to player |
+| 1 | `check_weapon_collision` runs | Entity can receive weapon damage |
+| 3 | Buster bounces (checked inside buster handler) | Shielded — buster deflects without damage |
+
+Common flag patterns from `entity_flags_table`:
+
+| Flags | Bits 0-1 | Meaning | Example entities |
+|-------|----------|---------|-----------------|
+| $83 | %11 | Standard enemy — contact + weapon | Shrink, Tanishi, Telly |
+| $81 | %01 | Contact only — immune to weapons | Laser beam, Appear Block |
+| $A0 | %00 | No collision — invisible to combat | Spawners, controllers, BG-tile entities |
+| $87 | %11 + bit 2 | Standard + extra flags | Kerog, Friender Fire, Sniper Joe |
+
 ### Weapon-Entity Collision (check_weapon_collision)
 
 Scans player weapon slots for overlap with the current enemy:
@@ -395,10 +479,30 @@ Scans player weapon slots for overlap with the current enemy:
 2. For each active weapon slot, bounding box test against current enemy
 3. On hit:
    - Call weapon-specific collision handler (pointer table dispatch)
-   - Apply `weapon_difficulty_scale` (2× damage on Normal difficulty)
+   - Apply `apply_difficulty_modifier` (2× damage on Normal difficulty)
    - If enemy HP ≤ 0 → run `item_drop_rng`, convert to death explosion
 
 Frame alternation means at most 4 weapon slots are tested per entity per frame. Since weapons are large and fast, the one-frame delay is imperceptible.
+
+### Weapon Damage Dispatch
+
+On a confirmed hit, `weapon_collision_dispatch` (bank0F:4779) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
+
+| Weapon ID | Weapon | Handler | Damage Sub-Table |
+|-----------|--------|---------|-----------------|
+| $00 | Mega Buster | bank0F:4787 | `weapon_damage_table` |
+| $01 | Atomic Fire | bank0F:4831 | Base table (uncharged) / $EA14 (full charge) |
+| $02 | Air Shooter | bank0F:4887 | $EA8C |
+| $03 | Leaf Shield | bank0F:4934 | $EB04 |
+| $04 | Bubble Lead | bank0F:4987 | `weapon_damage_table_2` |
+| $05 | Quick Boomerang | bank0F:5032 | $EBF4 |
+| $06 | Time Stopper | — | Handled separately (continuous damage, no dispatch) |
+| $07 | Metal Blade | bank0F:5141 | $ECE4 |
+| $08 | Crash Bomber | bank0F:5091 | `weapon_damage_table_3` |
+
+Each sub-table is 128 bytes — one entry per entity type. The handler reads `damage_table[entity_type]` into `temp_00`. A value of $00 means immune. The handler then calls `apply_difficulty_modifier`, which doubles `temp_00` on Normal difficulty (ASL). The resulting damage is subtracted from `ent_hp`.
+
+The buster handler has additional logic: it checks `ent_flags AND #$08` (bit 3) first. If set, the buster projectile is deflected (its flags are shifted right to deactivate it) without dealing any damage — this is how Neo Metall's shield works.
 
 ---
 
