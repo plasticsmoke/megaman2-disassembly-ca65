@@ -79,8 +79,8 @@ nsf_play:
 ;
 ; Sound ID groups:
 ;   $00-$02,$04-$09 → channel_init_standard (most stage music)
-;   $03             → channel_init_03       (Password — extra DPCM setup)
-;   $0B             → channel_init_0b       (Wily 3-5 — minimal setup)
+;   $03             → channel_init_03       (Heat Man Stage — extra DPCM/noise setup)
+;   $0B             → channel_init_0b       (Boss Battle — minimal setup)
 ;   $0A             → loops to nsf_play     (Wily Map — no extra init needed)
 ;   all others      → no extra init (RTS)
 ; =============================================================================
@@ -140,7 +140,7 @@ channel_init_standard:
         sta     $0573
         rts
 
-; ─── Password music init (ID $03) ────────────────────────────────────────────
+; ─── Heat Man Stage init (ID $03) ────────────────────────────────────────────
 ; Extra channel pointers for DPCM and noise channels.
 channel_init_03:
         lda     #$0D
@@ -160,7 +160,7 @@ channel_init_03:
         sta     $0536
         rts
 
-; ─── Wily 3-5 init (ID $0B) ──────────────────────────────────────────────────
+; ─── Boss Battle init (ID $0B) ───────────────────────────────────────────────
 channel_init_0b:
         lda     #$80
         sta     $0535
@@ -170,30 +170,61 @@ channel_init_0b:
 ; Track-to-sound-ID mapping table
 ; =============================================================================
 ; Maps NSFe track number (0-based index) to bank $0C engine sound ID.
-; 24 entries matching the original mm2.nsf track order.
+; 24 music entries.  Stage themes ordered by stage index ($00-$07).
 ; =============================================================================
 nsf_track_table:
+        ; ─── Music (24 tracks) ──────────────────────────────────────────────
         .byte   $0E                     ;  0: Opening
-        .byte   $0D                     ;  1: Title Screen
-        .byte   $00                     ;  2: Password
-        .byte   $01                     ;  3: Stage Select
-        .byte   $02                     ;  4: Game Start
-        .byte   $03                     ;  5: Metal Man Stage
+        .byte   $0D                     ;  1: Title
+        .byte   $10                     ;  2: Password
+        .byte   $0C                     ;  3: Stage Select
+        .byte   $0A                     ;  4: Stage Intro
+        .byte   $03                     ;  5: Heat Man Stage
         .byte   $04                     ;  6: Air Man Stage
-        .byte   $05                     ;  7: Bubble Man Stage
-        .byte   $06                     ;  8: Quick Man Stage
-        .byte   $07                     ;  9: Crash Man Stage
-        .byte   $08                     ; 10: Flash Man Stage
-        .byte   $09                     ; 11: Heat Man Stage
-        .byte   $17                     ; 12: Wood Man Stage
-        .byte   $10                     ; 13: Stage Clear
-        .byte   $0C                     ; 14: Get Weapon
-        .byte   $0A                     ; 15: Dr. Wily Map
-        .byte   $11                     ; 16: Dr. Wily Stage 1-2
-        .byte   $0B                     ; 17: Dr. Wily Stage 3-5
-        .byte   $15                     ; 18: Boss Battle
-        .byte   $0F                     ; 19: Game Over
-        .byte   $16                     ; 20: Ending
-        .byte   $13                     ; 21: Credits
-        .byte   $0D                     ; 22: All Clear
-        .byte   $14                     ; 23: Dr. Wily UFO
+        .byte   $01                     ;  7: Wood Man Stage
+        .byte   $07                     ;  8: Bubble Man Stage
+        .byte   $06                     ;  9: Quick Man Stage
+        .byte   $00                     ; 10: Flash Man Stage
+        .byte   $05                     ; 11: Metal Man Stage
+        .byte   $02                     ; 12: Crash Man Stage
+        .byte   $15                     ; 13: Stage Clear
+        .byte   $17                     ; 14: Weapon Upgrade
+        .byte   $11                     ; 15: Dr. Wily Map
+        .byte   $08                     ; 16: Dr. Wily Stage 1
+        .byte   $09                     ; 17: Dr. Wily Stage 2
+        .byte   $0B                     ; 18: Boss
+        .byte   $16                     ; 19: Wily Defeated
+        .byte   $13                     ; 20: Epilogue
+        .byte   $0D                     ; 21: Ending (Title Repeat)
+        .byte   $14                     ; 22: Credits
+        .byte   $0F                     ; 23: Game Over
+        ; ─── Sound Effects (29 tracks) ─────────────────────────────────────
+        .byte   $2F                     ; 24: Menu Cursor
+        .byte   $29                     ; 25: Landing
+        .byte   $26                     ; 26: Damage Recoil
+        .byte   $24                     ; 27: Mega Buster
+        .byte   $2B                     ; 28: Damage Hit
+        .byte   $2D                     ; 29: Deflect
+        .byte   $42                     ; 30: Extra Life
+        .byte   $28                     ; 31: Health Tick
+        .byte   $35                     ; 32: Skew 1
+        .byte   $36                     ; 33: Skew 2
+        .byte   $37                     ; 34: Skew 3
+        .byte   $30                     ; 35: Teleport In
+        .byte   $3A                     ; 36: Teleport Out
+        .byte   $38                     ; 37: Heat Charge
+        .byte   $3F                     ; 38: Air Shooter
+        .byte   $31                     ; 39: Leaf Shield Orbit
+        .byte   $21                     ; 40: Time Stopper
+        .byte   $23                     ; 41: Metal Blade
+        .byte   $2E                     ; 42: Crash Bomb Stick
+        .byte   $41                     ; 43: Death Explosion
+        .byte   $25                     ; 44: Enemy Shot
+        .byte   $39                     ; 45: Enemy Bounce
+        .byte   $27                     ; 46: Quick Man Laser
+        .byte   $3B                     ; 47: Water Splash
+        .byte   $3C                     ; 48: Block Appear
+        .byte   $2A                     ; 49: Wily Alarm
+        .byte   $2C                     ; 50: Dragon Fire
+        .byte   $3D                     ; 51: Acid Drip 1
+        .byte   $3E                     ; 52: Acid Drip 2

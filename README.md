@@ -16,7 +16,9 @@ Requires ca65/ld65 (from [cc65](https://cc65.github.io/)) and GNU Make.
 make
 ```
 
-Produces `build/mm2_built.nes` (verified byte-perfect against the original ROM) and `build/mm2.nsfe` (NSFe soundtrack).
+Produces:
+- `build/mm2_built.nes` — byte-perfect ROM, verified against the original
+- `build/mm2.nsfe` — NSFe soundtrack (built from source — see below)
 
 ### Expected Checksums
 
@@ -164,14 +166,11 @@ Wily stages share entity spawn banks with Robot Master stages — both stages' e
 
 ## NSFe Soundtrack
 
-`make` also builds `build/mm2.nsfe`, an [NSFe](https://www.nesdev.org/wiki/NSFe) soundtrack file with track names, per-track durations, fade-out times, and composer credits. Playable in any NSFe-compatible player (NSFPlay, Mesen, etc.).
+The NSFe file is built entirely from source — no ROM extraction, no external scripts. Bank $0C contains the complete sound engine and all music/instrument data, fully self-contained. A two-pass ca65/ld65 pipeline assembles bank $0C with the NSF init/play shim (`nsfe_shim.asm`) into a raw PRG binary, then wraps it by `src/nsfe.asm` into a complete NSFe container with chunk headers, track metadata, and the PRG payload via `.incbin`.
 
-Bank $0C contains the complete sound engine and all music data — no other ROM banks are needed for music playback. The build uses a two-pass ca65/ld65 pipeline (same approach as [MM3](https://github.com/megamanforever/megaman3-disassembly-ca65)):
+All metadata lives in `src/nsfe.asm` as assembly directives: track names, per-track durations, fade times, and composer credits. Chunk sizes auto-calculate via label math. To change a track title or timing, edit the file and rebuild.
 
-1. **Pass 1:** Assemble bank $0C + NSF init/play shim (`nsfe_shim.asm`) into a raw PRG binary
-2. **Pass 2:** Assemble the NSFe container (`nsfe.asm`), which `.incbin`s the PRG and wraps it with metadata chunks
-
-24 tracks covering all music — Opening through Ending, including the Dr. Wily UFO jingle. Track names, durations, and composer attributions are defined in `src/nsfe.asm`.
+53 tracks: 24 music (Opening through Credits, all 8 stage themes, Wily stages, boss battle, jingles) and 29 sound effects. Playable in any NSFe-compatible player (NSFPlay, Mesen, etc.).
 
 ## License
 

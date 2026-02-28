@@ -555,9 +555,9 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 | Gravity (water) | $1E | `gravity_hi_table+1` bank0E:1447 |
 | Jump velocity | $04.DF (initial Y vel) | Set in player jump code |
 | Terminal velocity | $F4 (max Y fall speed) | Clamped in physics |
-| Knockback Y vel | $01.40 | `fire_weapon_buster` bank0F:2781 |
-| Knockback X vel | $00.90 | `fire_weapon_buster` bank0F:2785 |
-| I-frame duration | $6F (111 frames) | `fire_weapon_buster` bank0F:2780 |
+| Knockback Y vel | $01.40 | `player_damage_knockback` bank0F:2781 |
+| Knockback X vel | $00.90 | `player_damage_knockback` bank0F:2785 |
+| I-frame duration | $6F (111 frames) | `player_damage_knockback` bank0F:2780 |
 | Default entity timer | $14 (20 frames) | `entity_init_from_type` bank0F:3214 |
 
 ### Player State Variables

@@ -48,7 +48,7 @@
 ; --- Weapon Fire Pipeline ---
 ;   weapon_dispatch (per weapon type)
 ;    ├── Ammo check + deduction
-;    ├── fire_find_slot_loop (scan slots 2-$0E)
+;    ├── fire_weapon_scan_slot (scan slots 2-4)
 ;    └── weapon_spawn_projectile (type, position, velocity from tables)
 ;
 ; =============================================================================
@@ -2763,10 +2763,10 @@ weapon_palette_data:  .byte   $0F,$0F,$2C,$11,$0F,$0F,$28,$15 ; palette entries 
         .byte   $0F,$0F,$30,$16,$0F,$0F,$30,$16
 
 ; =============================================================================
-; fire_weapon_buster — Fire Mega Buster — create bullet projectile ($D332)
+; player_damage_knockback — Player damage recoil — i-frames, knockback, sound ($D332)
 ; =============================================================================
-fire_weapon_buster:
-        lda     #$26                    ; sound: buster shot
+player_damage_knockback:
+        lda     #$26                    ; sound: damage recoil
         jsr     bank_switch_enqueue
         lda     #$00
         sta     weapon_fire_dir
@@ -2789,17 +2789,17 @@ fire_weapon_buster:
         lsr     ent_flags + $0F         ; clear sprint flag (bit 7)
         lda     #$00
         sta     game_mode
-; --- Scan slots $0E down to $02 for first inactive weapon slot ---
+; --- Scan slots $0E down to $02 for free slot to spawn damage spark ---
         ldx     #$0E
-fire_find_slot_loop:
+knockback_find_slot_loop:
         lda     ent_flags,x
-        bpl     fire_setup_projectile   ; bit 7 clear = slot available
+        bpl     knockback_spawn_spark   ; bit 7 clear = slot available
         dex
         cpx     #$01
-        bne     fire_find_slot_loop
+        bne     knockback_find_slot_loop
         rts                             ; no free slot
 
-fire_setup_projectile:  lda     #$80    ; active flag
+knockback_spawn_spark:  lda     #$80    ; active flag
         sta     ent_flags,x                 ; activate projectile entity
         lda     #ENTITY_CHANGKEY_PROJ   ; buster/changkey projectile entity type
         sta     ent_type,x
@@ -4696,7 +4696,7 @@ player_coll_knockback:
         eor     #$40                    ; flip: player faces AWAY from enemy
         ora     ent_flags
         sta     ent_flags
-        jsr     fire_weapon_buster      ; trigger recoil animation
+        jsr     player_damage_knockback ; trigger recoil animation
         inc     temp_01
 player_collision_done:  rts
 

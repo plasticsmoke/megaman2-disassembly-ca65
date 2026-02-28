@@ -49,7 +49,7 @@
 explosion_array_setup_inner           := $C3A8
 sound_column_copy           := $C5F1
 tile_lookup           := $CC63
-fire_weapon_buster           := $D332
+player_damage_knockback      := $D332
 entity_init_from_type           := $D77C
 find_empty_entity_slot           := $DA43
         jmp     boss_init
@@ -4535,7 +4535,7 @@ proximity_flip_facing:  lda     ent_flags
         eor     #$40
         ora     ent_flags
         sta     ent_flags
-        jsr     fire_weapon_buster
+        jsr     player_damage_knockback
         inc     temp_01
 proximity_check_rts:  rts
 
