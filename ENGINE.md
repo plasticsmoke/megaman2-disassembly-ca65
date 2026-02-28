@@ -124,20 +124,18 @@ main_game_loop (runs forever):
 This is the core gameplay loop. Every visible frame executes these steps in order:
 
 ```
-stage_frame_loop:
-  1. read_controllers         — Latch + shift 8 bits from $4016/$4017
-  2. player_update            — Movement, jumping, ladder, weapon fire
-  3. entity_update_loop       — For each slot $10-$1F:
-     ├── apply_entity_physics — Move entity by velocity
-     ├── entity_ai_dispatch   — Run type-specific AI handler
-     └── collision checks     — Player contact + weapon hit
-  4. entity_spawn_scan        — Activate entities entering screen
-  5. sound_engine_update      — Process music + SFX channels
-  6. render_all_sprites       — Build OAM buffer from entity positions
-  7. wait_for_vblank          — Spin on vblank_done flag until NMI fires
+main_game_loop:
+  1. build_active_list        — Tag entities within screen range
+  2. entity_update_dispatch   — Player input, state machine, weapons
+  3. update_entity_positions  — Apply velocity → position for all entities
+  4. entity_spawn_scan        — Activate/despawn entities at scroll edges
+  5. process_sound_and_bosses — Sound engine tick + boss defeat check
+  6. entity_ai_dispatch       — Run per-type AI handler for slots $10-$1F
+  7. render_all_sprites       — Build OAM buffer from entity positions
+  8. wait_for_vblank          — Spin on vblank_done flag until NMI fires
 ```
 
-`wait_for_vblank` at step 7 blocks until the NMI handler sets `vblank_done`. This synchronizes gameplay to 60 Hz (NTSC). All PPU writes happen inside NMI; the main loop only prepares data.
+Note that physics (step 3) runs **before** AI (step 6), so AI handlers see the entity's updated position. Controller input is processed inside `entity_update_dispatch`. `wait_for_vblank` at step 8 blocks until the NMI handler sets `vblank_done`. This synchronizes gameplay to 60 Hz (NTSC). All PPU writes happen inside NMI; the main loop only prepares data.
 
 ---
 
@@ -236,7 +234,7 @@ The game supports 32 entity slots indexed $00-$1F:
 
 ### Parallel Arrays
 
-Entity state is stored in parallel arrays indexed by the X register. Each array has 32 entries at $10 stride (16 bytes apart). Key arrays:
+Entity state is stored in parallel arrays indexed by the X register (X = slot number $00-$1F). The primary arrays are spaced $20 (32 bytes) apart, with secondary arrays (spawn data, hitbox masks) interleaved at $10 offsets in between. Key arrays:
 
 | Array | Address | Purpose |
 |-------|---------|---------|
@@ -345,7 +343,7 @@ X movement:
   if facing_right: position.x = position.x + velocity.x
 
 Bounds check:
-  if off-screen by > 32px → despawn
+  if screen-relative X < $08 or >= $F8 → despawn (8px margin)
 ```
 
 Key detail: Y velocity is **subtracted** from Y position. This is because NES screen coordinates increase downward, so a positive Y velocity means upward movement. Gravity decreases Y velocity each frame, eventually making it negative (downward).
@@ -392,8 +390,8 @@ ora (other bits)  ; merge back
 Scans player weapon slots for overlap with the current enemy:
 
 1. **Frame alternation** — split work across two frames to save cycles:
-   - Even frames: scan slots 9, 7, 5, 3
-   - Odd frames: scan slots 8, 6, 4, 2
+   - Odd frames: scan slots 9, 7, 5, 3
+   - Even frames: scan slots 8, 6, 4, 2
 2. For each active weapon slot, bounding box test against current enemy
 3. On hit:
    - Call weapon-specific collision handler (pointer table dispatch)
@@ -485,14 +483,16 @@ The player uses a special 3-layer rendering system (`render_player_sprites` in b
 
 ```
 Each frame:
-  y_velocity -= $40          ; gravity pulls downward
-  if y_velocity < $F4:       ; terminal velocity cap
+  y_velocity -= gravity_sub_hi   ; gravity pulls downward (normally $40)
+  if y_velocity < $F4:           ; terminal velocity cap
     y_velocity = $F4
-  position.y -= y_velocity   ; apply (subtract because NES Y-axis is inverted)
+  position.y -= y_velocity       ; apply (subtract because NES Y-axis is inverted)
 ```
 
-- **Jump**: initial Y velocity = ~$04.80 (upward). Gravity decreases it ~$40/256 per frame.
-- **Floor snap**: when tile collision detects ground, `Y &= $F0` (align to 16px grid) and velocity = 0.
+Two gravity modes exist in `gravity_hi_table`: $40 (normal) and $1E (reduced, used for water/special states).
+
+- **Jump**: initial Y velocity = $04.DF (upward). Gravity decreases it via 16-bit subtraction each frame.
+- **Floor snap**: when tile collision detects ground, the Y position is aligned to the next 16px boundary using `(y AND $0F) EOR $0F + 1` as a correction offset, then velocity is zeroed.
 - **Ceiling snap**: on upward collision, velocity set to 0 (fall immediately).
 - **Gravity sub-pixel**: `gravity_sub_lo`/`gravity_sub_hi` ($30/$31) accumulate fractional gravity. The carry propagates into the velocity byte for smooth deceleration.
 
@@ -674,7 +674,7 @@ $B900,y = entity_type     — ENTITY_* type ID
 
 ### Dynamic Spawns
 
-`spawn_entity_from_parent` ($F159 in bank $0F) creates child entities at runtime:
+`spawn_entity_from_parent` (in `bank0F_fixed.asm`) creates child entities at runtime:
 
 1. Find an empty slot (scan $10-$1F for inactive)
 2. Copy parent's position to child
