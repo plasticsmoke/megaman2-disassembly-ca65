@@ -170,7 +170,7 @@ channel_init_0b:
 ; Track-to-sound-ID mapping table
 ; =============================================================================
 ; Maps NSFe track number (0-based index) to bank $0C engine sound ID.
-; 24 music entries.  Stage themes ordered by stage index ($00-$07).
+; 24 music + 29 SFX entries.  Stage themes ordered by stage index ($00-$07).
 ; =============================================================================
 nsf_track_table:
         ; ─── Music (24 tracks) ──────────────────────────────────────────────

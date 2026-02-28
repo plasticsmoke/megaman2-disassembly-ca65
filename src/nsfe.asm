@@ -98,14 +98,14 @@ time_start:
 .dword  117000                  ; 11: $05 Metal Man Stage (0:39+0:39 ×2)
 .dword  218000                  ; 12: $02 Crash Man Stage (1:30+1:04 ×2)
 .dword    6000                  ; 13: $15 Stage Clear (0:06, one-shot)
-.dword   36000                  ; 14: $17 Get A Weapon (0:30+0:03 ×2)
+.dword   36000                  ; 14: $17 Weapon Upgrade (0:30+0:03 ×2)
 .dword    8000                  ; 15: $11 Dr. Wily Map (0:08, one-shot)
 .dword  225000                  ; 16: $08 Dr. Wily Stage 1 (1:15+1:15 ×2)
 .dword  231000                  ; 17: $09 Dr. Wily Stage 2 (1:17+1:17 ×2)
 .dword   46000                  ; 18: $0B Boss (0:20+0:13 ×2)
 .dword    8000                  ; 19: $16 Wily Defeated (0:08, one-shot)
 .dword   70000                  ; 20: $13 Epilogue (1:10, loops)
-.dword   43000                  ; 21: $0D Ending (0:43, same melody as Title)
+.dword   43000                  ; 21: $0D Ending / Title Repeat (0:43, non-looping)
 .dword   66000                  ; 22: $14 Credits (1:06, one-shot)
 .dword    3000                  ; 23: $0F Game Over (0:03, one-shot)
 ; ─── Sound Effects ──────────────────────────────────────────────────────
@@ -162,14 +162,14 @@ fade_start:
 .dword   5000                   ; 11: $05 Metal Man Stage (loops)
 .dword   5000                   ; 12: $02 Crash Man Stage (loops)
 .dword      0                   ; 13: $15 Stage Clear (one-shot)
-.dword   5000                   ; 14: $17 Get A Weapon (loops)
+.dword   5000                   ; 14: $17 Weapon Upgrade (loops)
 .dword      0                   ; 15: $11 Dr. Wily Map (one-shot)
 .dword   5000                   ; 16: $08 Dr. Wily Stage 1 (loops)
 .dword   5000                   ; 17: $09 Dr. Wily Stage 2 (loops)
 .dword   5000                   ; 18: $0B Boss (loops)
 .dword      0                   ; 19: $16 Wily Defeated (one-shot)
 .dword      0                   ; 20: $13 Epilogue (clean stop)
-.dword      0                   ; 21: $0D Ending (clean stop)
+.dword      0                   ; 21: $0D Ending / Title Repeat (non-looping)
 .dword      0                   ; 22: $14 Credits (one-shot)
 .dword      0                   ; 23: $0F Game Over (one-shot)
 ; ─── Sound Effects (all one-shot, no fade) ──────────────────────────────
@@ -207,12 +207,13 @@ fade_end:
 ; =============================================================================
 ; tlbl chunk — per-track labels (null-terminated strings)
 ; =============================================================================
-; Track names from code context (bank_switch_enqueue call sites)
-; cross-referenced with VGMRips Mega Man 2 (NES) pack.
+; Music names from code context and VGMRips.
+; SFX names verified against in-game playback.
 ;
 ; Sound IDs $00-$07 map to stage themes via stage_bank_table in bank $0E.
 ; Sound IDs $08-$09 map to Wily stages via the same table.
 ; Sound IDs $0A-$17 are UI/jingle/ending music triggered directly.
+; Sound IDs $21-$42 are sound effects dispatched via bank_switch_enqueue.
 ; =============================================================================
 .dword  tlbl_end - tlbl_start
 .byte   "tlbl"
