@@ -50,7 +50,7 @@ SND_SWEEP_ACC     = $1E    ; sweep accumulator
         jmp     sound_update_main       ; entry 0: per-frame sound update
 
 ; ─── Bank entry dispatch — A = command code on entry ───
-; $00-$EB: weapon index → weapon_select_handler (load weapon data + CHR tiles)
+; $00-$FB: weapon index → weapon_select_handler (load weapon data + CHR tiles)
 ; $FC: set frame repeat count → weapon_cmd_fc_handler
 ; $FD: enter password screen → password_mode_init
 ; $FE: reinit weapon slots (no CHR upload) → weapon_secondary_init
