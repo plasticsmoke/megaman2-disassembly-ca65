@@ -3503,28 +3503,28 @@ fire_weapon_bubble_fail:  sec
         rts
 @skip:
         ldx     #$05
-fire_weapon_leaf_scan:  lda     ent_flags,x
-        bpl     fire_weapon_leaf_fire
+fire_weapon_quick_scan:  lda     ent_flags,x
+        bpl     fire_weapon_quick_fire
         dex
         cpx     #$01
-        bne     fire_weapon_leaf_scan
-        beq     fire_weapon_leaf_fail
-fire_weapon_leaf_fire:  ldy     #$05
+        bne     fire_weapon_quick_scan
+        beq     fire_weapon_quick_fail
+fire_weapon_quick_fire:  ldy     #$05
         jsr     weapon_spawn_projectile
         lda     #$24
         jsr     bank_switch_enqueue
         inc     weapon_counter_2
         lda     weapon_counter_2
         cmp     #$08
-        bne     fire_weapon_leaf_reset
+        bne     fire_weapon_quick_reset
         lda     #$00
         sta     weapon_counter_2
         dec     weapon_energy
-fire_weapon_leaf_reset:  lda     #$00
+fire_weapon_quick_reset:  lda     #$00
         sta     weapon_counter_1
         jmp     fire_weapon_set_timer
 
-fire_weapon_leaf_fail:  sec
+fire_weapon_quick_fail:  sec
         rts
 
         lda     p1_new_presses
@@ -3549,52 +3549,52 @@ fire_weapon_leaf_fail:  sec
 
         lda     p1_new_presses
         and     #$02
-        beq     fire_weapon_crash_fail
+        beq     fire_weapon_metal_fail
         ldx     #$04
-fire_weapon_crash_scan:  lda     ent_flags,x
-        bpl     fire_weapon_crash_fire
+fire_weapon_metal_scan:  lda     ent_flags,x
+        bpl     fire_weapon_metal_fire
         dex
         cpx     #$01
-        bne     fire_weapon_crash_scan
-        beq     fire_weapon_crash_fail
-fire_weapon_crash_fire:  ldy     #$07
+        bne     fire_weapon_metal_scan
+        beq     fire_weapon_metal_fail
+fire_weapon_metal_fire:  ldy     #$07
         jsr     weapon_spawn_projectile
         lda     #$23
         jsr     bank_switch_enqueue
         inc     weapon_counter_2
         lda     weapon_counter_2
         cmp     #$04
-        bne     fire_weapon_crash_aim
+        bne     fire_weapon_metal_aim
         lda     #$00
         sta     weapon_counter_2
         dec     weapon_energy + 2
-fire_weapon_crash_aim:  lda     controller_1
+fire_weapon_metal_aim:  lda     controller_1
         and     #$F0
         lsr     a
         lsr     a
         lsr     a
         lsr     a
         tay
-        lda     crash_yvel_sub_tbl,y
+        lda     metal_blade_yvel_sub_tbl,y
         sta     ent_y_vel_sub,x
-        lda     crash_yvel_tbl,y
+        lda     metal_blade_yvel_tbl,y
         sta     ent_y_vel,x
-        lda     crash_xvel_sub_tbl,y
+        lda     metal_blade_xvel_sub_tbl,y
         sta     ent_x_vel_sub,x
-        lda     crash_xvel_tbl,y
+        lda     metal_blade_xvel_tbl,y
         sta     ent_x_vel,x
         jmp     fire_weapon_finish
 
-fire_weapon_crash_fail:  sec
+fire_weapon_metal_fail:  sec
         rts
 
-crash_yvel_sub_tbl:  .byte   $00,$00,$00,$00,$00,$D4,$2C,$00
+metal_blade_yvel_sub_tbl:  .byte   $00,$00,$00,$00,$00,$D4,$2C,$00
         .byte   $00,$D4,$2C,$00,$00,$00,$00,$00
-crash_yvel_tbl:  .byte   $00,$04,$FC,$00,$00,$02,$FD,$00
+metal_blade_yvel_tbl:  .byte   $00,$04,$FC,$00,$00,$02,$FD,$00
         .byte   $00,$02,$FD,$00,$00,$00,$00,$00
-crash_xvel_sub_tbl:  .byte   $00,$00,$00,$00,$00,$D4,$D4,$00
+metal_blade_xvel_sub_tbl:  .byte   $00,$00,$00,$00,$00,$D4,$D4,$00
         .byte   $00,$D4,$D4,$00,$00,$00,$00,$00
-crash_xvel_tbl:  .byte   $04,$00,$00,$00,$04,$02,$02,$00
+metal_blade_xvel_tbl:  .byte   $04,$00,$00,$00,$04,$02,$02,$00
         .byte   $04,$02,$02,$00,$00,$00,$00,$00
         lda     p1_new_presses
         and     #$02
@@ -3621,13 +3621,13 @@ fire_weapon_finish_in_range:
         and     #$02
         beq     *-6
         ldx     #$04
-fire_weapon_star_scan:  lda     ent_flags,x
-        bpl     fire_weapon_star_fire
+fire_weapon_item1_scan:  lda     ent_flags,x
+        bpl     fire_weapon_item1_fire
         dex
         cpx     #$01
-        bne     fire_weapon_star_scan
-        beq     fire_weapon_star_fail
-fire_weapon_star_fire:  ldy     #$09
+        bne     fire_weapon_item1_scan
+        beq     fire_weapon_item1_fail
+fire_weapon_item1_fire:  ldy     #$09
         jsr     weapon_spawn_projectile
         sec
         lda     weapon_energy + 4
@@ -3635,7 +3635,7 @@ fire_weapon_star_fire:  ldy     #$09
         sta     weapon_energy + 4
         jmp     fire_weapon_finish
 
-fire_weapon_star_fail:  sec
+fire_weapon_item1_fail:  sec
         rts
 
         lda     p1_new_presses
@@ -3715,31 +3715,31 @@ entity_special_dispatch_hi:  .byte   $DD,$DD,$DE,$DE,$DF,$DF,$E0,$E1
         .byte   $E1,$E1,$E2,$E2,$E4,$E4,$E4,$E4
         lda     ent_state,x
         beq     @skip
-        jmp     etank_weapon_state_check
+        jmp     atomic_fire_state_check
 @skip:
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
         lda     weapon_counter_2
         cmp     #$FF
-        beq     etank_check_threshold
+        beq     atomic_fire_check_threshold
         inc     weapon_counter_2
-etank_check_threshold:  ldy     #$02
+atomic_fire_check_threshold:  ldy     #$02
         lda     weapon_counter_2
         cmp     #$7D
-        bcc     etank_set_anim
+        bcc     atomic_fire_set_anim
         iny
         iny
         cmp     #$BB
-        bcc     etank_set_anim
+        bcc     atomic_fire_set_anim
         iny
         iny
-etank_set_anim:  sty     temp_00
+atomic_fire_set_anim:  sty     temp_00
         lda     frame_counter
         and     #$04
-        bne     etank_animate
+        bne     atomic_fire_animate
         ldy     #$00
-etank_animate:  jsr     etank_update_palette
+atomic_fire_animate:  jsr     atomic_fire_update_palette
         lda     ent_y_px
         sta     ent_y_px,x
         lda     ent_x_px
@@ -3749,35 +3749,35 @@ etank_animate:  jsr     etank_update_palette
         lda     temp_00
         lsr     a
         tay
-        lda     etank_cost_tbl,y
+        lda     atomic_fire_cost_tbl,y
         cmp     weapon_ammo
-        bcc     etank_check_fire
-        beq     etank_check_fire
+        bcc     atomic_fire_check_release
+        beq     atomic_fire_check_release
         ldy     #$00
         sty     weapon_counter_2
-        jsr     etank_update_palette
+        jsr     atomic_fire_update_palette
         lsr     ent_flags,x
         rts
 
-etank_check_fire:  lda     controller_1
+atomic_fire_check_release:  lda     controller_1
         and     #$02
-        beq     etank_reset_counter
+        beq     atomic_fire_reset_counter
         rts
 
-etank_reset_counter:  ldy     #$00
+atomic_fire_reset_counter:  ldy     #$00
         sty     weapon_counter_2
-        jsr     etank_update_palette
+        jsr     atomic_fire_update_palette
         lsr     ent_flags + $02
         ldx     #$04
-etank_find_projectile:  lda     ent_flags,x
-        bpl     etank_spawn_projectile
+atomic_fire_find_slot:  lda     ent_flags,x
+        bpl     atomic_fire_spawn_projectile
         dex
         cpx     #$02
-        bne     etank_find_projectile
-etank_done:  rts
+        bne     atomic_fire_find_slot
+atomic_fire_done:  rts
 
-etank_spawn_projectile:  lda     $F9
-        bne     etank_deduct_ammo
+atomic_fire_spawn_projectile:  lda     $F9
+        bne     atomic_fire_deduct_ammo
         ldy     #$01
         jsr     weapon_spawn_projectile
         lda     temp_00
@@ -3785,64 +3785,64 @@ etank_spawn_projectile:  lda     $F9
         sta     ent_state,x
         sta     ent_weapon_type,x
         tay
-        lda     etank_anim_frame_tbl,y
+        lda     atomic_fire_anim_frame_tbl,y
         sta     ent_anim_id,x
         sec
         lda     ent_x_px,x
         sbc     scroll_x
         sta     ent_screen_x,x
-etank_deduct_ammo:  sec
+atomic_fire_deduct_ammo:  sec
         lda     weapon_ammo
-        sbc     etank_cost_tbl,y
+        sbc     atomic_fire_cost_tbl,y
         sta     weapon_ammo
         lda     #$38
         jsr     bank_switch_enqueue
         lda     #$04
         sta     ent_x_vel,x
         lda     game_substate
-        beq     etank_done
+        beq     atomic_fire_done
         jmp     fire_weapon_set_timer
 
-etank_weapon_state_check:  cmp     #$02
-        bcs     etank_weapon_mid
+atomic_fire_state_check:  cmp     #$02
+        bcs     atomic_fire_weapon_mid
         lda     ent_anim_id,x
         cmp     #$03
-        bne     etank_apply_physics
+        bne     atomic_fire_apply_physics
         lda     #$01
-        bne     etank_weapon_set_anim
-etank_weapon_mid:  bne     etank_weapon_high
+        bne     atomic_fire_weapon_set_anim
+atomic_fire_weapon_mid:  bne     atomic_fire_weapon_high
         lda     ent_anim_id,x
         cmp     #$06
-        bne     etank_apply_physics
+        bne     atomic_fire_apply_physics
         lda     #$04
-        bne     etank_weapon_set_anim
-etank_weapon_high:  lda     ent_anim_id,x
+        bne     atomic_fire_weapon_set_anim
+atomic_fire_weapon_high:  lda     ent_anim_id,x
         cmp     #$09
-        bne     etank_apply_physics
+        bne     atomic_fire_apply_physics
         lda     #$07
-etank_weapon_set_anim:  sta     ent_anim_id,x
-etank_apply_physics:  jsr     apply_entity_physics
+atomic_fire_weapon_set_anim:  sta     ent_anim_id,x
+atomic_fire_apply_physics:  jsr     apply_entity_physics
         rts
 
-etank_update_palette:  lda     etank_palette_lo_tbl,y
+atomic_fire_update_palette:  lda     atomic_fire_palette_lo_tbl,y
         sta     palette_sprite + $01
-        lda     etank_palette_hi_tbl,y
+        lda     atomic_fire_palette_hi_tbl,y
         sta     palette_sprite + $03
         lda     frame_counter
         and     #$07
-        bne     etank_palette_done
+        bne     atomic_fire_palette_done
         lda     temp_00
         lsr     a
         tay
-        lda     etank_sound_bank_tbl,y
+        lda     atomic_fire_sound_bank_tbl,y
         jsr     bank_switch_enqueue
-etank_palette_done:  rts
+atomic_fire_palette_done:  rts
 
-etank_sound_bank_tbl:  .byte   $35,$35,$36,$37
-etank_palette_lo_tbl:  .byte   $0F
-etank_palette_hi_tbl:  .byte   $15,$31,$15,$35,$2C,$30,$30
-etank_anim_frame_tbl:  .byte   $00,$01,$04
-etank_cost_tbl:  .byte   $07,$01,$06,$0A,$8A,$38,$E9,$02
+atomic_fire_sound_bank_tbl:  .byte   $35,$35,$36,$37
+atomic_fire_palette_lo_tbl:  .byte   $0F
+atomic_fire_palette_hi_tbl:  .byte   $15,$31,$15,$35,$2C,$30,$30
+atomic_fire_anim_frame_tbl:  .byte   $00,$01,$04
+atomic_fire_cost_tbl:  .byte   $07,$01,$06,$0A,$8A,$38,$E9,$02
         .byte   $A8,$B9,$6E,$DE,$9D,$20,$06,$B9
         .byte   $71,$DE,$9D,$00,$06,$18,$BD,$60
         .byte   $06,$69,$10,$9D,$60,$06,$BD,$40
@@ -3960,42 +3960,42 @@ bubble_yvel_tbl:  .byte   $04,$FC
         sta     temp_02
         jsr     check_horiz_tile_collision
         lda     ent_state,x
-        bne     metal_blade_launch_skip
+        bne     bubble_lead_launch_skip
         lda     temp_00
-        beq     metal_blade_physics
+        beq     bubble_lead_physics
         inc     ent_state,x
         lda     ent_flags,x
         and     #$FB
         sta     ent_flags,x
-metal_blade_launch:  lda     #$C0
+bubble_lead_launch:  lda     #$C0
         sta     ent_y_vel_sub,x
         lda     #$FF
         sta     ent_y_vel,x
         lda     #$02
         sta     ent_x_vel,x
-        bne     metal_blade_physics
-metal_blade_launch_skip:
+        bne     bubble_lead_physics
+bubble_lead_launch_skip:
         cmp     #$01
-        bne     metal_blade_check_stop
+        bne     bubble_lead_check_stop
         lda     temp_03
-        beq     metal_blade_check_wall
+        beq     bubble_lead_check_wall
         lsr     ent_flags,x
         rts
 
-metal_blade_check_wall:  lda     temp_00
-        bne     metal_blade_physics
+bubble_lead_check_wall:  lda     temp_00
+        bne     bubble_lead_physics
         lda     #$00
         sta     ent_x_vel,x
         sta     ent_y_vel_sub,x
         lda     #$FE
         sta     ent_y_vel,x
         inc     ent_state,x
-        bne     metal_blade_physics
-metal_blade_check_stop:  lda     temp_00
-        beq     metal_blade_physics
+        bne     bubble_lead_physics
+bubble_lead_check_stop:  lda     temp_00
+        beq     bubble_lead_physics
         dec     ent_state,x
-        bne     metal_blade_launch
-metal_blade_physics:  jsr     apply_entity_physics
+        bne     bubble_lead_launch
+bubble_lead_physics:  jsr     apply_entity_physics
         rts
 
         .byte   $BD,$E0,$04,$C9,$12,$B0,$14,$38
@@ -4006,17 +4006,17 @@ metal_blade_physics:  jsr     apply_entity_physics
         .byte   $06,$E9
         .byte   $00
         .byte   $9D,$40,$06,$4C,$0F,$E0
-        bne     metal_blade_check_despawn
+        bne     bubble_lead_check_despawn
         lda     ent_flags,x
         eor     #$40
         sta     ent_flags,x
-metal_blade_check_despawn:  lda     ent_state,x
+bubble_lead_check_despawn:  lda     ent_state,x
         cmp     #$23
-        bne     metal_blade_accelerate
+        bne     bubble_lead_accelerate
         lsr     ent_flags,x
         rts
 
-metal_blade_accelerate:  clc
+bubble_lead_accelerate:  clc
         lda     ent_y_vel_sub,x
         adc     #$4B
         sta     ent_y_vel_sub,x
@@ -4028,7 +4028,7 @@ metal_blade_accelerate:  clc
         rts
 
         lda     ent_state,x
-        bne     quick_boomerang_hit_skip
+        bne     crash_bomber_hit_skip
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
@@ -4060,7 +4060,7 @@ metal_blade_accelerate:  clc
         ldy     temp_00
         ldx     current_entity_slot
         lda     tile_solid_flag_tbl,y
-        bne     quick_boomerang_hit
+        bne     crash_bomber_hit
         clc
         lda     temp_0A
         adc     #$10
@@ -4069,11 +4069,11 @@ metal_blade_accelerate:  clc
         ldy     temp_00
         ldx     current_entity_slot
         lda     tile_solid_flag_tbl,y
-        bne     quick_boomerang_hit
+        bne     crash_bomber_hit
         jsr     apply_entity_physics
         rts
 
-quick_boomerang_hit:  lda     #$2E
+crash_bomber_hit:  lda     #$2E
         jsr     bank_switch_enqueue
         lda     ent_flags,x
         and     #$FE
@@ -4082,17 +4082,17 @@ quick_boomerang_hit:  lda     #$2E
         inc     ent_state,x
         lda     #$7E
         sta     ent_hp,x
-        bne     quick_boomerang_bounds
-quick_boomerang_hit_skip:
+        bne     crash_bomber_bounds
+crash_bomber_hit_skip:
         cmp     #$01
-        bne     quick_boomerang_phase2
+        bne     crash_bomber_phase2
         lda     ent_anim_id,x
         cmp     #$04
-        bne     quick_boomerang_phase1
+        bne     crash_bomber_phase1
         lda     #$02
         sta     ent_anim_id,x
-quick_boomerang_phase1:  dec     ent_hp,x
-        bne     quick_boomerang_bounds
+crash_bomber_phase1:  dec     ent_hp,x
+        bne     crash_bomber_bounds
         lda     #$05
         sta     ent_anim_id,x
         lda     #$00
@@ -4100,14 +4100,14 @@ quick_boomerang_phase1:  dec     ent_hp,x
         lda     #$38
         sta     ent_hp,x
         inc     ent_state,x
-quick_boomerang_bounds:  jsr     check_entity_on_screen
+crash_bomber_bounds:  jsr     check_entity_on_screen
         rts
 
-quick_boomerang_phase2:  lda     #$00
+crash_bomber_phase2:  lda     #$00
         sta     ent_anim_frame,x
         lda     ent_hp,x
         and     #$07
-        bne     quick_boomerang_dec_hp
+        bne     crash_bomber_dec_hp
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     ent_hp,x
@@ -4116,9 +4116,9 @@ quick_boomerang_phase2:  lda     #$00
         sta     temp_02
         lda     #$06
         sta     temp_01
-quick_boomerang_scatter:  lda     temp_01
+crash_bomber_scatter:  lda     temp_01
         cmp     #$02
-        beq     quick_boomerang_dec_hp
+        beq     crash_bomber_dec_hp
         sta     temp_00
         ldy     #$0C
         jsr     spawn_weapon_from_entity
@@ -4138,14 +4138,14 @@ quick_boomerang_scatter:  lda     temp_01
         ldx     current_entity_slot
         inc     temp_02
         dec     temp_01
-        bne     quick_boomerang_scatter
-quick_boomerang_dec_hp:  ldx     current_entity_slot
+        bne     crash_bomber_scatter
+crash_bomber_dec_hp:  ldx     current_entity_slot
         dec     ent_hp,x
-        bpl     quick_boomerang_check
+        bpl     crash_bomber_check
         lsr     ent_flags,x
         rts
 
-quick_boomerang_check:  jsr     check_entity_on_screen
+crash_bomber_check:  jsr     check_entity_on_screen
         rts
 
 scatter_offset_y_tbl:  .byte   $F8,$F0,$08,$00,$F8,$F8
