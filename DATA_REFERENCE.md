@@ -189,7 +189,7 @@ Where difficulty_multiplier = 2 (Normal) or 1 (Difficult). Enemies with base_dam
 Special cases:
 - **Tanishi** ($0A): AI checks `ent_hp < $14` — any hit that reduces HP below 20 triggers shell-shed, spawning Tanishi Bare ($0B) as a new entity with fresh HP=20. On Normal, buster does 20 damage (instant kill, no shell-shed). On Difficult, buster does 10 (HP drops to 10, shell sheds, bare form needs 2 more hits).
 - **Collision gating**: `ent_flags` bits 0-1 control collision eligibility (bank0F:5457). Bit 0 = player contact, bit 1 = weapon collidable. Entities with both bits clear (e.g. flags $A0) skip all collision checks: Goblin ($40/$41), Laser Beam ($14), and controller-type entities ($1C/$47).
-- **Multi-entity hitboxes**: Some large enemies render as background metatiles via a controller entity (flags $A0, immune) and spawn an invisible child entity that serves as the hitbox. Examples: Friender ($1C controller → $19 hitbox), Mole ($47 controller → child hitbox). The child carries the actual HP and weapon damage values.
+- **Multi-entity hitboxes**: Some large enemies render as background metatiles via a controller entity (flags $A0, immune) and spawn a child entity that serves as the hitbox. Examples: Friender ($1C controller → $19 hitbox, reuses ENTITY_AIR_TORNADO1 type), Mole ($47 controller → child hitbox). The child carries the actual HP and weapon damage values.
 - **Neo Metall** ($34/$56): Switches between hittable ($34, helmet up) and invulnerable ($56, helmet down) entity types.
 
 ### Weapon Damage Tables
@@ -264,7 +264,7 @@ Stage $02 — entity bank $02 (shared with Wily 3)
 |---|---|---|---|---|
 | Robbit | $17 | 5/10 | bank0E:$9F22 | Jumping rabbit |
 | Batton | $16 | 1/2 | bank0E:$9E81 | Bat; swoops from ceiling |
-| Friender | $1C | 10/20 | `friender_ai` (bank0E:4083) | Fire dog; BG-tile controller (flags $A0). Hitbox is child entity $19 (dmg=$01). Spawns fire children $19/$1A |
+| Friender | $1C | 10/20 | `friender_ai` (bank0E:4083) | Fire dog; BG-tile controller (flags $A0). Invisible hitbox child reuses type $19 (ENTITY_AIR_TORNADO1, dmg=$01). Spawns fire projectile $1A (ENTITY_AIR_TORNADO2) |
 | Monking | $1D | 2/3 | bank0E:$A2F4 | Monkey; throws projectiles |
 | Kukku (spawn) | $1E | -- | `kukku_spawner_ai` (bank0E:4340) | Invisible; tracks player X, spawns body every 31 frames |
 | Kukku (body) | $1F | 5/10 | `kukku_body_ai` (bank0E:4382) | Bouncing chicken |
@@ -542,13 +542,13 @@ Enemy and boss projectiles use the same `contact_damage_to_player_tbl`:
 
 ### Entity Slot Map
 
-| Slots | Range | Purpose |
-|---|---|---|
-| $00 | — | Player |
-| $01 | — | Boss (during boss fights) |
-| $02–$0E | — | Player weapon projectiles |
-| $0F | — | (reserved) |
-| $10–$1F | — | Stage enemies and objects |
+16 physical entity slots ($00–$0F). All spawned entities (enemies, projectiles, items) share slots $02–$0F. The renderer processes 32 virtual slots ($00–$1F) — slots $10–$1F alias to `ent_spawn_type` ($0410,x) via array overlap, so each spawned entity appears in the weapon renderer automatically.
+
+| Slots | Purpose |
+|---|---|
+| $00 | Player (Mega Man) |
+| $01 | Boss (during boss fights) |
+| $02–$0F | All spawned entities (enemies, projectiles, items) |
 
 Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc` (e.g., `boss_hp` = `ent_hp + 1` = $06C1).
 
@@ -582,7 +582,7 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Weapon Projectile Base Types
 
-`weapon_base_type_tbl` (bank0F:2847) — maps weapon ID to base OAM/entity type for player projectiles:
+`weapon_base_type_tbl` (bank0F:2847) — maps weapon ID to base OAM/sprite type for player projectiles:
 
 | Weapon ID | Weapon | Base Type |
 |---|---|---|
@@ -598,6 +598,29 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 | $09 | Item 1 | $1B |
 | $0A | Item 2 | $1F |
 | $0B | Item 3 | $26 |
+
+### Weapon Fire Dispatch
+
+`weapon_dispatch_lo/hi_tbl` (bank0F:3669) — 12 entries indexed by `current_weapon`. Each handler checks B button and spawns a projectile entity via `weapon_spawn_projectile` (bank0F:2857).
+
+| Index | Weapon | Fire Handler | Spawn Y | Entity Type | Flags | Position Handler |
+|---|---|---|---|---|---|---|
+| 0 | Mega Buster | `fire_weapon_scan_slot` | Y=0 | $23 | $81 | normal physics |
+| 1 | Atomic Fire | *(unlabeled)* | Y=1 | $30 | $83 | `atomic_fire_*` (bank0F:3716) |
+| 2 | Air Shooter | `fire_weapon_multi_scan` | Y=2 | $31 | $83 | entity_special_dispatch |
+| 3 | Leaf Shield | `fire_weapon_spread_loop` | Y=3 | $32 | $82 | entity_special_dispatch |
+| 4 | Bubble Lead | `fire_weapon_bubble_scan` | Y=4 | $33 | $87 | `bubble_lead_*` (bank0F:3957) |
+| 5 | Quick Boomerang | `fire_weapon_quick_scan` | Y=5 | $34 | $83 | entity_special_dispatch |
+| 6 | Time Stopper | *(unlabeled)* | Y=8 | $37 | $82 | entity_special_dispatch |
+| 7 | Metal Blade | `fire_weapon_metal_scan` | Y=7 | $36 | $81 | normal physics |
+| 8 | Crash Bomber | *(unlabeled)* | Y=6 | $35 | $83 | `crash_bomber_*` (bank0F:4030) |
+| 9 | Item 1 | `fire_weapon_item1_scan` | Y=9 | $38 | $82 | entity_special_dispatch |
+| 10 | Item 2 | *(unlabeled)* | Y=A | $39 | $82 | entity_special_dispatch |
+| 11 | Item 3 | *(unlabeled)* | Y=B | $3A | $86 | entity_special_dispatch |
+
+**Dual-purpose entity types**: Projectile entity types ($23, $2F–$3E) are reused IDs that also serve as enemy types (Changkey, Boss Door, Press, Blocky, etc.). When spawned as weapon projectiles they occupy weapon renderer slots ($10–$1F) and use separate AI via `entity_special_dispatch` (bank0F:3712) instead of the main entity AI table.
+
+**Projectile flags bit 1**: Determines position update path. Set = `entity_special_dispatch` (custom handler). Clear = normal `apply_entity_physics`. Buster ($23) and Metal Blade ($36) use normal physics; all others use custom handlers.
 
 ---
 
