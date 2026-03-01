@@ -172,6 +172,29 @@ Contact damage is a flat value subtracted from player HP — **not** affected by
 | `boss_state_flag` | $BD | Boss-specific state flag |
 | `boss_mode_flag` | $BC | Boss mode / sound state flag |
 
+### Boss AI Entry Points (bank0B)
+
+Boss AI is dispatched through `enemy_ai_routine_lo/hi` (bank0B:87). Each boss's per-frame AI handler is in bank $0B:
+
+| Boss | ID | AI Section | Description |
+|---|---|---|---|
+| Heat Man | 0 | bank0B:198 | Fire dash and 3-shot burst patterns |
+| Air Man | 1 | bank0B:427 | Tornado pattern spawning and jump movement |
+| Wood Man | 2 | bank0B:586 | Leaf Shield creation and leaf projectile toss |
+| Bubble Man | 3 | bank0B:757 | Bubble shot aiming and ceiling bounce |
+| Quick Man | 4 | bank0B:952 | Fast movement and boomerang attacks |
+| Flash Man | 5 | bank0B:1177 | Time Stopper activation and buster shot patterns |
+| Metal Man | 6 | bank0B:1359 | Metal Blade throws and jump patterns |
+| Crash Man | 7 | bank0B:1554 | Crash Bomber aiming and jump patterns |
+| Mecha Dragon | 8 | bank0B:1840 | Battle collision and fire breath |
+| Picopico-kun | 9 | bank0B:2196 | Entity spawning and block splitting |
+| Guts-Dozer | 10 | bank0B:2374 | Nametable scrolling and turret control |
+| Boobeam Trap | 11 | bank0B:2697 | Turret spawning and position tables |
+| Wily Machine | 12 | bank0B:2899 | Movement and bouncing ball attacks |
+| Alien | 13 | bank0B:3253 | Hologram movement and shot patterns |
+
+Boss sub-entity AI for Wily bosses (dragon segments, turrets, etc.) is in bank0E:6780–7170.
+
 ---
 
 ## 4. Enemy Data

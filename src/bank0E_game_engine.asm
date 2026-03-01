@@ -3669,7 +3669,7 @@ woodman_timer_expired:
         bcc     woodman_at_target_x
 
 ; =============================================================================
-; woodman_check_leaf_wall -- Boss AI: Woodman — walk, leaf shield, contact check ($9DFE)
+; woodman_check_leaf_wall -- Boss AI: Wood Man — walk, leaf shield, contact check ($9DFE)
 ; =============================================================================
 woodman_check_leaf_wall:  lda     ent_x_px,x
         cmp     ent_parent_slot,x
@@ -3757,7 +3757,7 @@ bubbleman_apply_physics:
         rts
 
 ; =============================================================================
-; bubbleman_state_swim -- Boss AI: Bubbleman — swim/fall physics, bubble shot ($9EB3)
+; bubbleman_state_swim -- Boss AI: Bubble Man — swim/fall physics, bubble shot ($9EB3)
 ; =============================================================================
 bubbleman_state_swim:  lda     ent_flags,x
         and     #$F7
@@ -3807,7 +3807,7 @@ bubbleman_fall_setup:  lda     #$04
 bubbleman_fall_physics:  jsr     apply_entity_physics
         rts
 
-bubbleman_timer_table:  .byte   $3E,$9C         ; Bubbleman AI timer values (62/156 frames)
+bubbleman_timer_table:  .byte   $3E,$9C         ; Bubble Man AI timer values (62/156 frames)
 ; --- quickman_ai_init -- Quick Man boss AI (bank0E) — tile collision, dash/jump pattern (ptr table: type $17) ---
 quickman_ai_init:
         lda     ent_y_vel,x
@@ -3891,7 +3891,7 @@ quickman_dec_timer:  dec     ent_state,x
 quickman_state_table:  jsr     apply_entity_physics
         rts
 
-quickman_anim_threshold:  .byte   $00,$02,$00,$00,$00             ; Quickman animation speed thresholds
+quickman_anim_threshold:  .byte   $00,$02,$00,$00,$00             ; Quick Man animation speed thresholds
 ; ─── Heat Man boss AI: palette, fire pattern, charge ───
 air_tornado_proj_ai:
         ldy     #$02
@@ -4038,7 +4038,7 @@ heatman_dec_cooldown:  dec     ent_x_vel_sub,x
 
 heatman_palette_data:                    ; Heat Man intro palette (6 bytes)
         .byte   $08,$2C,$12,$08,$20,$20
-heatman_flame_x_offset:  .byte   $FC    ; Heatman flame X offset per slot
+heatman_flame_x_offset:  .byte   $FC    ; Heat Man flame X offset per slot
         .byte   $FC,$14,$1C,$2C,$F4,$04,$0C,$14
         .byte   $24,$F4,$04,$14,$2C,$2C,$04,$0C
 heatman_flame_data_end:  .byte   $14,$24,$24
@@ -4207,7 +4207,7 @@ friender_y_offset_table:
         .byte   $F0,$00,$F0,$00       ; Y pixel offsets: -16, 0, -16, 0
 friender_x_offset_table:
         .byte   $00,$00,$20,$20       ; X pixel offsets: 0, 0, 32, 32
-friender_tile_data:                         ; 128 bytes — CHR tile indices for Air Man sprite
+friender_tile_data:                         ; 128 bytes — CHR tile indices for Friender sprite
         .byte   $88,$8A,$84,$86,$89,$8B,$85,$87  ; frame 1
         .byte   $84,$86,$8C,$8E,$85,$87,$8D,$8F
         .byte   $84,$86,$74,$76,$85,$87,$75,$77
@@ -4235,7 +4235,7 @@ friender_tile_data:                         ; 128 bytes — CHR tile indices for
         rts
 
 ; =============================================================================
-; flashman_stop_freeze -- Boss AI: Flashman — time stopper, walk/jump/shoot ($A308)
+; flashman_stop_freeze -- Boss AI: Flash Man — time stopper, walk/jump/shoot ($A308)
 ; =============================================================================
 flashman_stop_freeze:  lda     #$00
         sta     ent_anim_id,x

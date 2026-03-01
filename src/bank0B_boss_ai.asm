@@ -949,7 +949,7 @@ bubbleman_collision_params:  lda     #$09
 
 
 ; =============================================================================
-; Boss AI: Quickman — fast movement and boomerang attacks ($8826)
+; Boss AI: Quick Man — fast movement and boomerang attacks ($8826)
 ; =============================================================================
 quickman_check_anim:  lda     boss_anim_id
         bne     quickman_check_y_vel
@@ -1356,7 +1356,7 @@ metalman_inc_timer:  inc     boss_action_timer
 
 
 ; =============================================================================
-; Boss AI: Metalman — Metal Blade throws and jump patterns ($8B74)
+; Boss AI: Metal Man — Metal Blade throws and jump patterns ($8B74)
 ; =============================================================================
 metalman_fire_blade:  lda     #$65
         jsr     play_sound_and_reset_anim
@@ -1434,7 +1434,7 @@ metalman_frame_rts:  rts
 
 
 ; =============================================================================
-; Metalman Palette Flash — stage lightning effect timer ($8C3E)
+; Metal Man Palette Flash — stage lightning effect timer ($8C3E)
 ; =============================================================================
 metalman_flash_timer_lo  := $05A7  ; 16-bit lightning effect timer (low byte)
 metalman_flash_timer_hi  := $05A9  ; 16-bit lightning effect timer (high byte)
