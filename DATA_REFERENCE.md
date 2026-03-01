@@ -62,41 +62,46 @@ On **Normal** difficulty, `weapon_difficulty_scale` (bank0B:5009) doubles all we
 
 ### Boss Weakness Matrix — Base Damage (Difficult Mode)
 
-Values are hex. `--` = 0 (immune/no effect). `kill` = $FF (instant kill). Normal mode doubles all values.
+Values are hex. `--` = 0 (immune/no effect). **kill** = $FF (instant kill). Normal mode doubles all values.
 
-| Boss (ID) | Buster | Metal Blade | Leaf Shield | Quick Boom |
-|---|---|---|---|---|
-| Heat Man (0) | 2 | **kill** | 6 | **kill** |
-| Air Man (1) | 2 | 6 | -- | -- |
-| Wood Man (2) | 1 | $0E | -- | 2 |
-| Bubble Man (3) | 1 | -- | **kill** | 2 |
-| Quick Man (4) | 2 | $0A | -- | 4 |
-| Flash Man (5) | 2 | 6 | 2 | 3 |
-| Metal Man (6) | 1 | 4 | -- | -- |
-| Crash Man (7) | 1 | 6 | 1 | -- |
-| Mecha Dragon (8) | 1 | 8 | -- | 1 |
-| Picopico-kun (9) | -- | -- | -- | -- |
-| Guts-Dozer (10) | 1 | 8 | 1 | 1 |
-| Boobeam Trap (11) | -- | -- | -- | -- |
-| Wily Machine (12) | 1 | $0E | -- | 4 |
-| Alien (13) | **kill** | **kill** | 1 | **kill** |
+| Boss (ID) | Buster | Atomic Fire | Air Shooter | Leaf Shield | Bubble Lead | Quick Boom | Metal Blade | Crash Bomber |
+|---|---|---|---|---|---|---|---|---|
+| Heat Man (0) | 2 | **kill** | 2 | -- | 6 | 2 | 1 | **kill** |
+| Air Man (1) | 2 | 6 | -- | 8 | -- | 2 | -- | -- |
+| Wood Man (2) | 1 | $0E | 4 | **kill** | -- | -- | 2 | 2 |
+| Bubble Man (3) | 1 | -- | -- | -- | **kill** | 2 | 4 | 2 |
+| Quick Man (4) | 2 | $0A | 2 | -- | -- | -- | -- | 4 |
+| Flash Man (5) | 2 | 6 | -- | -- | 2 | -- | 4 | 3 |
+| Metal Man (6) | 1 | 4 | -- | -- | -- | 4 | $0E | -- |
+| Crash Man (7) | 1 | 6 | $0A | -- | 1 | 1 | -- | -- |
+| Mecha Dragon (8) | 1 | 8 | -- | -- | -- | 1 | -- | 1 |
+| Picopico-kun (9) | -- | -- | -- | -- | -- | -- | -- | -- |
+| Guts-Dozer (10) | 1 | 8 | -- | -- | 1 | 2 | -- | 1 |
+| Boobeam Trap (11) | -- | -- | -- | -- | -- | -- | -- | -- |
+| Wily Machine (12) | 1 | $0E | 1 | -- | -- | 1 | 1 | 4 |
+| Alien (13) | **kill** | **kill** | **kill** | **kill** | 1 | **kill** | **kill** | **kill** |
+
+Time Stopper is excluded — it uses frame-by-frame drain logic (not the weapon-boss collision system). The Atomic Fire column shows full-charge values; uncharged = buster damage, medium charge = 3x buster. Alien table values of $FF are unreachable in normal gameplay (only Bubble Lead can collide). Boobeam Trap uses custom collision handling (only Crash Bomber works, outside this table).
 
 ### Per-Weapon Damage Table Locations
 
-| Weapon | Label | Location |
-|---|---|---|
-| Mega Buster | `weapon_base_damage_table` | bank0B:5023 |
-| Metal Blade | `weapon_metal_damage_table` | bank0B:5025 |
-| Leaf Shield | `weapon_leaf_damage_table` | bank0B:5031 |
-| Quick Boomerang | `weapon_quick_damage_table` | bank0B:5037 |
-| Air Shooter | *(unlabeled)* | ROM $A95E (bank $0B) |
-| Atomic Fire | *(unlabeled)* | ROM $A9A4 (bank $0B) |
-| Crash Bomber | *(unlabeled)* | ROM $A988 (bank $0B) |
-| Time Stopper | `weapon_force_kill_boss` | bank0B:5001 |
+All tables have 14 entries (one per `boss_id` 0–13). Tables are packed contiguously in ROM starting at $A942. The handler pointer table at `weapon_handler_ptr_lo/hi` (bank0B:5018) dispatches to per-weapon code that loads from the correct table via `LDA $xxxx,Y`.
 
-Each labeled table has 14 entries (one per `boss_id` 0–13). Multi-charge weapons (Metal Blade, Atomic Fire) have additional sub-tables following the first 14 bytes.
+| Weapon | Handler | Table | Label / ROM Address |
+|---|---|---|---|
+| Mega Buster (0) | $A601 | $A942 | `weapon_base_damage_table` (bank0B:5023) |
+| Atomic Fire (1) | $A65A | $A950 | `weapon_atomic_fire_damage_table` (bank0B:5025) |
+| Air Shooter (2) | $A6CE | $A95E | *(unlabeled, within above table's bytes)* |
+| Leaf Shield (3) | $A725 | $A96C | *(unlabeled, within above table's bytes)* |
+| Bubble Lead (4) | $A789 | $A97A | `weapon_bubble_lead_damage_table` (bank0B:5031) |
+| Quick Boomerang (5) | $A7E0 | $A988 | *(unlabeled, within above table's bytes)* |
+| Time Stopper (6) | $A91B | — | `weapon_force_kill_boss` (bank0B:5001) |
+| Metal Blade (7) | $A8B6 | $A9A4 | *(unlabeled, within above table's bytes)* |
+| Crash Bomber (8) | $A854 | $A996 | `weapon_crash_bomber_damage_table` (bank0B:5037) |
 
-Time Stopper has no per-hit damage table — its weapon handler entry ($A91B) points directly to `weapon_force_kill_boss`. Actual Time Stopper drain damage is applied frame-by-frame through separate logic, not through the weapon hit dispatch system.
+The Atomic Fire handler has multi-level charge logic: `ent_state < 2` → buster damage, `ent_state == 2` → 3x buster damage, `ent_state > 2` → full-charge table ($A950). It also hardcodes an instant kill for boss_id 0 (Heat Man) before the charge check.
+
+Time Stopper has no per-hit damage table — its handler entry ($A91B) points directly to `weapon_force_kill_boss`. Actual Time Stopper drain damage is applied frame-by-frame through separate logic, not through the weapon hit dispatch system.
 
 ### Weapon-to-Enemy Damage Summary (bank0F)
 

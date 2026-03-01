@@ -4654,34 +4654,34 @@ buster_deflect_done:  clc
 @skip:
         lda     boss_flags
         and     #$08
-        bne     metal_blade_deflect
+        bne     atomic_fire_deflect
         ldy     boss_id
-        lda     weapon_metal_damage_table,y
-        beq     metal_blade_deflect
+        lda     weapon_atomic_fire_damage_table,y
+        beq     atomic_fire_deflect
         lda     ent_state,x
         cmp     #$02
-        bcc     metal_blade_base_damage
-        beq     metal_blade_triple_damage
-        lda     weapon_metal_damage_table,y
-        bne     metal_blade_store_damage
-metal_blade_triple_damage:  clc
+        bcc     atomic_fire_base_damage
+        beq     atomic_fire_triple_damage
+        lda     weapon_atomic_fire_damage_table,y
+        bne     atomic_fire_store_damage
+atomic_fire_triple_damage:  clc
         lda     weapon_base_damage_table,y
         asl     a
         adc     weapon_base_damage_table,y
-        jmp     metal_blade_store_damage
+        jmp     atomic_fire_store_damage
 
-metal_blade_base_damage:  lda     weapon_base_damage_table,y
+atomic_fire_base_damage:  lda     weapon_base_damage_table,y
 
 
 ; =============================================================================
-; Weapon Damage: Metal Blade — variable damage based on boss ($A68D)
+; Weapon Damage: Atomic Fire — variable damage based on charge level ($A68D)
 ; =============================================================================
-metal_blade_store_damage:  sta     temp_00
-        beq     metal_blade_deflect
-        bpl     metal_blade_apply
+atomic_fire_store_damage:  sta     temp_00
+        beq     atomic_fire_deflect
+        bpl     atomic_fire_apply
         jmp     weapon_force_kill_boss
 
-metal_blade_apply:  jsr     weapon_difficulty_scale
+atomic_fire_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
@@ -4691,23 +4691,23 @@ metal_blade_apply:  jsr     weapon_difficulty_scale
         lda     boss_hp
         sbc     temp_00
         sta     boss_hp
-        beq     metal_blade_killed
-        bcs     metal_blade_clear_hit
-metal_blade_killed:  lda     #$00
+        beq     atomic_fire_killed
+        bcs     atomic_fire_clear_hit
+atomic_fire_killed:  lda     #$00
         sta     boss_hp
         sec
         rts
 
-metal_blade_deflect:  lda     #$2D
+atomic_fire_deflect:  lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
         sta     temp_02
         lsr     ent_flags,x
-        jmp     metal_blade_done
+        jmp     atomic_fire_done
 
-metal_blade_clear_hit:  lda     #$00
+atomic_fire_clear_hit:  lda     #$00
         sta     ent_flags,x
-metal_blade_done:  clc
+atomic_fire_done:  clc
         rts
 
         lda     boss_flags
@@ -4731,7 +4731,7 @@ metal_blade_done:  clc
         sbc     temp_00
         sta     boss_hp
         beq     air_shooter_killed
-        bcs     metal_blade_clear_hit
+        bcs     atomic_fire_clear_hit
 air_shooter_killed:  lda     #$00
         sta     boss_hp
         sec
@@ -4755,11 +4755,11 @@ air_shooter_killed_skip:
 
         lda     boss_flags
         and     #$08
-        bne     air_shooter_killed_2_skip
+        bne     leaf_shield_deflect
         ldy     boss_id
         lda     $A96C,y
         sta     temp_00
-        beq     air_shooter_killed_2_skip
+        beq     leaf_shield_deflect
         bpl     @skip
         jmp     weapon_force_kill_boss
 @skip:
@@ -4773,14 +4773,14 @@ air_shooter_killed_skip:
         lda     boss_hp
         sbc     temp_00
         sta     boss_hp
-        beq     air_shooter_killed_2
-        bcs     air_shooter_clear_hit
-air_shooter_killed_2:  lda     #$00
+        beq     leaf_shield_killed
+        bcs     leaf_shield_clear_hit
+leaf_shield_killed:  lda     #$00
         sta     boss_hp
         sec
         rts
 
-air_shooter_killed_2_skip:
+leaf_shield_deflect:
         lda     #$2D
         jsr     bank_switch_enqueue
         lda     #$02
@@ -4795,23 +4795,23 @@ air_shooter_killed_2_skip:
         sta     ent_anim_frame,x
         sta     ent_state,x
         sta     ent_hp,x
-air_shooter_done:  clc
+leaf_shield_done:  clc
         rts
 
-air_shooter_clear_hit:  lda     #$00
+leaf_shield_clear_hit:  lda     #$00
         sta     ent_flags,x
-        beq     air_shooter_done
+        beq     leaf_shield_done
         lda     boss_flags
         and     #$08
-        bne     leaf_shield_deflect
+        bne     bubble_lead_deflect
         ldy     boss_id
-        lda     weapon_leaf_damage_table,y
+        lda     weapon_bubble_lead_damage_table,y
         sta     temp_00
-        beq     leaf_shield_deflect
-        bpl     leaf_shield_apply
+        beq     bubble_lead_deflect
+        bpl     bubble_lead_apply
         jmp     weapon_force_kill_boss
 
-leaf_shield_apply:  jsr     weapon_difficulty_scale
+bubble_lead_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
@@ -4821,14 +4821,14 @@ leaf_shield_apply:  jsr     weapon_difficulty_scale
         lda     boss_hp
         sbc     temp_00
         sta     boss_hp
-        beq     leaf_shield_killed
-        bcs     air_shooter_clear_hit
-leaf_shield_killed:  lda     #$00
+        beq     bubble_lead_killed
+        bcs     leaf_shield_clear_hit
+bubble_lead_killed:  lda     #$00
         sta     boss_hp
         sec
         rts
 
-leaf_shield_deflect:  lda     #$00
+bubble_lead_deflect:  lda     #$00
         sta     ent_x_vel,x
         sta     ent_x_vel_sub,x
         sta     ent_y_vel_sub,x
@@ -4845,15 +4845,15 @@ leaf_shield_deflect:  lda     #$00
 
         lda     boss_flags
         and     #$08
-        bne     crash_bomber_deflect
+        bne     quick_boomerang_deflect
         ldy     boss_id
         lda     $A988,y
         sta     temp_00
-        beq     crash_bomber_deflect
-        bpl     crash_bomber_apply
+        beq     quick_boomerang_deflect
+        bpl     quick_boomerang_apply
         jmp     weapon_force_kill_boss
 
-crash_bomber_apply:  jsr     weapon_difficulty_scale
+quick_boomerang_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
@@ -4863,14 +4863,14 @@ crash_bomber_apply:  jsr     weapon_difficulty_scale
         lda     boss_hp
         sbc     temp_00
         sta     boss_hp
-        beq     crash_bomber_killed
-        bcs     crash_bomber_clear_hit
-crash_bomber_killed:  lda     #$00
+        beq     quick_boomerang_killed
+        bcs     quick_boomerang_clear_hit
+quick_boomerang_killed:  lda     #$00
         sta     boss_hp
         sec
         rts
 
-crash_bomber_deflect:  lda     #ENTITY_COPIPI
+quick_boomerang_deflect:  lda     #ENTITY_COPIPI
         sta     ent_type,x
         lda     ent_flags,x
         and     #$C0
@@ -4890,24 +4890,24 @@ crash_bomber_deflect:  lda     #ENTITY_COPIPI
         jsr     bank_switch_enqueue
         lda     #$02
         sta     temp_02
-crash_bomber_restore_x:  ldx     current_entity_slot
+quick_boomerang_restore_x:  ldx     current_entity_slot
         clc
         rts
 
-crash_bomber_clear_hit:  lda     #$00
+quick_boomerang_clear_hit:  lda     #$00
         sta     ent_flags,x
-        beq     crash_bomber_restore_x
+        beq     quick_boomerang_restore_x
         lda     boss_flags
         and     #$08
-        bne     quick_boomerang_deflect
+        bne     crash_bomber_deflect
         ldy     boss_id
-        lda     weapon_quick_damage_table,y
+        lda     weapon_crash_bomber_damage_table,y
         sta     temp_00
-        beq     quick_boomerang_deflect
-        bpl     quick_boomerang_apply
+        beq     crash_bomber_deflect
+        bpl     crash_bomber_apply
         jmp     weapon_force_kill_boss
 
-quick_boomerang_apply:  jsr     weapon_difficulty_scale
+crash_bomber_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
         jsr     bank_switch_enqueue
         lda     #$01
@@ -4917,19 +4917,19 @@ quick_boomerang_apply:  jsr     weapon_difficulty_scale
         lda     boss_hp
         sbc     temp_00
         sta     boss_hp
-        beq     quick_boomerang_killed
-        bcs     crash_bomber_clear_hit
-quick_boomerang_killed:  lda     #$00
+        beq     crash_bomber_killed
+        bcs     quick_boomerang_clear_hit
+crash_bomber_killed:  lda     #$00
         sta     boss_hp
         sec
         rts
 
-quick_boomerang_deflect:  lda     ent_type,x
+crash_bomber_deflect:  lda     ent_type,x
         cmp     #$2F
-        beq     quick_boomerang_done
+        beq     crash_bomber_done
         lda     ent_state,x
         cmp     #$02
-        beq     quick_boomerang_done
+        beq     crash_bomber_done
         lda     #$05
         sta     ent_anim_id,x
         lda     #$00
@@ -4941,16 +4941,16 @@ quick_boomerang_deflect:  lda     ent_type,x
         jsr     bank_switch_enqueue
         lda     #$01
         sta     temp_02
-quick_boomerang_done:  clc
+crash_bomber_done:  clc
         rts
 
         lda     boss_flags
         and     #$08
-        bne     atomic_fire_killed_skip
+        bne     metal_blade_deflect
         ldy     boss_id
         lda     $A9A4,y
         sta     temp_00
-        beq     atomic_fire_killed_skip
+        beq     metal_blade_deflect
         bpl     @skip
         jmp     weapon_force_kill_boss
 @skip:
@@ -4964,14 +4964,14 @@ quick_boomerang_done:  clc
         lda     boss_hp
         sbc     temp_00
         sta     boss_hp
-        beq     atomic_fire_killed
-        bcs     atomic_fire_clear_hit
-atomic_fire_killed:  lda     #$00
+        beq     metal_blade_killed
+        bcs     metal_blade_clear_hit
+metal_blade_killed:  lda     #$00
         sta     boss_hp
         sec
         rts
 
-atomic_fire_killed_skip:
+metal_blade_deflect:
         lda     #$03
         sta     ent_y_vel,x
         lda     #$B2
@@ -4987,12 +4987,12 @@ atomic_fire_killed_skip:
         jsr     bank_switch_enqueue
         lda     #$02
         sta     temp_02
-atomic_fire_done:  clc
+metal_blade_done:  clc
         rts
 
-atomic_fire_clear_hit:  lda     #$00
+metal_blade_clear_hit:  lda     #$00
         sta     ent_flags,x
-        beq     atomic_fire_done
+        beq     metal_blade_done
 
 
 ; =============================================================================
@@ -5022,19 +5022,19 @@ weapon_handler_ptr_hi:  .byte   $A6,$A6
         .byte   $A7,$A7,$A9,$A8,$A8
 weapon_base_damage_table:  .byte   $02,$02,$01,$01,$02,$02,$01,$01
         .byte   $01,$00,$01,$00,$01,$FF
-weapon_metal_damage_table:  .byte   $FF,$06,$0E,$00,$0A,$06,$04,$06
+weapon_atomic_fire_damage_table:  .byte   $FF,$06,$0E,$00,$0A,$06,$04,$06
         .byte   $08,$00,$08,$00,$0E,$FF,$02,$00
         .byte   $04,$00,$02,$00,$00,$0A,$00,$00
         .byte   $00,$00,$01,$FF,$00,$08,$FF,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$FF
-weapon_leaf_damage_table:  .byte   $06,$00,$00,$FF,$00,$02,$00,$01
+weapon_bubble_lead_damage_table:  .byte   $06,$00,$00,$FF,$00,$02,$00,$01
         .byte   $00,$00
         .byte   $01,$00
         .byte   $00
         .byte   $01,$02,$02,$00,$02,$00,$00,$04
         .byte   $01,$01,$00,$02,$00,$01,$FF
-weapon_quick_damage_table:  .byte   $FF,$00,$02,$02,$04,$03,$00,$00
+weapon_crash_bomber_damage_table:  .byte   $FF,$00,$02,$02,$04,$03,$00,$00
         .byte   $01,$00,$01,$00,$04,$FF
         .byte   $01,$00
         .byte   $02,$04,$00,$04
