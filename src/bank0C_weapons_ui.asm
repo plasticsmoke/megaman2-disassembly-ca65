@@ -447,70 +447,70 @@ apu_enable_channels:  lda     #$07       ; enable pulse 1+2 + triangle
 ;     └─ sound_lives_display             lives counter animation
 ; =============================================================================
 sound_update_main:  inc     sound_frame_counter           ; Main sound engine update (channels, bars, lives)
-        lda     sound_busy_flag
+        lda     sound_busy_flag         ; busy flag set while loading new song
         beq     sound_init_channels
         rts
 
-sound_init_channels:  ldx     #$00        ; initialize 4 sound channel slots
+sound_init_channels:  ldx     #$00        ; slot pointer ($EC/$ED) → $0500 (channel 0 data)
         ldy     #$05
         stx     sound_slot_lo
-        sty     sound_slot_hi
+        sty     sound_slot_hi           ; each channel slot = $1F bytes
         lda     #$00
-        sta     apu_channel_offset
+        sta     apu_channel_offset      ; APU register base ($4000 + offset)
         lda     #$04
-        sta     active_channel_count
-sound_channel_loop:  lda     #$01
+        sta     active_channel_count    ; process 4 channels: sq1, sq2, tri, noise
+sound_channel_loop:  lda     #$01        ; increment vibrato phase counter
         ldy     #SND_VIB_CTR
         clc
         adc     ($EC),y
         sta     ($EC),y
-        lda     #$01
+        lda     #$01                    ; increment sweep phase counter
         ldy     #SND_SWEEP_CTR
         clc
         adc     ($EC),y
         sta     ($EC),y
-        lda     channel_active_flags
+        lda     channel_active_flags    ; bit 0 = current channel has stream data
         lsr     a
-        bcc     sound_check_pause
-        jsr     sound_stream_check
+        bcc     sound_check_pause       ; no stream → skip to pause check
+        jsr     sound_stream_check      ; process stream commands for this channel
 sound_check_pause:  lda     sound_pause_flag
-        lsr     a
+        lsr     a                       ; bit 0 = sound paused (e.g. weapon select)
         bcc     sound_check_active
-        jmp     sound_channel_silent
+        jmp     sound_channel_silent    ; paused → silence channel
 
-sound_check_active:  ldy     #SND_FREQ_LO
+sound_check_active:  ldy     #SND_FREQ_LO ; check if channel has a note playing
         lda     ($EC),y
         iny
-        ora     ($EC),y
-        beq     sound_channel_silent
-        lda     #$01
-        ldy     #SND_PORTA_ACC
+        ora     ($EC),y                 ; freq_lo OR freq_hi
+        beq     sound_channel_silent    ; zero frequency → channel is silent
+        lda     #$01                    ; increment portamento accumulator
+        ldy     #SND_PORTA_ACC          ; (drives pitch slide timing)
         clc
         adc     ($EC),y
         sta     ($EC),y
-        jsr     sound_note_process
+        jsr     sound_note_process      ; apply vibrato/sweep/envelope → APU regs
         jmp     sound_shift_active_flags
 
 sound_channel_silent:  lda     channel_active_flags
-        lsr     a
-        bcs     sound_shift_active_flags
-        ldx     apu_channel_offset
-        inx
+        lsr     a                       ; bit 0 = channel has stream (already shifted once)
+        bcs     sound_shift_active_flags ; has stream → don't write silence
+        ldx     apu_channel_offset      ; no stream + no note → write silence to APU
+        inx                             ; +2 → point to freq_lo register
         inx
         ldy     active_channel_count
-        jsr     apu_sound_control
-sound_shift_active_flags:  lsr     channel_active_flags
+        jsr     apu_sound_control       ; zero the APU freq register
+sound_shift_active_flags:  lsr     channel_active_flags ; consume bit for current channel
         bcc     sound_next_channel
-        lda     channel_active_flags
-        ora     #$80
+        lda     channel_active_flags    ; carry set → next bit was 1, restore it
+        ora     #$80                    ; into bit 7 (right-rotating through 8 bits)
         sta     channel_active_flags
 sound_next_channel:  dec     active_channel_count
-        beq     sound_lives_display
-        lda     #$04
+        beq     sound_lives_display     ; all 4 channels done → post-processing
+        lda     #$04                    ; advance APU offset to next channel (+4 regs)
         clc
         adc     apu_channel_offset
         sta     apu_channel_offset
-        lda     #$1F
+        lda     #$1F                    ; advance slot pointer by $1F bytes
         clc
         adc     sound_slot_lo
         sta     sound_slot_lo
@@ -519,29 +519,29 @@ sound_next_channel:  dec     active_channel_count
         sta     sound_slot_hi
         jmp     sound_channel_loop
 
-sound_lives_display:  lda     lives_timer          ; check lives counter display flag
-        and     #$7F
-        beq     sound_check_refill
-        cmp     sound_frame_counter
+sound_lives_display:  lda     lives_timer          ; lives counter animation (1UP display)
+        and     #$7F                    ; mask off sign bit (bit 7 = repeat flag)
+        beq     sound_check_refill      ; zero → no animation active
+        cmp     sound_frame_counter     ; wait for target frame
         bne     sound_check_refill
-        lda     sound_frame_counter
-        and     #$01
+        lda     sound_frame_counter     ; toggle frame counter to bit 0 only
+        and     #$01                    ; creates alternating 0/1 pattern
         sta     sound_frame_counter
         inc     lives_animate_timer
-        lda     #$10
+        lda     #$10                    ; 16 frames per animation cycle
         cmp     lives_animate_timer
         bne     sound_check_refill
-        lda     lives_timer
-        bmi     sound_lives_reset_timer
-        lda     #$00
+        lda     lives_timer             ; animation cycle complete
+        bmi     sound_lives_reset_timer ; bit 7 set → loop animation
+        lda     #$00                    ; bit 7 clear → stop animation
         sta     lives_timer
 sound_lives_reset_timer:  lda     #$0F
-        sta     lives_animate_timer
-sound_check_refill:  lda     instrument_type     ; check refill animation timer
-        beq     sound_final_shift_flags
-        dec     instrument_type
-sound_final_shift_flags:  lsr     channel_active_flags
-        lsr     channel_active_flags
+        sta     lives_animate_timer     ; reset for next cycle (15 → counts to 16)
+sound_check_refill:  lda     instrument_type     ; refill animation cooldown timer
+        beq     sound_final_shift_flags ; already zero → skip
+        dec     instrument_type         ; count down each frame
+sound_final_shift_flags:  lsr     channel_active_flags ; shift out remaining 4 consumed bits
+        lsr     channel_active_flags    ; (channels used bits 0-3, stream used bits 4-7)
         lsr     channel_active_flags
         lsr     channel_active_flags
         rts
@@ -1006,32 +1006,35 @@ sound_stream_set_mode:  sta     sound_temp
         jmp     sound_sweep_process
 
 ; ─── fetch and dispatch next stream command ───
-sound_stream_fetch:  jsr     sound_data_read_byte ; fetch next sound command byte
-        asl     a
-        bcs     sound_stream_cmd_check
-        jmp     sound_stream_dispatch
+; Stream byte format:
+;   bit 7 clear → command index (dispatch to 7 handlers via table)
+;   bit 7 set   → note event; low nibble $0F = envelope reload, else new note
+sound_stream_fetch:  jsr     sound_data_read_byte ; fetch next stream byte → A (original), X (copy)
+        asl     a                       ; bit 7 → carry
+        bcs     sound_stream_cmd_check  ; carry set → note event ($80+)
+        jmp     sound_stream_dispatch   ; carry clear → command ($00-$7F)
 
-sound_stream_cmd_check:  txa             ; check for special command ($xF)
+sound_stream_cmd_check:  txa           ; restore original byte from X
         and     #$0F
-        cmp     #$0F
-        bne     sound_stream_new_note
-        jsr     sound_data_read_byte
+        cmp     #$0F                    ; low nibble = $F?
+        bne     sound_stream_new_note   ; no → start new note
+        jsr     sound_data_read_byte    ; $xF: reload envelope from next byte
         jmp     sound_state_save_restore
 
-sound_stream_new_note:  and     #$07     ; extract note duration bits
+sound_stream_new_note:  and     #$07   ; bits 0-2 = note duration index
         sta     sound_temp
-        jsr     sound_data_read_byte
+        jsr     sound_data_read_byte    ; read stream pointer (pattern address)
         ldy     #SND_STREAM_LO
-        sta     ($EC),y
+        sta     ($EC),y                 ; store pattern pointer low
         iny
         lda     sound_temp
-        sta     ($EC),y
+        sta     ($EC),y                 ; store pattern pointer high / duration
         lda     #SND_DUTY_VOL
         sta     sound_temp
-        jsr     sound_state_init_slot
-        jmp     sound_channel_off
+        jsr     sound_state_init_slot   ; initialize slot registers from SND_DUTY_VOL onward
+        jmp     sound_channel_off       ; silence channel before new note starts
 
-sound_stream_dispatch:  jsr     sound_dispatch_table
+sound_stream_dispatch:  jsr     sound_dispatch_table ; 7-entry jump table follows
         .byte   $D3,$85,$DB,$85,$E5,$85,$F5,$85
         .byte   $0F,$86,$40,$86,$56,$86
 stream_cmd_set_instrument:              ; handler 0: set instrument type
@@ -1046,46 +1049,46 @@ stream_cmd_set_apu_out:                 ; handler 1: set APU output register
         jmp     sound_stream_fetch
 stream_cmd_set_duty:                    ; handler 2: set duty cycle bits in SND_DUTY_VOL
         jsr     sound_data_read_byte
-        sta     sound_temp
+        sta     sound_temp              ; param has duty in bits 6-7
         ldy     #SND_DUTY_VOL
         lda     ($EC),y
-        and     #$3F
-        ora     sound_temp
+        and     #$3F                    ; preserve volume (bits 0-5)
+        ora     sound_temp              ; merge new duty bits
         jmp     sound_cmd_store_param
 
 stream_cmd_set_volume:                  ; handler 3: set volume bits in SND_DUTY_VOL
         jsr     sound_data_read_byte
         ldy     #$02
-        cpy     active_channel_count
-        beq     sound_cmd_store_param
-        sta     sound_temp
+        cpy     active_channel_count    ; triangle channel? (count=2)
+        beq     sound_cmd_store_param   ; tri has no volume control, store raw
+        sta     sound_temp              ; param has volume in bits 0-5
         ldy     #SND_DUTY_VOL
         lda     ($EC),y
-        and     #$C0
-        ora     sound_temp
+        and     #$C0                    ; preserve duty (bits 6-7)
+        ora     sound_temp              ; merge new volume bits
 sound_cmd_store_param:  ldy     #SND_DUTY_VOL
         sta     ($EC),y
         jmp     sound_stream_fetch
 
 stream_cmd_set_pointer:                 ; handler 4: set stream data pointer
-        jsr     sound_data_read_byte
+        jsr     sound_data_read_byte    ; read conditional flag byte
         txa
-        beq     :+
-        cpx     stream_update_flag
+        beq     :+                      ; flag=0 → unconditional load
+        cpx     stream_update_flag      ; flag matches current? → skip (already loaded)
         beq     sound_stream_skip_update
-        inc     stream_update_flag
-:       jsr     sound_data_read_byte
+        inc     stream_update_flag      ; first time seeing this flag → proceed
+:       jsr     sound_data_read_byte    ; read pointer low byte
         sta     sound_temp
-        jsr     sound_data_read_byte
+        jsr     sound_data_read_byte    ; read pointer high byte
         sta     sound_stream_hi
         lda     sound_temp
-        sta     sound_stream_lo
+        sta     sound_stream_lo         ; set new stream data pointer
         jmp     sound_stream_fetch
 
 sound_stream_skip_update:
         lda     #$00
-        sta     stream_update_flag
-        lda     #$02
+        sta     stream_update_flag      ; reset flag for next encounter
+        lda     #$02                    ; skip 2 bytes (the pointer we're not loading)
         clc
         adc     sound_stream_lo
         sta     sound_stream_lo
@@ -1095,26 +1098,26 @@ sound_stream_skip_update:
         jmp     sound_stream_fetch
 
 stream_cmd_load_vibrato:                ; handler 5: load 4-byte vibrato/sweep params
-        lda     #SND_VIB_AMP
-        sta     sound_temp
+        lda     #SND_VIB_AMP            ; copy 4 consecutive bytes from stream
+        sta     sound_temp              ; into SND_VIB_AMP..SND_SWEEP_CTR-1
 sound_cmd_load_regs:  jsr     sound_data_read_byte
         ldy     sound_temp
         sta     ($EC),y
         inc     sound_temp
         ldy     sound_temp
-        cpy     #SND_VIB_CTR
+        cpy     #SND_VIB_CTR            ; loaded all 4 bytes?
         bne     sound_cmd_load_regs
         jmp     sound_stream_fetch
 
 stream_cmd_loop_back:                   ; handler 6: end stream, loop back or stop channel
-        lda     sound_stream_lo
-        sec
+        lda     sound_stream_lo         ; back up stream pointer by 1
+        sec                             ; (re-read the loop command byte)
         sbc     #$01
         sta     sound_stream_lo
         lda     sound_stream_hi
         sbc     #$00
         sta     sound_stream_hi
-        lda     weapon_select_state
+        lda     weapon_select_state     ; clear upper bits of weapon select state
         and     #$0F
         sta     weapon_select_state
         lda     #$00
@@ -1228,88 +1231,93 @@ sound_note_done:  ldy     #SND_FLAGS           ; end of note — fetch instrumen
 ; =============================================================================
 ; sound_pattern_fetch — Sound Pattern Fetch — read and dispatch instrument pattern commands ($8706)
 ; =============================================================================
-sound_pattern_fetch:  jsr     sound_stream_read_next ; fetch pattern byte from stream
-        and     #$F0
-        bne     sound_pattern_cmd_20
-        jmp     sound_cmd_dispatch
+; Pattern byte format (high nibble routing):
+;   $0x → command index (dispatch to 10 handlers)
+;   $2x → set volume envelope + recurse (bits 0-2 = env index)
+;   $3x → loop/repeat control
+;   $4x+ → note: bits 4-6 = detune table index, bits 0-4 = note index
+sound_pattern_fetch:  jsr     sound_stream_read_next ; fetch pattern byte → A (masked), X (raw)
+        and     #$F0                    ; isolate high nibble for routing
+        bne     sound_pattern_cmd_20    ; non-zero → $2x/$3x/note
+        jmp     sound_cmd_dispatch      ; $0x → pattern command dispatch
 
-sound_pattern_cmd_20:  cmp     #$20
+sound_pattern_cmd_20:  cmp     #$20    ; $2x: volume envelope + recursive fetch
         bne     sound_pattern_cmd_30
         txa
-        and     #$07
+        and     #$07                    ; bits 0-2 = volume envelope index
         pha
-        jsr     sound_pattern_fetch
+        jsr     sound_pattern_fetch     ; recursive: process next pattern byte first
         pla
-        jmp     sound_pattern_set_vol_env
+        jmp     sound_pattern_set_vol_env ; then apply volume envelope
 
-sound_pattern_cmd_30:  cmp     #$30
+sound_pattern_cmd_30:  cmp     #$30    ; $3x: loop/repeat control
         bne     sound_pattern_set_duty
         jmp     sound_pattern_set_loop
 
-sound_pattern_set_duty:  txa
+sound_pattern_set_duty:  txa           ; $4x+: note with detune
+        rol     a                       ; rotate bits 4-6 into low position
+        rol     a                       ; (4 rotates left through carry)
         rol     a
         rol     a
-        rol     a
-        rol     a
-        and     #$07
+        and     #$07                    ; extract 3-bit detune table index
         tay
-        lda     freq_multiply_table_a,y
-        jsr     sound_freq_multiply
+        lda     freq_multiply_table_a,y ; look up frequency multiplier
+        jsr     sound_freq_multiply     ; apply detune to base frequency
 sound_pattern_volume_dec:  ldy     #SND_VOL_ENV
         lda     ($EC),y
-        and     #$E0
-        beq     sound_pattern_lookup_freq
+        and     #$E0                    ; bits 5-7 = volume countdown
+        beq     sound_pattern_lookup_freq ; zero → volume done, look up frequency
         sec
-        sbc     #$20
+        sbc     #$20                    ; decrement volume countdown (step -1)
         sta     sound_temp
         lda     ($EC),y
-        and     #$1F
-        ora     sound_temp
+        and     #$1F                    ; preserve envelope index (bits 0-4)
+        ora     sound_temp              ; merge updated countdown
         sta     ($EC),y
         lda     channel_active_flags
-        lsr     a
-        bcc     sound_pattern_goto_save
-        rts
+        lsr     a                       ; channel active?
+        bcc     sound_pattern_goto_save ; no → save state and return
+        rts                             ; yes → return (note still decaying)
 
 sound_pattern_goto_save:  jmp     sound_state_save_restore
 
-sound_pattern_lookup_freq:  txa
-        and     #$1F
+sound_pattern_lookup_freq:  txa       ; volume done → resolve note frequency
+        and     #$1F                    ; bits 0-4 = note index
         bne     sound_pattern_noise_check
-        tax
+        tax                             ; note 0 = rest (frequency = 0)
         jmp     sound_pattern_store_freq
 
 sound_pattern_noise_check:  ldy     #$01
-        cpy     active_channel_count
+        cpy     active_channel_count    ; noise channel? (count=1)
         bne     sound_pattern_freq_table
-        ldx     #$00
+        ldx     #$00                    ; noise: high byte always 0
         jmp     sound_pattern_store_freq
 
-sound_pattern_freq_table:  asl     a
-        ldy     #SND_FREQ_TBL_LO
+sound_pattern_freq_table:  asl     a   ; note_index * 2 (16-bit table entries)
+        ldy     #SND_FREQ_TBL_LO       ; add to channel's frequency table base
         clc
         adc     ($EC),y
-        sta     sound_temp
+        sta     sound_temp              ; → indirect pointer low
         lda     #$00
         iny
         adc     ($EC),y
-        sta     freq_register_hi
-        ldy     #$01
-        lda     (sound_temp),y
+        sta     freq_register_hi        ; → indirect pointer high
+        ldy     #$01                    ; read 16-bit frequency from table
+        lda     (sound_temp),y          ; high byte
         tax
         dey
-        lda     (sound_temp),y
-sound_pattern_store_freq:  ldy     #SND_TARGET_LO
+        lda     (sound_temp),y          ; low byte
+sound_pattern_store_freq:  ldy     #SND_TARGET_LO ; store target frequency for portamento
         sta     ($EC),y
         iny
         txa
         sta     ($EC),y
-        ldy     #SND_PORTA_RATE
+        ldy     #SND_PORTA_RATE         ; check if portamento is active
         lda     ($EC),y
         sta     sound_temp
-        and     #$7F
-        beq     sound_pattern_check_sweep
-        jsr     sound_portamento_init
+        and     #$7F                    ; mask direction bit
+        beq     sound_pattern_check_sweep ; rate=0 → no portamento
+        jsr     sound_portamento_init   ; initialize slide toward target
 sound_pattern_check_sweep:  lda     channel_active_flags
         lsr     a
         bcc     sound_pattern_init_state
@@ -1403,36 +1411,36 @@ sound_cmd_store_duty:  ldy     #SND_DUTY_CMD
         jmp     sound_pattern_fetch
 
 pattern_cmd_set_note:                   ; cmd 4: set note frequency and duration flags
-        jsr     sound_stream_read_next
+        jsr     sound_stream_read_next  ; param byte → X
         txa
-        beq     sound_cmd_read_note_data
-        ldy     #SND_FLAGS
+        beq     sound_cmd_read_note_data ; param=0 → unconditional note load
+        ldy     #SND_FLAGS              ; param≠0: conditional — compare with current flags
         lda     ($EC),y
-        and     #$7F
+        and     #$7F                    ; mask off bit 7 (active flag)
         sta     sound_temp
-        cpx     sound_temp
-        beq     sound_cmd_skip_note
-        inc     sound_temp
+        cpx     sound_temp              ; same as current note ID?
+        beq     sound_cmd_skip_note     ; yes → skip (note already playing)
+        inc     sound_temp              ; no → update note ID
         lda     ($EC),y
-        and     #$80
+        and     #$80                    ; preserve active flag
         ora     sound_temp
         sta     ($EC),y
 sound_cmd_read_note_data:
-        jsr     sound_stream_read_next
+        jsr     sound_stream_read_next  ; read freq_lo
         pha
-        jsr     sound_stream_read_next
+        jsr     sound_stream_read_next  ; read freq_hi
         pla
         ldy     #SND_FREQ_LO
-        sta     ($EC),y
+        sta     ($EC),y                 ; store frequency low byte
         iny
         txa
-        sta     ($EC),y
+        sta     ($EC),y                 ; store frequency high byte
         jmp     sound_pattern_fetch
 
-sound_cmd_skip_note:  lda     ($EC),y
+sound_cmd_skip_note:  lda     ($EC),y ; same note → clear flags and skip 2 data bytes
         and     #$80
-        sta     ($EC),y
-        ldy     #SND_FREQ_LO
+        sta     ($EC),y                 ; keep only active bit
+        ldy     #SND_FREQ_LO            ; advance past the 2 frequency bytes
         lda     #$02
         clc
         adc     ($EC),y
@@ -1444,78 +1452,78 @@ sound_cmd_skip_note:  lda     ($EC),y
         jmp     sound_pattern_fetch
 
 pattern_cmd_set_freq_table:             ; cmd 5: set frequency lookup table pointer
-        jsr     sound_stream_read_next
-        ldx     #$85
+        jsr     sound_stream_read_next  ; param = table index
+        ldx     #$85                    ; base address of freq tables = $8985
         ldy     #$89
         stx     sound_temp
         sty     freq_register_hi
-        asl     a
+        asl     a                       ; index * 2 (each table entry = 2 bytes)
         ldy     #SND_FREQ_TBL_LO
         clc
-        adc     sound_temp
+        adc     sound_temp              ; $85 + index*2 → pointer low
         sta     ($EC),y
         lda     #$00
-        adc     freq_register_hi
+        adc     freq_register_hi        ; $89 + carry → pointer high
         iny
         sta     ($EC),y
         jmp     sound_pattern_fetch
 
 pattern_cmd_set_detune:                 ; cmd 6: set pitch detune
         jsr     sound_stream_read_next  ; param byte: top 3 bits = detune table index
+        rol     a                       ; rotate bits 5-7 into bits 0-2
+        rol     a                       ; (4 left rotates through carry)
         rol     a
         rol     a
-        rol     a
-        rol     a
-        and     #$07
+        and     #$07                    ; isolate 3-bit index
         tay
         lda     freq_multiply_table_b,y ; look up detune frequency offset
         jsr     sound_freq_multiply     ; multiply base frequency by offset
         jmp     sound_pattern_volume_dec ; continue to volume processing
 pattern_cmd_set_portamento:              ; cmd 7: set portamento rate and direction
-        jsr     sound_stream_read_next
+        jsr     sound_stream_read_next  ; byte 1: rate (bit 7 = direction)
         ldy     #SND_PORTA_RATE
         sta     ($EC),y
         pha
-        jsr     sound_stream_read_next
+        jsr     sound_stream_read_next  ; byte 2: direction + initial phase
         ldy     #SND_PORTA_DIR
         sta     ($EC),y
         pla
-        sta     sound_temp
-        and     #$7F
-        beq     sound_cmd_portamento_done
+        sta     sound_temp              ; save rate byte for direction check
+        and     #$7F                    ; mask direction bit
+        beq     sound_cmd_portamento_done ; rate=0 → no portamento
         jsr     sound_portamento_init
 sound_cmd_portamento_done:  jmp     sound_pattern_fetch
 
 ; ─── initialize portamento pitch slide ───
-sound_portamento_init:  lda     #$00
+sound_portamento_init:  lda     #$00  ; reset accumulator
         ldy     #SND_PORTA_ACC
         sta     ($EC),y
-        lda     sound_temp
-        bpl     sound_portamento_dir_up
-        lda     #$0F
+        lda     sound_temp              ; check rate bit 7 for direction
+        bpl     sound_portamento_dir_up ; bit 7 clear → slide up
+        lda     #$0F                    ; bit 7 set → slide down (init=$0F)
         jmp     sound_portamento_store
 
-sound_portamento_dir_up:  lda     #$00
+sound_portamento_dir_up:  lda     #$00 ; slide up (init=$00)
 sound_portamento_store:  sta     sound_temp
-        ldy     #SND_PORTA_DIR
+        ldy     #SND_PORTA_DIR          ; merge direction nibble into low bits
         lda     ($EC),y
-        and     #$F0
-        ora     sound_temp
+        and     #$F0                    ; preserve high nibble (slide target)
+        ora     sound_temp              ; set low nibble (0=up, F=down)
         sta     ($EC),y
         rts
 
 pattern_cmd_set_sweep:                  ; cmd 8: set sweep envelope
-        jsr     sound_stream_read_next
+        jsr     sound_stream_read_next  ; param = sweep index (bits 0-4)
         sta     sound_temp
         ldy     #SND_VOL_ENV
         lda     ($EC),y
-        and     #$E0
-        ora     sound_temp
+        and     #$E0                    ; preserve volume countdown (bits 5-7)
+        ora     sound_temp              ; merge new sweep index
         sta     ($EC),y
         lda     channel_active_flags
-        lsr     a
-        bcs     sound_cmd_volume_done
-        jsr     sound_instrument_load
+        lsr     a                       ; channel active?
+        bcs     sound_cmd_volume_done   ; yes → skip instrument reload
+        jsr     sound_instrument_load   ; no → load instrument data for this sweep
 sound_cmd_volume_done:  jmp     sound_pattern_fetch
 
 
@@ -1562,23 +1570,23 @@ sound_instrument_next:  lda     #$01
         jmp     sound_instrument_byte
 
 pattern_cmd_stop_note:                  ; cmd 9: stop note and silence channel
-        ldy     #SND_FREQ_LO
+        ldy     #SND_FREQ_LO            ; zero frequency → marks channel as silent
         lda     #$00
         sta     ($EC),y
         iny
         sta     ($EC),y
-        lda     weapon_select_state
+        lda     weapon_select_state     ; clear low nibble (stop SFX selection)
         and     #$F0
         sta     weapon_select_state
         lda     channel_active_flags
-        lsr     a
-        bcc     :+
-        rts
-:       ldx     $EB
-        inx
+        lsr     a                       ; channel active?
+        bcc     :+                      ; no → write silence to APU
+        rts                             ; yes → just return (will be silenced next frame)
+:       ldx     $EB                     ; APU channel offset
+        inx                             ; +2 → freq register
         inx
         ldy     active_channel_count
-        jmp     apu_sound_control
+        jmp     apu_sound_control       ; zero the APU freq register
 
 
 ; =============================================================================

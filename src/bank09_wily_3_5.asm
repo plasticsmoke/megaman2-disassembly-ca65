@@ -12,6 +12,11 @@
 
         .setcpu "6502"
 
+; --- Local equates (bank09 has no .include directives) ---
+col_update_addr_hi  = $03B6     ; column update VRAM addr high
+col_update_addr_lo  = $03B7     ; column update VRAM addr low
+col_update_tiles    = $03B8     ; column update tile data buffer
+
 
 ; =============================================================================
 ; CHR Tile Pattern Data ($8000-$8188)
@@ -290,7 +295,7 @@ copy_sprite_loop:  lda     ($08),y
 ; tile is transferred to the PPU buffer. When a section boundary is
 ; reached, advance to the next section.
 ;
-; PPU buffer layout: $03B6/$03B7 = PPUADDR hi/lo, $03B8+ = tile data.
+; PPU buffer layout: col_update_addr_hi/lo = PPUADDR, col_update_tiles = data.
 ; col_update_count ($47) signals NMI to perform the actual VRAM write.
 ; =============================================================================
 
@@ -307,9 +312,9 @@ copy_sprite_loop:  lda     ($08),y
         adc     scroll_increment_table,x ; compute tile index offset
         tax
         lda     column_tile_index,x     ; look up tile ID for this column
-        sta     $03B8                   ; store in PPU buffer
+        sta     col_update_tiles        ; store in PPU buffer
         inc     $47                     ; signal NMI: 1 tile to write
-        inc     $03B7                   ; advance PPU target address
+        inc     col_update_addr_lo      ; advance PPU target address
         inc     $0680                   ; advance column offset
         bne     scroll_update_done
 advance_scroll_section:                 ; Move to next scroll section
@@ -320,9 +325,9 @@ advance_scroll_section:                 ; Move to next scroll section
         lda     #$00
         sta     $0680                   ; reset column offset
         lda     #$25                    ; PPU addr $25CC (nametable 1, row 14)
-        sta     $03B6
+        sta     col_update_addr_hi
         lda     #$CC
-        sta     $03B7
+        sta     col_update_addr_lo
 scroll_update_done:  rts
 
 ; --- Initialize metatile data pointer for section ---
@@ -357,7 +362,7 @@ store_scroll_y:  sta     $22
         stx     $47                     ; 32 tiles to write (full row)
         dex
         lda     #$00                    ; fill with blank tile ($00)
-clear_ppu_buf_loop:  sta     $03B8,x ; clear PPU buffer
+clear_ppu_buf_loop:  sta     col_update_tiles,x ; clear PPU buffer
         dex
         bpl     clear_ppu_buf_loop
         rts
@@ -374,13 +379,13 @@ check_scroll_boundary:  ldx     $06A0   ; current section index
         sta     $01
         jsr     calc_nametable_addr     ; compute PPU target address
         lda     section_ppu_buffer_hi,x ; set PPU buffer high byte
-        sta     $03B7
+        sta     col_update_addr_lo
         lda     section_column_count,x  ; tiles to copy this section
         sta     $47                     ; → col_update_count for NMI
         ldy     #$00
         ldx     #$00
 copy_column_data:  lda     ($DE),y      ; read tile from metatile data
-        sta     $03B8,x                 ; store in PPU buffer
+        sta     col_update_tiles,x      ; store in PPU buffer
         clc
         lda     $DE                     ; advance source pointer
         adc     #$01
@@ -395,7 +400,7 @@ copy_column_data:  lda     ($DE),y      ; read tile from metatile data
 column_copy_done:  rts
 
 ; --- Calculate nametable VRAM address from Y scroll position ---
-; Input: $01 = Y position (aligned to 8px). Output: $03B6/$03B7 = PPUADDR.
+; Input: $01 = Y position (aligned to 8px). Output: col_update_addr = PPUADDR.
 ; Formula: addr = $0800 | (Y << 2), where high byte accumulates via ROL.
 calc_nametable_addr:  lda     #$08      ; base high byte ($08 → $20xx or $28xx)
         sta     $00
@@ -404,9 +409,9 @@ calc_nametable_addr:  lda     #$08      ; base high byte ($08 → $20xx or $28xx
         rol     $00                     ; carry into high byte
         asl     a
         rol     $00
-        sta     $03B7                   ; PPU address low byte
+        sta     col_update_addr_lo      ; PPU address low byte
         lda     $00
-        sta     $03B6                   ; PPU address high byte
+        sta     col_update_addr_hi      ; PPU address high byte
         rts
 
 
