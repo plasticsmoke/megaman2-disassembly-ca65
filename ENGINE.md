@@ -96,13 +96,13 @@ MMC1 bank switching requires 5 serial writes (bit 0 of each byte) to any address
 Power-on sequence:
 
 1. **Reset vector** ($FFE0) → `cold_boot_init` in bank $0F
-2. **Disable interrupts** (`SEI`), initialize stack pointer
-3. **Wait for PPU warmup** — two VBLANK polls reading `PPUSTATUS`
-4. **Clear RAM** — zero pages $00-$07 ($0000-$07FF), clearing all entity state, scroll vars, and the OAM buffer
-5. **Initialize MMC1** — write reset bit ($80) then configure mode 3 (fixed high bank)
-6. **Switch to bank $0E** — the game engine bank
-7. **Hardware init** — set PPU control registers, enable NMI
-8. **Enter `main_game_loop`** — the permanent outer loop
+2. **Hardware init** — set PPUCTRL ($10: enable NMI, BG pattern table $1000) and PPUMASK ($06)
+3. **Switch to bank $0E** — `bank_switch` + `jmp banked_entry` to the game engine bank
+4. **Disable interrupts** (`SEI`), initialize stack pointer
+5. **Wait for PPU warmup** — two VBLANK polls reading `PPUSTATUS`
+6. **Clear RAM** — zero pages $00-$07 ($0000-$07FF), clearing all entity state, scroll vars, and the OAM buffer
+7. **Initialize MMC1** — write $01 to CHR bank 0 register (`mmc1_shift_register`), $1F to CHR bank 1 register ($DFFF)
+8. **Enter `main_game_loop`** — via `game_init`, the permanent outer loop
 
 The CPU never returns from `main_game_loop`. All game states (title, stage select, gameplay, ending) are sub-states within this loop.
 
@@ -111,15 +111,6 @@ The CPU never returns from `main_game_loop`. All game states (title, stage selec
 ## 4. Main Game Loop
 
 **File:** `bank0E_game_engine.asm`
-
-```
-main_game_loop (runs forever):
-  ├── Read game_state ($04)
-  ├── If game_state = 0 → stage_frame_loop (in-stage gameplay)
-  └── If game_state ≠ 0 → banked_dispatch (title, stage select, password, ending, etc.)
-```
-
-### Stage Frame Loop (game_state = 0)
 
 This is the core gameplay loop. Every visible frame executes these steps in order:
 
@@ -135,7 +126,7 @@ main_game_loop:
   8. wait_for_vblank          — Spin on vblank_done flag until NMI fires
 ```
 
-Note that physics (step 3) runs **before** AI (step 6), so AI handlers see the entity's updated position. Controller input is processed inside `entity_update_dispatch`. `wait_for_vblank` at step 8 blocks until the NMI handler sets `vblank_done`. This synchronizes gameplay to 60 Hz (NTSC). All PPU writes happen inside NMI; the main loop only prepares data.
+Note that physics (step 3) runs **before** AI (step 6), so AI handlers see the entity's updated position. Controller hardware is read inside `wait_for_vblank` (via `read_controllers`), and the results (`p1_new_presses`) are consumed by `entity_update_dispatch`. `wait_for_vblank` at step 8 blocks until the NMI handler sets `vblank_done`. This synchronizes gameplay to 60 Hz (NTSC). All PPU writes happen inside NMI; the main loop only prepares data.
 
 ---
 
@@ -153,8 +144,8 @@ NMI handler:
   4. Column update     — If col_update_count > 0: write vertical tile column to nametable
   5. Attribute update  — If attr_update_count > 0: write attribute table entries
   6. Scroll setup      — Compute final PPUSCROLL from scroll_x/y minus camera shake offsets
-  7. RNG tick          — seed = (ent_x_sub[0] XOR seed + frame_counter) >> 1
-  8. Bank callback     — Process queued cross-bank calls (CHR upload, sound)
+  7. Bank callback     — Process queued cross-bank calls (CHR upload, sound)
+  8. RNG tick          — seed = (ent_x_sub[0] XOR seed + frame_counter) >> 1
 ```
 
 **Step 1 (OAM DMA)** takes 513 CPU cycles. The OAM buffer at $0200 is pre-built by `render_all_sprites` during the main loop. A single write to $4014 triggers the hardware DMA.
@@ -239,7 +230,7 @@ Entity state is stored in parallel arrays indexed by the X register (X = slot nu
 | Array | Address | Purpose |
 |-------|---------|---------|
 | `ent_type` | $0400,x | Entity type ID ($00-$7F) — indexes AI table |
-| `ent_flags` | $0420,x | Status bits: active ($80), facing ($40), no-collide ($20) |
+| `ent_flags` | $0420,x | Status bits: active ($80), facing ($40), collision gate (bits 0-1) |
 | `ent_x_screen` | $0440,x | X position, screen/page byte |
 | `ent_x_px` | $0460,x | X position, pixel byte |
 | `ent_x_sub` | $0480,x | X position, sub-pixel (1/256th pixel) |
@@ -313,14 +304,14 @@ Large enemies bypass NES sprite limits by rendering directly as background metat
 
 ```
 friender_ai (bank0E:4083):
-  1. Look up landing height from airman_height_threshold table
+  1. Look up landing height from friender_height_threshold table
   2. Compute metatile position from entity X/Y + offset tables
   3. Call metatile_render / metatile_attr_update for nametable address
-  4. Copy 16 CHR tile indices from airman_tile_data into ppu_update_buf
+  4. Copy CHR tile indices from friender_tile_data into ppu_update_buf
   5. NMI handler writes tiles to the nametable
 ```
 
-The entity has no sprite representation — its visual appearance is entirely background tiles. Animation frames are selected via `ent_anim_id`, indexing into 128 bytes of tile data (`airman_tile_data` at bank0E:4211 — 8 frames × 16 tiles per frame). When the entity animates, the AI handler overwrites the nametable region with the new frame's tiles.
+The entity has no sprite representation — its visual appearance is entirely background tiles. Animation frames are selected via `ent_anim_id`, indexing into 128 bytes of tile data (`friender_tile_data` at bank0E:4210 — 2 frames × 64 bytes per frame, covering a 4×4 metatile region). When the entity animates, the AI handler overwrites the nametable region with the new frame's tiles.
 
 This technique allows arbitrarily large enemies (Friender fills a 4×4 metatile region) without hitting the 8-sprite-per-scanline limit. The tradeoff: background-tile enemies can't move smoothly (snapped to 16px metatile grid) and require the multi-entity hitbox pattern for collision.
 
@@ -369,7 +360,7 @@ The return stub trick is a soft-interrupt pattern: pushing a return address then
 
 ### NULL AI
 
-17 entity types point to a NULL stub (`kerog_physics_rts` — a bare RTS instruction). These are entities that have no per-frame behavior (explosions, static objects, etc.).
+Several entity types point to a minimal stub (`kerog_physics_rts` — calls `apply_entity_physics` then RTS). These are entities that need physics movement but have no per-frame AI behavior (explosions, projectiles, static objects, etc.).
 
 ---
 
@@ -515,9 +506,9 @@ Tile collision converts a pixel position to a collision type by walking the stag
 ```
 Pixel position
   → Screen index (which 256px room)
-  → Metatile map (8×8 grid of 16×16 metatiles per screen)
+  → Metatile map (8×8 grid of 32×32 metatiles per screen)
   → Metatile ID
-  → Quadrant (which 8×8 tile within the 16×16 metatile)
+  → Quadrant (which 16×16 sub-tile within the 32×32 metatile)
   → Collision type (2-bit value from tile's attribute byte)
 ```
 
@@ -526,12 +517,12 @@ Pixel position
 1. **Row/column extraction** — bit shifts extract the 3-bit row and 3-bit column from the pixel Y and X positions
 2. **Map index** — `column × 8 + row` (column-major layout, 64 entries per screen)
 3. **Metatile pointer** — base address from screen number × 64
-4. **Metatile ID** → data address at `$2000 + ID × 4` (each metatile = 4 bytes for 2×2 tiles)
-5. **Quadrant select** — bit 4 of X and Y selects which of the 4 tiles in the metatile
-6. **Collision bits** — top 2 bits of the tile byte encode collision type:
+4. **Metatile ID** → data address at `$2000 + ID × 4` (each metatile = 4 bytes for 2×2 sub-tiles)
+5. **Quadrant select** — bit 4 of X and Y selects which of the 4 sub-tiles in the metatile
+6. **Collision bits** — top 2 bits of the sub-tile byte encode collision type:
    - 0 = empty (passable)
    - 1 = solid
-   - 2-3 = stage-specific (look up in `stage_collision_table`, 16 bytes per stage)
+   - 2-3 = stage-specific (look up in `stage_collision_table`, 2 bytes per stage)
 
 Types 2-3 are overloaded per-stage — they can mean ladder, spike, water, conveyor, or other stage-specific surfaces.
 
@@ -641,7 +632,7 @@ Player presses B:
   1. fire_weapon_dispatch — branch by current_weapon ($A9)
   2. Check ammo (weapon_ammo array at $9C)
   3. Deduct ammo cost
-  4. fire_find_slot_loop — scan slots $02-$0E for empty slot
+  4. fire_weapon_scan_slot — scan slots $04→$03→$02 for empty slot
   5. weapon_spawn_projectile:
      - Set ent_type to weapon's projectile entity type
      - Position: player position + directional offset
@@ -792,7 +783,7 @@ Used by bosses (projectiles), enemy systems (Kukku spawner → Kukku body, Pipi 
 Some enemies use multi-entity spawn chains:
 - **Kukku**: $1E (invisible spawner, tracks player X) → $1F (visible body) + $20 (despawner)
 - **Pipi**: $37 (spawn point) → $38 (bird) → $3A (egg) → $3C (Copipi baby birds)
-- **Mole**: $47 (controller, spawns copies of itself + $48/$49 shots)
+- **Mole**: $47 (controller, spawns $48/$49 shots)
 
 ---
 
@@ -844,7 +835,7 @@ Drop rate comparison:
 
 | Item | Normal | Difficult |
 |------|--------|-----------|
-| Total drop rate | 72% | 52% |
+| Total drop rate | 71% | 50% |
 | Small health | 30% | 5% |
 | Small weapon | 20% | 4% |
 | Large health | 10% | 15% |
