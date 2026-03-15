@@ -34,7 +34,7 @@
 ;     │     └─ Boss door: special scroll lock + shutter animation
 ;     │
 ;     └─ weapon_select (Start pressed)
-;           ├─ Pause entities (game_mode |= $04)
+;           ├─ Pause entities (game_mode = $03)
 ;           ├─ D-pad: 24-frame delay, 8-frame auto-repeat
 ;           ├─ Cursor wraps through acquired weapons
 ;           └─ Start/B: unpause, restore weapon palette

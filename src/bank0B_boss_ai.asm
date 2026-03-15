@@ -4414,17 +4414,17 @@ boss_init:  ldx     boss_id                 ; Initialize boss from property tabl
         sta     boss_x_screen
         lda     boss_ai_flags,x         ; load AI behavior flags for this boss
         sta     boss_flags
-        lda     boss_movement_mode,x    ; load default X position
+        lda     boss_default_x_px,x     ; initial X pixel position
         sta     boss_x_px
-        lda     boss_x_position,x       ; load Y position
+        lda     boss_default_y_px,x     ; initial Y pixel position
         sta     boss_y_px
-        lda     boss_y_position,x
+        lda     boss_default_type,x     ; entity type for sprite rendering
         sta     boss_type
-        lda     boss_type_table,x       ; load boss entity type
+        lda     boss_default_screen,x   ; screen/page X byte
         sta     boss_screen_x
-        lda     boss_x_velocity_table,x
+        lda     boss_default_x_vel_sub,x ; X velocity sub-pixel
         sta     boss_x_vel_sub
-        lda     boss_palette_table,x
+        lda     boss_default_x_vel,x   ; X velocity high byte
         sta     boss_x_vel
         lda     boss_y_vel_sub_table,x
         sta     boss_y_vel_sub
@@ -4446,9 +4446,9 @@ boss_init:  ldx     boss_id                 ; Initialize boss from property tabl
 
 boss_ai_flags:  .byte   $83,$83,$83,$83,$83,$83,$83,$83
         .byte   $8B,$00,$00,$00,$83,$00
-boss_movement_mode:  .byte   $C8,$C8,$C8,$C8,$C8,$C8,$C8,$C8
+boss_default_x_px:  .byte   $C8,$C8,$C8,$C8,$C8,$C8,$C8,$C8
         .byte   $70,$C8,$FF,$C8,$78,$B4
-boss_x_position:  .byte   $28
+boss_default_y_px:  .byte   $28
         .byte   $28
         .byte   $30,$28
         .byte   $28
@@ -4456,15 +4456,15 @@ boss_x_position:  .byte   $28
         .byte   $28
         .byte   $28
         .byte   $6B,$10,$4B,$10,$77,$7C
-boss_y_position:  .byte   $50,$66,$6C,$60,$54,$5A,$63,$69
+boss_default_type:  .byte   $50,$66,$6C,$60,$54,$5A,$63,$69
         .byte   $70,$50,$71,$50,$72,$75
-boss_type_table:  .byte   $01,$09,$09,$01,$01,$01,$01,$01
+boss_default_screen:  .byte   $01,$09,$09,$01,$01,$01,$01,$01
         .byte   $0D,$01,$01,$01,$00,$01
-boss_x_velocity_table:  .byte   $00,$00
-boss_x_vel_data:  .byte   $00,$00,$00,$00,$00,$00,$00,$00
+boss_default_x_vel_sub:  .byte   $00,$00
+boss_default_x_vel_sub_data:  .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $60,$00
         .byte   $C4,$00
-boss_palette_table:  .byte   $00
+boss_default_x_vel:  .byte   $00
         .byte   $00
         .byte   $00
         .byte   $00
