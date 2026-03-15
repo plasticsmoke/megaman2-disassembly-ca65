@@ -3684,7 +3684,7 @@ update_entity_loop:  stx     current_entity_slot
         lda     ent_x_px,x
         sbc     scroll_x                     ; subtract scroll X for screen pos
         sta     ent_screen_x,x                 ; store screen-relative X
-        jsr     apply_entity_physics    ; apply velocity and gravity
+        jsr     entity_physics_core     ; apply velocity and gravity
 update_entity_next:  ldx     current_entity_slot
         dex
         cpx     #$01
@@ -3821,7 +3821,7 @@ atomic_fire_weapon_high:  lda     ent_anim_id,x
         bne     atomic_fire_apply_physics
         lda     #$07
 atomic_fire_weapon_set_anim:  sta     ent_anim_id,x
-atomic_fire_apply_physics:  jsr     apply_entity_physics
+atomic_fire_apply_physics:  jsr     entity_physics_core
         rts
 
 atomic_fire_update_palette:  lda     atomic_fire_palette_lo_tbl,y
@@ -3950,7 +3950,7 @@ bubble_deduct_ammo:  sec
         inc     ent_state,x
 bubble_done:  rts
 
-bubble_apply_physics:  jsr     apply_entity_physics
+bubble_apply_physics:  jsr     entity_physics_core
         rts
 
 bubble_yvel_tbl:  .byte   $04,$FC
@@ -3995,7 +3995,7 @@ bubble_lead_check_stop:  lda     temp_00
         beq     bubble_lead_physics
         dec     ent_state,x
         bne     bubble_lead_launch
-bubble_lead_physics:  jsr     apply_entity_physics
+bubble_lead_physics:  jsr     entity_physics_core
         rts
 
         .byte   $BD,$E0,$04,$C9,$12,$B0,$14,$38
@@ -4024,7 +4024,7 @@ bubble_lead_accelerate:  clc
         adc     #$00
         sta     ent_y_vel,x
         inc     ent_state,x
-        jsr     apply_entity_physics
+        jsr     entity_physics_core
         rts
 
         lda     ent_state,x
@@ -4070,7 +4070,7 @@ bubble_lead_accelerate:  clc
         ldx     current_entity_slot
         lda     tile_solid_flag_tbl,y
         bne     crash_bomber_hit
-        jsr     apply_entity_physics
+        jsr     entity_physics_core
         rts
 
 crash_bomber_hit:  lda     #$2E
@@ -4249,7 +4249,7 @@ air_shooter_end_phase:  lda     #$02
         lda     #$00
         sta     ent_anim_frame,x
         sta     ent_hitbox_width,x
-air_shooter_physics:  jsr     apply_entity_physics
+air_shooter_physics:  jsr     entity_physics_core
         bcc     air_shooter_done
         lda     #$00
         sta     ent_hitbox_width,x
@@ -4342,7 +4342,7 @@ leaf_shield_hitbox:  sec
         bne     leaf_shield_physics
         lda     #$00
         sta     ent_anim_id,x
-leaf_shield_physics:  jsr     apply_entity_physics
+leaf_shield_physics:  jsr     entity_physics_core
         bcc     leaf_shield_done
         lda     #$00
         sta     ent_hitbox_width,x
@@ -4462,7 +4462,7 @@ time_stopper_set_vel:  lda     #$9E
         sta     ent_y_vel,x
         jmp     time_stopper_check_done
 
-time_stopper_physics:  jsr     apply_entity_physics
+time_stopper_physics:  jsr     entity_physics_core
         bcc     time_stopper_done
         lda     #$00
         sta     ent_hitbox_width,x
@@ -4574,7 +4574,7 @@ crash_entity_accelerate:  clc
         sta     ent_hp,x
         dec     ent_state,x
 crash_entity_dec_timer:  dec     ent_hp,x
-        jsr     apply_entity_physics
+        jsr     entity_physics_core
         rts
 
         jsr     check_entity_on_screen
@@ -5449,24 +5449,27 @@ collision_apply_physics:  jsr     apply_entity_physics_alt
 collision_done:  rts
 
         rts
+apply_simple_collision:                 ; bank0E entry: death_context=1 (secondary despawn)
         lda     #$01
-        bne     @skip
+        bne     collision_set_context
+apply_entity_physics:                   ; bank0E entry: collision-gated physics ($EEBA)
         lda     #$00
-@skip:
+collision_set_context:
         sta     death_context
         lda     ent_flags,x
         and     #$03
-        beq     apply_entity_physics
+        beq     entity_physics_core
         pha
         and     #$01
         beq     collision_check_contact
         jsr     check_player_collision
 collision_check_contact:  pla
         and     #$02
-        beq     apply_entity_physics
+        beq     entity_physics_core
         jsr     check_weapon_collision
-        bcc     apply_entity_physics
+        bcc     entity_physics_core
         jsr     item_drop_rng
+apply_collision_physics:                ; bank0E entry: kill handler ($EEDA)
         lda     #ENTITY_DEATH_EXPLODE
         sta     ent_type,x
         lda     #$80
@@ -5477,7 +5480,7 @@ collision_check_contact:  pla
         jmp     physics_despawn_check
 
 ; =============================================================================
-; apply_entity_physics — Move entity by velocity, apply gravity, bounds check ($EEEF)
+; entity_physics_core — Move entity by velocity, apply gravity, bounds check ($EEEF)
 ; =============================================================================
 ; Input: X = entity slot
 ; Output: carry clear = in bounds, carry set = despawned
@@ -5487,7 +5490,7 @@ collision_check_contact:  pla
 ; Gravity decreases Y velocity each frame (increasing downward speed).
 ; Entities outside screen bounds ($08-$F7 relative to scroll) are despawned.
 ; =============================================================================
-apply_entity_physics:
+entity_physics_core:
 ; --- Y movement: position -= velocity (16-bit sub-pixel) ---
         sec
         lda     ent_y_sub,x
@@ -5587,6 +5590,7 @@ physics_despawn_secondary:
         sec
         rts
 
+apply_simple_physics:                   ; bank0E entry: death_context=1 ($EFAF)
         lda     #$01
         bne     apply_entity_physics_alt_skip
 
@@ -5864,7 +5868,7 @@ spawn_entity_no_slot:
         rts
 
 ; =============================================================================
-; calc_aimed_velocity — Compute velocity vector toward player ($F1A2)
+; calc_entity_velocity — Compute velocity vector toward player ($F197)
 ; =============================================================================
 ; Input: jump_ptr/jump_ptr_hi = base speed (sub/main), X = entity slot
 ; Calculates X/Y distances to player, then uses division to compute
@@ -5879,6 +5883,7 @@ spawn_entity_no_slot:
 ;        y_vel = base_speed, x_vel = base_speed * (delta_x / delta_y)
 ;   5. Negate Y velocity if player is above entity (PHP/PLP preserves sign)
 ; =============================================================================
+calc_entity_velocity:                   ; bank0E entry point ($F197)
         ldy     #$40                    ; assume facing right (bit 6)
         sec
         lda     player_screen_x
@@ -5901,10 +5906,10 @@ spawn_entity_no_slot:
         lda     ent_y_px
         sbc     ent_y_px,x
         php                             ; save sign flag (player above/below)
-        bcs     calc_entity_velocity
+        bcs     calc_vel_store_delta_y
         eor     #$FF                    ; negate: |delta_y|
         adc     #$01
-calc_entity_velocity:
+calc_vel_store_delta_y:
         sta     temp_01                 ; temp_01 = |delta_y|
         cmp     temp_00                 ; compare |delta_y| vs |delta_x|
         bcs     calc_vel_y_greater
