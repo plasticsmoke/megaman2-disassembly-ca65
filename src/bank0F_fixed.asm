@@ -272,6 +272,7 @@ bank_switch_enqueue_rts:  rts
         lsr     a
         sta     $9FFF
         rts
+boss_beaten_check:
         lda     #$0D
         jsr     bank_switch
         jsr     banked_0D_boss_get_screen
@@ -311,6 +312,7 @@ wait_vblank_loop:
         rts
 
 ; ─── (unreachable code: duplicate wait-for-vblank, returns to bank $0D) ─────
+wait_for_vblank_0D:
         lda     controller_1
         sta     p1_prev_buttons
         lda     controller_2
@@ -679,6 +681,7 @@ setup_explosion_array:  lda     ent_x_screen
         lda     #$25                    ; explosion entity type
         sta     temp_0B
         ldx     #$0D
+explosion_array_setup_inner:
         ldy     #$0B
 explosion_setup_loop:  lda     #$80
         ora     explosion_flags_tbl,y
@@ -751,6 +754,7 @@ palette_anim_copy_loop:  lda     palette_anim_frames,x ; copy from palette anima
         inc     palette_dirty
 palette_anim_done:  rts
 
+chr_upload_init:
         lda     current_stage
         and     #$07
         jsr     bank_switch
@@ -812,6 +816,7 @@ chr_upload_palette_copy:  lda     (temp_0A),y
         jsr     bank_switch
         rts
 
+chr_upload_run:
         lda     current_stage
         and     #$07
         jsr     bank_switch
@@ -877,18 +882,21 @@ chr_sound_byte_loop:  lda     (jump_ptr),y
         jsr     banked_0E_wily_check
 chr_upload_wily_check:  rts
 
+nametable_init:
         lda     #$0D
         jsr     bank_switch
         jsr     banked_0D_wily_intro
         lda     #$0E
         jsr     bank_switch
         rts
+nametable_stage_setup:
         lda     #$0D
         jsr     bank_switch
         jsr     banked_entry
         lda     #$0E
         jsr     bank_switch
         rts
+palette_anim_run:
         ldx     #$0F
 
 ; =============================================================================
@@ -956,6 +964,7 @@ process_sound_jump_intro:  jmp     boss_intro_sequence ; start boss intro
 
 process_sound_done:  rts
 
+sound_column_copy:
         pha
         lda     boss_work_var1
         sta     jump_ptr_hi
@@ -981,6 +990,7 @@ process_sound_done:  rts
         jsr     bank_switch
         rts
 
+ppu_fill_from_ptr:
         jsr     bank_switch
         lda     #$00
         sta     jump_ptr
@@ -996,6 +1006,7 @@ chr_copy_ppu_loop:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
+chr_ram_bank_load:
         sta     temp_00
         tax
         lda     $C689,x
@@ -1055,6 +1066,7 @@ chr_bank_page_count_tbl:  .byte   $10,$10,$10,$10,$08,$08,$10,$0E
         ora     (temp_01,x)
         .byte   $02
 ; ─── Copy column data to PPU update buffer ───
+scroll_column_prep:
 column_copy_to_buffer:  jsr     bank_switch
         ldy     #$1F
 column_copy_loop:  lda     (jump_ptr),y
@@ -1067,6 +1079,7 @@ column_copy_loop:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
+ppu_set_scroll_state:
         lda     #$01
         jsr     bank_switch
         ldx     #$1F
@@ -1084,6 +1097,7 @@ column_copy_from_ram:  lda     $9CD0,x
         jsr     bank_switch
         rts
 
+ppu_column_fill:
         lda     #$09
         jsr     bank_switch
         ldy     #$1F
@@ -1097,6 +1111,7 @@ column_copy_from_ptr:  lda     (general_ptr_lo),y
         jsr     bank_switch
         rts
 
+metatile_render_column:
         lda     general_counter
         sta     jump_ptr_hi
         lda     #$00
@@ -1134,6 +1149,7 @@ column_copy_from_bank:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
+get_screen_boundary:
         lda     current_stage
         and     #$07
         jsr     bank_switch
@@ -1142,6 +1158,7 @@ column_copy_from_bank:  lda     (jump_ptr),y
         lda     #$0E
         jsr     bank_switch
         rts
+boss_entrance_setup:
         lda     #$C0
         sta     ent_flags
         lda     #$80
@@ -1180,8 +1197,10 @@ boss_entrance_done:  lda     #$30
         jsr     bank_switch
         rts
 
+boss_trigger_entrance:
         lda     current_stage
         sta     boss_id
+boss_wily_entrance:
         lda     #$0B
         jsr     bank_switch
         jsr     banked_entry
@@ -1290,6 +1309,7 @@ div16_next:
         sta     temp_0E
         rts
 
+attr_table_write:
         ldx     ppu_buffer_count
         ldy     #$20
         lda     jump_ptr_hi
@@ -1352,6 +1372,7 @@ div16_next:
         sta     col_update_addr_hi,x
         rts
 
+metatile_attr_update:
         pha
         lda     jump_ptr
         pha
@@ -1495,6 +1516,7 @@ metatile_offset_table:  .byte   $00,$08,$02,$0A
 ; Labels metatile_attr_loop and metatile_attr_done are only self-referenced.
 ; Complete routine that loads stage bank, computes PPU attribute data, and
 ; writes to update buffer — but nothing calls or branches into it.
+scroll_y_update:
         lda     current_stage
         and     #$07
         jsr     bank_switch
@@ -1691,6 +1713,7 @@ scroll_col_load_palette:  ldy     $B42C,x
         rts
 
 ; ─── Build list of active entity slots ───
+build_active_list:
         ldx     #$0F
         ldy     #$00
 build_active_entity_list:  lda     ent_spawn_flags,x
@@ -1835,6 +1858,7 @@ stage_collision_table:  .byte   $02,$03,$02,$03,$02,$00,$04,$03
         .byte   $00,$03,$02,$07,$05,$06,$02,$03
         .byte   $02,$00,$02,$03,$04,$03,$02,$03
         .byte   $00,$00,$00,$00
+tile_lookup:
         jsr     lookup_cached_tile
         lda     #$0B
         jsr     bank_switch
@@ -1843,6 +1867,7 @@ stage_collision_table:  .byte   $02,$03,$02,$03,$02,$00,$04,$03
 ; =============================================================================
 ; clear_oam_buffer — Fill OAM buffer with $F8 (hide all sprites) ($CC6C)
 ; =============================================================================
+clear_oam_buffer_fixed:
 clear_oam_buffer:  lda     #$F8         ; $F8 = off-screen Y (hide sprite)
         ldx     #$00
 clear_oam_loop:  sta     oam_buffer,x        ; write $F8 to OAM Y position
@@ -3035,7 +3060,9 @@ contact_damage_range_y_tbl:  .byte   $18
         .byte   $38,$1C,$2C,$14,$18,$20,$18,$28
         .byte   $40,$20,$20,$10,$10,$10,$10,$10
         .byte   $10,$10,$10,$10,$10
+ending_player_render:
         ldy     ent_type
+ending_player_anim:
         sty     temp_01
         lda     #$09
         jsr     bank_switch
@@ -3045,17 +3072,21 @@ switch_to_bank_0D:  lda     #$0D
         jsr     bank_switch
         rts
 
+ending_scroll_update:
         .byte   $A9,$09,$20,$00,$C0,$20,$03,$86
-        .byte   $4C,$31,$D6,$A9,$09,$20,$00,$C0
+        .byte   $4C,$31,$D6
+ending_init_walk:
+        .byte   $A9,$09,$20,$00,$C0
         .byte   $20
         .byte   $06,$86
         .byte   $4C,$31,$D6
 
+ending_walk_step:
         .byte   $A9,$09,$20,$00,$C0,$20,$09,$86
         .byte   $4C,$31,$D6
 
 ; =============================================================================
-; entity_spawn_scan — Scan stage data and spawn/despawn entities based on scroll ($C658)
+; entity_spawn_scan — Scan stage data and spawn/despawn entities based on scroll ($D658)
 ; =============================================================================
 entity_spawn_scan:  lda     current_stage
         and     #$07                    ; mask to stage bank index 0-7
@@ -3177,7 +3208,7 @@ spawn_scan_done:  lda     #$0E          ; switch back to game engine
         rts
 
 ; =============================================================================
-; activate_primary_entity — Activate an enemy entity from stage spawn data ($C753)
+; activate_primary_entity — Activate an enemy entity from stage spawn data ($D753)
 ; =============================================================================
 activate_primary_entity:  tya
         ldx     #$0F
@@ -3241,7 +3272,7 @@ entity_init_from_type:
 entity_activate_done:  rts
 
 ; =============================================================================
-; activate_secondary_entity — Activate a secondary entity from spawn data ($C7CC)
+; activate_secondary_entity — Activate a secondary entity from spawn data ($D7CC)
 ; =============================================================================
 activate_secondary_entity:  tya
         ldx     #$0F
@@ -3360,6 +3391,7 @@ find_slot_loop:  lda     ent_spawn_flags,x
 find_slot_found:  clc
         rts
 
+fire_weapon_dispatch:
         lda     boss_fight_flag
         bne     @in_range
         ldx     current_weapon
@@ -5826,7 +5858,7 @@ horiz_coll_no_hit:  plp
 tile_solid_lookup_tbl:  .byte   $00,$01,$00,$01,$00,$01,$01,$01 ; solid flag lookup per tile type
         .byte   $01
 ; =============================================================================
-; spawn_entity_from_parent — Spawn child entity from parent ($F182)
+; spawn_entity_from_parent — Spawn child entity from parent ($F159)
 ; =============================================================================
 ; Input: A = child entity type, X = parent slot (current_entity_slot)
 ; Output: carry clear = success (child slot in X), carry set = no free slot

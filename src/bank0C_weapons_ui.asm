@@ -238,7 +238,7 @@ password_mode_init:  sty     lives_timer        ; Enter password screen mode
 
 
 ; =============================================================================
-; weapon_secondary_init — Weapon Secondary Init — initialize weapon slots without CHR-RAM upload ($8128)
+; weapon_secondary_init — Weapon Secondary Init — initialize weapon slots without CHR-RAM upload ($813A)
 ; =============================================================================
 weapon_secondary_init:  lda     weapon_select_state
         and     #$0F
@@ -288,7 +288,7 @@ weapon_check_sound_slot:  lda     sound_slot_lo
 
 
 ; =============================================================================
-; weapon_clear_display — Weapon Clear Display — zero out all 4 weapon CHR-RAM slots ($8190)
+; weapon_clear_display — Weapon Clear Display — zero out all 4 weapon CHR-RAM slots ($818C)
 ; =============================================================================
 weapon_clear_display:  lda     weapon_select_state       ; clear weapon display slots
         and     #$F0
@@ -311,7 +311,7 @@ weapon_clear_loop:  lda     #$00
 
 
 ; =============================================================================
-; draw_energy_bar_template — Draw Energy Bar Template — fill 16 tiles with blank energy bar pattern ($81B3)
+; draw_energy_bar_template — Draw Energy Bar Template — fill 16 tiles with blank energy bar pattern ($81B2)
 ; =============================================================================
 draw_energy_bar_template:  ldy     #$0F ; Draw empty 16-tile energy bar
         lda     #$10
@@ -1638,7 +1638,7 @@ sound_freq_mult_dec:  dey
 
 
 ; =============================================================================
-; freq_multiply_table_a — Sound Data Tables — Frequency Multiply & Note Frequency Tables ($8978)
+; freq_multiply_table_a — Sound Data Tables — Frequency Multiply & Note Frequency Tables ($8975)
 ; =============================================================================
 freq_multiply_table_a:  .byte   $00,$00,$02,$04,$08,$10,$20,$40
 freq_multiply_table_b:  .byte   $00,$00,$03,$06,$0C,$18,$30,$60
@@ -1685,7 +1685,7 @@ note_freq_table:                        ; 128-entry 16-bit note frequency lookup
         .byte   $FF,$FF,$FF
 
 ; =============================================================================
-; weapon_data_ptr_lo — Weapon/Music Data Pointer Table — interleaved lo/hi pointers ($8AD6)
+; weapon_data_ptr_lo — Weapon/Music Data Pointer Table — interleaved lo/hi pointers ($8A50)
 ; =============================================================================
 weapon_data_ptr_lo:  .byte   $D6
 weapon_data_ptr_hi:  .byte   $8A,$1D,$8E,$C8,$90,$87,$94,$98

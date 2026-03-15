@@ -105,7 +105,7 @@ calc_entity_velocity           := $F197
         ldx     #$01
 
 ; =============================================================================
-; wait_ppu_warmup_1 -- Cold Boot Entry — wait for PPU warmup, clear RAM, init MMC1 ($8000)
+; wait_ppu_warmup_1 -- Cold Boot Entry — wait for PPU warmup, clear RAM, init MMC1 ($8006)
 ; =============================================================================
 wait_ppu_warmup_1:  lda     PPUSTATUS       ; read PPUSTATUS to clear latch
         bpl     wait_ppu_warmup_1
@@ -3055,7 +3055,7 @@ claw_var_apply_physics:  jsr     apply_entity_physics
         rts
 
 ; =============================================================================
-; tanishi_ai -- Enemy AI: Tanishi (type $0A) — snail, spawns bare form on hit ($9776)
+; tanishi_ai -- Enemy AI: Tanishi (type $0A) — snail, spawns bare form on hit ($976F)
 ; Mislabeled by annotation scripts as "Shotman". Actually type $0A (Tanishi).
 ; =============================================================================
 ; ─── stage transition: destroy all spawned entities ───
