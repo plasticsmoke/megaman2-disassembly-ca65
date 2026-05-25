@@ -952,7 +952,7 @@ clear_boss_entities:  lsr     ent_spawn_flags,x
         jsr     reset_sound_state
         lda     #$00
         sta     current_entity_slot
-        lda     #$7D
+        lda     #ENTITY_WILY_GATE_OPEN
         ldx     #$0F
         jsr     spawn_entity_init
         lda     #$20

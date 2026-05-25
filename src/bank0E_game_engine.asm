@@ -354,7 +354,7 @@ wily_spawn_gate_entities:  lda     $BC
         bne     wily_spawn_gate_loop
         ldx     #$00
         stx     current_entity_slot
-        lda     #$7E
+        lda     #ENTITY_WILY_GATE_BG
         ldx     #$0E
         jsr     spawn_entity_init
         lda     #$3B
@@ -368,7 +368,7 @@ wily_spawn_gate_loop:  lda     #$00
         sta     temp_03
 wily_spawn_shift_flags:  lsr     temp_03
 wily_spawn_check_done:  bcs     wily_spawn_next_bit
-        lda     #$7C
+        lda     #ENTITY_WILY_GATE_BOSS
         ldx     temp_02
         jsr     spawn_entity_init
         lda     wily_gate_anim_table,y
@@ -2640,8 +2640,8 @@ entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; $00-$07: Shrink, An
         .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B ; $58-$5F: HeatmanFire, QuickBoomer, BubbleHazard, BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
         .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE ; $60-$67: BossDebris, WoodmanLeaf, WoodmanTornado, BossBody, BossBodyCtrl, DragonBodyA, DragonBodyB, DragonPart
         .byte   $2B,$FE,$32,$EF,$2B,$25,$2B,$2B ; $68-$6F: DragonBreath, GutsdozerTurret, Picopico, WilyBall, WilyMachShot, BoobeamTurret, BoobeamShot, AlienBossShot
-        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1 ; $70-$77: AlienBody, BigFish, FlashHaz(72), FlashHaz(73), RedLiquid, (75), LargeHealth, SmallHealth
-        .byte   $A9,$B1,$A9,$A9,$08,$08,$08,$24 ; $78-$7F: LargeWeapon, SmallWeapon, ETank, ExtraLife, (7C), (7D), (7E), (7F)
+        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1 ; $70-$77: AlienBody, BigFish, FlashHaz(72), FlashHaz(73), RedLiquid, Pickup(75-unused), LargeHealth, SmallHealth
+        .byte   $A9,$B1,$A9,$A9,$08,$08,$08,$24 ; $78-$7F: LargeWeapon, SmallWeapon, ETank, ExtraLife, WilyGateBoss, WilyGateOpen, WilyGateBg, (7F-unused)
 entity_ai_ptr_hi:  .byte   $94,$94,$95,$95,$95,$96,$96,$96 ; $00-$07
         .byte   $96,$97,$97,$98,$98,$98,$98,$98 ; $08-$0F
         .byte   $9A,$9A,$9A,$9C,$9C,$9D,$9E,$9F ; $10-$17
@@ -7347,7 +7347,13 @@ pickup_stopped_physics:  jsr     apply_entity_physics_alt
 pickup_simple_physics:  jsr     apply_simple_physics ; apply simple movement
         rts
 
-        ldy     #$25
+; =============================================================================
+; wily_gate_indicator_ai -- Wily Fortress Gate Indicator AI ($BD08)
+;   Used by entity types $7C/$7D/$7E (boss-defeated marker / all-defeated /
+;   gate background) on the Wily 4 boss rematch stage. Picks palette index
+;   based on frame_counter bit 3, then falls into boss_indicator_palette.
+; =============================================================================
+wily_gate_indicator_ai:  ldy     #$25
         lda     frame_counter
         and     #$08
         bne     boss_indicator_palette

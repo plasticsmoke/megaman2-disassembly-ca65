@@ -203,6 +203,9 @@ ENTITY_BOOBEAM_SHOT = $6E       ; Boobeam turret shot (Wily 4)
 ENTITY_ALIEN_BODY   = $70       ; Alien hologram body segments (13 parts, spawned on death)
 ENTITY_BIG_FISH     = $71       ; Big Fish (Wily 3 gray fish, jumps from pit, 10 dmg)
 ENTITY_RED_LIQUID   = $74       ; Red liquid drip (Wily 6, spawned by $72/$73)
+ENTITY_WILY_GATE_BOSS = $7C     ; Wily 4 boss-rematch gate indicator (per defeated boss bit)
+ENTITY_WILY_GATE_OPEN = $7D     ; Wily 4 gate "all defeated" indicator (boss_mode_flag = $FF)
+ENTITY_WILY_GATE_BG = $7E       ; Wily 4 gate background entity (slot $0E, single instance)
 
 ; ─── Fixed bank entry points ─────────────────────────────────────────────────
 ; These are called by all banks via the fixed bank
