@@ -42,13 +42,13 @@ A lookup-oriented companion to [ENGINE.md](ENGINE.md). Use this file to find the
 | Weapon palettes | `weapon_palette_data` — `bank0F:2808` |
 | Stage BG palettes | Bank offset $3E00 in stage banks $00–$09 |
 | Music triggers | `sound_queue_push` with sound ID — `bank0F:271` |
-| Password encoding | `password_all_dots_placed` — `bank0D:3685` |
+| Password encoding | `password_all_dots_placed` — `bank0D:3664` |
 | Tile collision types | `stage_collision_table` — `bank0F:1883` |
 | Entity AI handlers | `entity_ai_ptr_lo/hi/bank` — `bank0E:2656` |
 | Entity flags/hitboxes | `entity_flags_table` — `bank0F:3331` |
 | Entity AI behavior | `entity_ai_behavior_tbl` — `bank0F:3381` |
 | Sprite definitions | `sprite_def_ptr_lo/hi` — `bank0F:6460` |
-| Text tile encoding | CHR tile indices: $C1=A ... $DA=Z — `bank0D:4805` |
+| Text tile encoding | CHR tile indices: $C1=A ... $DA=Z — `bank0D:4784` |
 
 ---
 
@@ -781,7 +781,7 @@ The CHR upload callback runs through `BANK_CHR_UPLOAD` (bank $0C). Stage CHR dat
 
 ### Flag
 
-`difficulty` ($CB) — `0` = Normal, `1` = Difficult. Default is `0`. Set to `1` on the ending screen after completing the game (bank0D).
+`difficulty` ($CB) — `0` = Normal, `1` = Difficult. Default is `0`. Selected with the NORMAL/DIFFICULT cursor on the TITLE screen (bank0D `title_menu_loop`).
 
 ### Three Scaling Points
 
@@ -871,20 +871,20 @@ Sound IDs $00-$17 are music tracks. IDs $00-$09 double as stage bank numbers —
 | $07 | Bubble Man Stage | `stage_bank_table[$03]` |
 | $08 | Dr. Wily Stage 1-2 | `stage_bank_table[$08/$09]` |
 | $09 | Dr. Wily Stage 3-4 | `stage_bank_table[$0A/$0B/$0C]` |
-| $0A | Dr. Wily Map | Fortress gate cinematic (bank0D:288) |
+| $0A | Dr. Wily Map | Fortress gate cinematic (bank0D:270) |
 | $0B | Boss Battle | Boss fight start (bank0E:621) |
-| $0C | Stage Select | Stage select screen (bank0D:147) |
-| $0D | Title / Ending | Title screen + ending (bank0D:3400, 5517) |
-| $0E | Opening | Ending text scroll (bank0D:3220) — reuses opening theme |
-| $0F | Game Over | Game over screen (bank0D:5040) |
-| $10 | Password | Password screen (bank0D:3546, 5069) |
-| $11 | Game Start | Intro jingle (bank0D:2475, 2834) |
-| $12 | Robot Master Walk-in | Boss entrance sequence (bank0D:2256) |
-| $13 | All Stage Clear | Credits complete (bank0D:5425) |
-| $14 | Dr. Wily UFO | Wily walk-away (bank0D:5585) |
+| $0C | Stage Select | Stage select screen (bank0D:129) |
+| $0D | Title / Ending | Title screen + ending (bank0D:3382, 5517) |
+| $0E | Opening | Ending text scroll (bank0D:3202) — reuses opening theme |
+| $0F | Game Over | Game over screen (bank0D:5019) |
+| $10 | Password | Password screen (bank0D:3527, 5069) |
+| $11 | Game Start | Intro jingle (bank0D:2457, 2834) |
+| $12 | Robot Master Walk-in | Boss entrance sequence (bank0D:2238) |
+| $13 | All Stage Clear | Credits complete (bank0D:5399) |
+| $14 | Dr. Wily UFO | Wily walk-away (bank0D:5559) |
 | $15 | Stage Clear | Fortress defeat transition (bank0B:3917) |
 | $16 | Clear Demo | Fortress explosion (bank0B:3787) |
-| $17 | Last Stage (Wily 5-6) | Final fortress stages (bank0D:5868) |
+| $17 | Last Stage (Wily 5-6) | Final fortress stages (bank0D:5842) |
 
 ### SFX IDs
 
@@ -898,25 +898,25 @@ SFX IDs ($18+) index past the pointer table into embedded sound data. Listed by 
 | $25 | Enemy shoot / Sniper fire | bank0E:5182, 6062, 6190, 6262 |
 | $26 | Mega Buster shot | bank0F:2819 |
 | $27 | Heavy impact | bank0E:3686 |
-| $28 | HP bar fill tick | bank0B:191, bank0D:1777 |
+| $28 | HP bar fill tick | bank0B:191, bank0D:1759 |
 | $29 | Landing / thud | bank0E:963 |
 | $2A | Block break (Picopico-kun) | bank0B:3625 |
 | $2B | Weapon hit (damage dealt) | bank0F:4962 — all 9 weapon handlers |
 | $2C | Dragon fire breath | bank0B:1828, 1922 |
 | $2D | Weapon immune / deflect | bank0F:4992 — all 9 weapon handlers |
 | $2E | Quick Boomerang hit | bank0F:4225 |
-| $2F | Cursor / menu move | bank0D:1711, 3576, 3631 |
-| $30 | Boss fight music start | bank0F:1213, bank0D:1895 |
+| $2F | Cursor / menu move | bank0D:1693, 3576, 3631 |
+| $30 | Boss fight music start | bank0F:1213, bank0D:1877 |
 | $31 | Weapon get fanfare | bank0F:4040 |
 | $32 | Boss intro transition | bank0F:955 |
 | $38 | Large pickup / E-Tank | bank0F:3892, bank0B:301 |
 | $39 | Pipi egg hatch | bank0E:4789 |
-| $3A | Victory jingle | bank0D:191, bank0B:3940 |
+| $3A | Victory jingle | bank0D:173, bank0B:3940 |
 | $3B | Screen transition | bank0E:1519 |
 | $3C | Appear block sound | bank0E:6469 |
 | $3F | Atomic Fire charge | bank0F:3497, bank0B:446 |
 | $41 | Boss death explosion | bank0F:403, bank0B:3879 |
-| $42 | Extra life (1-UP) | bank0D:3668, bank0E:576 |
+| $42 | Extra life (1-UP) | bank0D:3647, bank0E:576 |
 
 $2B (weapon hit) and $2D (weapon immune) are by far the most common — used in every weapon collision handler in both bank0F and bank0B.
 
@@ -940,7 +940,7 @@ Music is loaded by enqueuing `stage_bank_table[current_stage]` (bank0E:250). Sin
 | $0B Wily 4 | $09 | Dr. Wily Stage 3-4 |
 | $0C Wily 5 | $09 | Dr. Wily Stage 3-4 (overridden to $17) |
 
-Wily 5-6 override the bank table music with $17 ("Last Stage") via bank0D:5868.
+Wily 5-6 override the bank table music with $17 ("Last Stage") via bank0D:5842.
 
 ### Boss Intro Sound IDs
 
@@ -979,7 +979,7 @@ Wily 5-6 override the bank table music with $17 ("Last Stage") via bank0D:5868.
 
 ## 11. Password System
 
-Location: `password_screen_init` (bank0D:3516), `password_all_dots_placed` (bank0D:3685).
+Location: `password_screen_init` (bank0D:3497), `password_all_dots_placed` (bank0D:3664).
 
 ### Grid Layout
 
@@ -1189,7 +1189,7 @@ Example: `"MEGAMAN"` = `$CD,$C5,$C7,$C1,$CD,$C1,$CE`
 
 ### Credits Text
 
-`credits_text_data` (bank0D:4805) — ending credits stored as sequential CHR tile bytes. Each credit screen is a fixed-length block. `$00` bytes serve as word separators (space tiles).
+`credits_text_data` (bank0D:4784) — ending credits stored as sequential CHR tile bytes. Each credit screen is a fixed-length block. `$00` bytes serve as word separators (space tiles).
 
 Decoded excerpt:
 
@@ -1202,18 +1202,18 @@ $C4,$D2,$DC                       = "DR."
 $CC,$C9,$C7,$C8,$D4               = "LIGHT"
 ```
 
-Credits display uses a palette fade-in/fade-out sequence controlled by `credits_fade_brightness` (bank0D:4839).
+Credits display uses a palette fade-in/fade-out sequence controlled by `credits_fade_brightness` (bank0D:4818).
 
 ### Stage Intro Text
 
-Stage name rendering (`stage_intro_draw_name`, bank0D:5902) displays boss names letter-by-letter using the column update system. Each letter is written to the nametable via `col_update_tiles` with frame delays between characters, creating a typewriter effect.
+Stage name rendering (`stage_intro_draw_name`, bank0D:5876) displays boss names letter-by-letter using the column update system. Each letter is written to the nametable via `col_update_tiles` with frame delays between characters, creating a typewriter effect.
 
-The `weapon_name_data` table (bank0D, indexed by `current_stage`) provides per-stage name tile data. After all letters are drawn, `stage_intro_blink_loop` (bank0D:5930) alternates the text between white and stage-specific colors using `stage_intro_pal_lo/hi` tables.
+The `weapon_name_data` table (bank0D, indexed by `current_stage`) provides per-stage name tile data. After all letters are drawn, `stage_intro_blink_loop` (bank0D:5904) alternates the text between white and stage-specific colors using `stage_intro_pal_lo/hi` tables.
 
 ### Password Screen
 
-`password_screen_init` (bank0D:3516) renders the password grid via direct PPU writes from `password_ppu_layout_data` tables. Grid tiles are written outside of NMI (during forced blank). The blinking cursor position is maintained in the OAM buffer at `oam_buffer` ($0200).
+`password_screen_init` (bank0D:3497) renders the password grid via direct PPU writes from `password_ppu_layout_data` tables. Grid tiles are written outside of NMI (during forced blank). The blinking cursor position is maintained in the OAM buffer at `oam_buffer` ($0200).
 
 ### Boss Get Screen
 
-`boss_get_screen_init` (bank0D:2205) renders the weapon acquisition screen. The nametable is filled with `wily_nametable_fill_tiles` tile patterns, then boss/weapon name text is written via PPU buffer updates. Palette data loaded from `boss_get_palette_data`.
+`wily_map_screen_init` (bank0D:2187) renders the weapon acquisition screen. The nametable is filled with `wily_nametable_fill_tiles` tile patterns, then boss/weapon name text is written via PPU buffer updates. Palette data loaded from `boss_get_palette_data`.

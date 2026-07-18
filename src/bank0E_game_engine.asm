@@ -61,15 +61,15 @@
 .include "include/fixed_bank.inc"
 
 mmc1_write_control := $C05D  ; bank0F: serial write to MMC1 control reg ($9FFF)
-boss_beaten_check           := $C071
+show_wily_map           := $C071
 boss_beaten_mask_lo         := $C279
 wait_for_vblank           := $C07F
 wait_one_rendering_frame           := $C0D7
 chr_upload_init           := $C45D
 checkpoint_respawn       := $C4CD
-nametable_init           := $C557
-nametable_stage_setup           := $C565
-palette_anim_run           := $C573
+show_title_screen        := $C557
+show_stage_select        := $C565
+open_weapon_menu         := $C573
 process_sound_and_bosses           := $C5A9
 get_screen_boundary           := $C7A4
 boss_entrance_setup           := $C7B5
@@ -154,7 +154,7 @@ clear_ram_loop:  sta     (temp_00),y        ; zero out RAM page
 ; =============================================================================
 ; game_init -- Game Initialization — set up PPU, load stage data, fill palettes ($805F)
 ; =============================================================================
-game_init:  jsr     nametable_init      ; initialize nametable data
+game_init:  jsr     show_title_screen   ; title / prologue / attract (or one ending scene)
         lda     ending_state
         bne     game_init
         lda     beaten_bosses
@@ -165,11 +165,11 @@ game_init:  jsr     nametable_init      ; initialize nametable data
         bne     game_init_wily_check
 game_init_restart:  lda     #$03    ; $8072: restart entry — reset lives
         sta     current_lives
-        jsr     nametable_stage_setup
+        jsr     show_stage_select
 game_init_wily_check:  lda     current_stage   ; $8079 entry
         cmp     #WILY_STAGE_START                    ; stages 8+ are Wily fortress
         bcc     game_init_refill
-        jsr     boss_beaten_check
+        jsr     show_wily_map
         lda     current_stage
         cmp     #$09
         bcs     game_init_checkpoint
@@ -299,7 +299,7 @@ main_loop_check_start:
         lda     p1_new_presses
         and     #$08                    ; START pressed?
         beq     main_loop_update_entities
-        jsr     palette_anim_run        ; pause palette fade effect
+        jsr     open_weapon_menu        ; Start: open weapon select menu
 main_loop_update_entities:
         jsr     build_active_list       ; 1. scan entities within screen range
         jsr     entity_update_dispatch  ; 2. player input + state machine
@@ -393,7 +393,7 @@ wily_loop_main:  lda     $AD
 wily_loop_check_start:  lda     p1_new_presses
         and     #$08
         beq     wily_loop_update_entities
-        jsr     palette_anim_run
+        jsr     open_weapon_menu        ; Start: open weapon select menu
 wily_loop_update_entities:  jsr     build_active_list
         jsr     entity_update_dispatch
         jsr     update_entity_positions

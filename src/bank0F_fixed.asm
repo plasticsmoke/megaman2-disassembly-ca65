@@ -191,15 +191,15 @@
 ; ─── External references (banked addresses) ─────────────────────────────────
 banked_entry       := $8000         ; Standard entry point in switched bank
 banked_entry_alt   := $8003         ; Alternate entry point in switched bank
-banked_0D_scroll_update := $800C    ; Bank $0D: scroll/camera update
-banked_0D_stage_complete := $800F   ; Bank $0D: stage completion handler
-banked_0D_boss_init := $8012        ; Bank $0D: boss initialization
+banked_0D_game_over := $800C        ; Bank $0D: game over / continue screen
+banked_0D_ending := $800F           ; Bank $0D: ending scenes (seasons walk)
+banked_0D_weapon_get := $8012       ; Bank $0D: weapon get screen
 banked_0E_init_restart := $8072     ; Bank $0E: game_init entry — reset lives, restart stage
 banked_0E_init_stage := $8076       ; Bank $0E: all robot masters beaten
 banked_0E_init_wily_check := $8079       ; Bank $0E: advance to next stage
 banked_0E_init_refill := $8088     ; Bank $0E: boss timeout/escape handler
-banked_0D_boss_get_screen := $8006   ; Bank $0D: boss get screen init
-banked_0D_wily_intro := $8009       ; Bank $0D: Wily intro sequence
+banked_0D_wily_map := $8006          ; Bank $0D: Wily castle map screen
+banked_0D_title := $8009            ; Bank $0D: title screen / prologue / attract
 banked_0E_init_respawn := $80AB     ; Bank $0E: game_init entry — respawn (keep lives/ammo)
 banked_0E_entity_update := $84EE    ; Bank $0E: per-frame entity update
 banked_09_scroll_code := $8600      ; Bank $09: scroll column update code
@@ -292,10 +292,11 @@ mmc1_write_control:
         lsr     a
         sta     $9FFF
         rts
-boss_beaten_check:
+; ─── Show the Wily castle map screen (bank $0D) ───
+show_wily_map:
         lda     #$0D
         jsr     bank_switch
-        jsr     banked_0D_boss_get_screen
+        jsr     banked_0D_wily_map
         lda     #$0E
         jsr     bank_switch
         rts
@@ -331,7 +332,8 @@ wait_vblank_loop:
         jsr     bank_switch
         rts
 
-; ─── (unreachable code: duplicate wait-for-vblank, returns to bank $0D) ─────
+; ─── wait_for_vblank variant returning to bank $0D ($C0AB) ───
+; Heavily used by all bank $0D screens (title, menus, password, ending).
 wait_for_vblank_0D:
         lda     controller_1
         sta     p1_prev_buttons
@@ -487,7 +489,7 @@ player_death_checkpoint_set:  stx     checkpoint_idx
         sta     current_etanks
         lda     #$0D
         jsr     bank_switch
-        jsr     banked_0D_scroll_update
+        jsr     banked_0D_game_over
         lda     #$0E
         jsr     bank_switch
         lda     general_counter
@@ -553,7 +555,7 @@ boss_defeated_finish:  lda     boss_phase
         sta     beaten_bosses_hi
         lda     #$0D
         jsr     bank_switch
-        jsr     banked_0D_boss_init
+        jsr     banked_0D_weapon_get
         lda     #$0E
         jsr     bank_switch
         lda     beaten_bosses
@@ -569,7 +571,7 @@ advance_to_next_stage:  inc     current_stage
         bne     next_stage_continue
         lda     #$0D
         jsr     bank_switch
-        jsr     banked_0D_stage_complete
+        jsr     banked_0D_ending
         lda     #$0E
         jmp     cold_boot_init
 
@@ -923,36 +925,38 @@ chr_sound_byte_loop:  lda     (jump_ptr),y
         jsr     banked_0E_wily_check
 checkpoint_respawn_done:  rts
 
-nametable_init:
+; ─── Run the title screen / prologue / one ending scene (bank $0D) ───
+show_title_screen:
         lda     #$0D
         jsr     bank_switch
-        jsr     banked_0D_wily_intro
+        jsr     banked_0D_title
         lda     #$0E
         jsr     bank_switch
         rts
-nametable_stage_setup:
+; ─── Show the stage select screen (bank $0D $8000) ───
+show_stage_select:
         lda     #$0D
         jsr     bank_switch
         jsr     banked_entry
         lda     #$0E
         jsr     bank_switch
         rts
-palette_anim_run:
+open_weapon_menu:
         ldx     #$0F
 
 ; =============================================================================
-; find_active_entity_slot — Wait for slots 2..X to clear, then flush column ($C575)
+; weapon_menu_wait_clear — Open weapon menu once projectiles clear ($C575)
 ; =============================================================================
-; Returns immediately if ANY entity in slots 2..X is still active. Once all
-; are gone: flushes a pending column update, queues sound command $32
-; (sound-engine bank switch), and calls the bank $0D $8003 entry.
-; Entry palette_anim_run starts the scan at slot $0F.
+; Returns immediately if ANY entity in slots 2..X is still active (the pause
+; menu will not open while projectiles are on screen). Once all are gone:
+; flushes a pending column update, queues sound command $32, and calls the
+; bank $0D weapon-select screen ($8003). Entry open_weapon_menu scans $0F..2.
 ; -----------------------------------------------------------------------------
-find_active_entity_slot:  lda     ent_flags,x ; check entity flags (bit 7=active)
-        bmi     find_entity_done
+weapon_menu_wait_clear:  lda     ent_flags,x ; check entity flags (bit 7=active)
+        bmi     weapon_menu_gate_done
         dex
         cpx     #$01
-        bne     find_active_entity_slot
+        bne     weapon_menu_wait_clear
         lda     col_update_count
         beq     scroll_column_setup
         jsr     wait_for_vblank
@@ -971,7 +975,7 @@ scroll_column_setup:  lda     col_update_addr_hi
         sta     col_update_addr_hi
         lda     #$0E
         jsr     bank_switch
-find_entity_done:  rts
+weapon_menu_gate_done:  rts
 
 ; =============================================================================
 ; process_sound_and_bosses — Process sound engine and check boss encounter ($C5A9)
