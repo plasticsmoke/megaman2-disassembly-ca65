@@ -194,13 +194,13 @@ banked_entry_alt   := $8003         ; Alternate entry point in switched bank
 banked_0D_scroll_update := $800C    ; Bank $0D: scroll/camera update
 banked_0D_stage_complete := $800F   ; Bank $0D: stage completion handler
 banked_0D_boss_init := $8012        ; Bank $0D: boss initialization
-banked_0E_boss_defeated := $8072    ; Bank $0E: boss defeated handler
-banked_0E_all_beaten := $8076       ; Bank $0E: all robot masters beaten
-banked_0E_next_stage := $8079       ; Bank $0E: advance to next stage
-banked_0E_boss_timeout := $8088     ; Bank $0E: boss timeout/escape handler
+banked_0E_init_restart := $8072     ; Bank $0E: game_init entry — reset lives, restart stage
+banked_0E_init_stage := $8076       ; Bank $0E: all robot masters beaten
+banked_0E_init_wily_check := $8079       ; Bank $0E: advance to next stage
+banked_0E_init_refill := $8088     ; Bank $0E: boss timeout/escape handler
 banked_0D_boss_get_screen := $8006   ; Bank $0D: boss get screen init
 banked_0D_wily_intro := $8009       ; Bank $0D: Wily intro sequence
-banked_0E_boss_continue := $80AB    ; Bank $0E: boss intro continue
+banked_0E_init_respawn := $80AB     ; Bank $0E: game_init entry — respawn (keep lives/ammo)
 banked_0E_entity_update := $84EE    ; Bank $0E: per-frame entity update
 banked_09_scroll_code := $8600      ; Bank $09: scroll column update code
 banked_09_entry_3  := $8603         ; Bank $09: ending cutscene entry (scroll)
@@ -278,6 +278,10 @@ sound_queue_push:  ldy     sound_queue_count
         inc     sound_queue_count
 sound_queue_push_rts:  rts
 
+; ─── Write A to the MMC1 CONTROL register ($9FFF, 5 serial writes) ───
+; Called cross-bank ($C05D) from bank $0E cold boot with A=$0E:
+; PRG mode 3 (fix $C000-$FFFF), CHR mode 1, vertical mirroring.
+mmc1_write_control:
         sta     $9FFF
         lsr     a
         sta     $9FFF
@@ -488,11 +492,11 @@ player_death_checkpoint_set:  stx     checkpoint_idx
         jsr     bank_switch
         lda     general_counter
         bne     player_death_gameover
-        jmp     banked_0E_boss_timeout
+        jmp     banked_0E_init_refill
 
-player_death_gameover:  jmp     banked_0E_boss_defeated
+player_death_gameover:  jmp     banked_0E_init_restart
 
-player_death_respawn:  jmp     banked_0E_boss_continue
+player_death_respawn:  jmp     banked_0E_init_respawn
 
 explosion_offset_y_tbl:  .byte   $F8,$08,$FB,$05,$00,$00,$05,$FB ; Y offsets for boss explosion pattern
 explosion_offset_x_lo_tbl:  .byte   $00,$00,$FB,$05,$FB,$08,$FB,$05 ; X offsets (low) for explosion pattern
@@ -555,7 +559,7 @@ boss_defeated_finish:  lda     boss_phase
         lda     beaten_bosses
         cmp     #$FF
         beq     all_bosses_defeated
-        jmp     banked_0E_all_beaten
+        jmp     banked_0E_init_stage
 
 all_bosses_defeated:  lda     #$07
         sta     current_stage
@@ -569,7 +573,7 @@ advance_to_next_stage:  inc     current_stage
         lda     #$0E
         jmp     cold_boot_init
 
-next_stage_continue:  jmp     banked_0E_next_stage
+next_stage_continue:  jmp     banked_0E_init_wily_check
 
 boss_beaten_mask_lo:  .byte   $01,$02,$04,$08,$10,$20,$40,$80 ; bitmask for each boss (low byte)
 boss_beaten_mask_hi:  .byte   $01,$02,$00,$00,$00,$04,$00,$00 ; bitmask for each boss (high byte)
@@ -1202,7 +1206,7 @@ boss_entrance_setup:
         sta     ent_x_px
         lda     #$14
         sta     ent_y_px
-        lda     #ENTITY_AIR_TORNADO2
+        lda     #$1A                    ; player teleport-beam sprite (entity sprite table)
         sta     ent_type
 ; ─── Scroll boss into view on screen ───
 boss_entrance_scroll:  lda     current_stage
@@ -2159,7 +2163,7 @@ render_begin_oam_write:  tay
         beq     render_check_flash
 render_flash_jump:  jmp     render_ok_return
 
-render_check_flash:  lda     boss_fight_flag
+render_check_flash:  lda     player_y_screen
         bne     render_flash_jump
         beq     render_load_sprite_data
 render_skip_flash:  bne     render_load_sprite_data
@@ -2844,7 +2848,7 @@ player_damage_knockback:
         sta     general_timer
         lda     #$02
         sta     game_substate           ; player state = weapon active
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         lda     #$01
         sta     ent_anim_id
         lda     #$6F
@@ -2891,11 +2895,14 @@ knockback_spawn_spark:  lda     #$80    ; active flag
         rts
 
 ; =============================================================================
-; weapon_set_base_type — Set weapon's base entity type from current weapon ID ($D3A8)
+; player_set_sprite — Set player's base sprite type from player state ($D3A8)
 ; =============================================================================
-weapon_set_base_type:  ldx     game_substate      ; current weapon select index
+; game_substate = player state (0-$0B); the table gives Mega Man's base
+; sprite/animation type for that state. weapon_fire_dir offsets it while
+; firing (gun-out variants).
+player_set_sprite:  ldx     game_substate      ; player state index
         clc
-        lda     weapon_base_type_tbl,x  ; look up base sprite type
+        lda     player_state_sprite_tbl,x  ; base sprite type for state
         adc     weapon_fire_dir
         cmp     ent_type
         beq     weapon_store_type
@@ -2911,11 +2918,11 @@ weapon_store_type:  sta     ent_type
 weapon_reset_direction:  lda     #$00
         sta     weapon_fire_dir
         ldx     game_substate
-        lda     weapon_base_type_tbl,x
+        lda     player_state_sprite_tbl,x
         sta     ent_type
         rts
 
-weapon_base_type_tbl:  .byte   $1A,$19,$18,$00,$04,$08,$0C,$10 ; base sprite type per weapon ID
+player_state_sprite_tbl:  .byte   $1A,$19,$18,$00,$04,$08,$0C,$10 ; player base sprite per state
         .byte   $14,$1B,$1F,$26
 
 ; =============================================================================
@@ -3444,7 +3451,7 @@ find_slot_found:  clc
         rts
 
 fire_weapon_dispatch:
-        lda     boss_fight_flag
+        lda     player_y_screen
         bne     @no_fire
         ldx     current_weapon
         beq     @dispatch               ; buster: no ammo check
@@ -3482,7 +3489,7 @@ fire_weapon_set_timer:  lda     #$0F
 fire_weapon_set_dir:  sta     weapon_fire_dir
         ldx     game_substate
         clc
-        adc     weapon_base_type_tbl,x
+        adc     player_state_sprite_tbl,x
         sta     ent_type
         clc
         rts
@@ -3894,7 +3901,7 @@ atomic_fire_find_slot:  lda     ent_flags,x
         bne     atomic_fire_find_slot
 atomic_fire_done:  rts
 
-atomic_fire_spawn_projectile:  lda     boss_fight_flag
+atomic_fire_spawn_projectile:  lda     player_y_screen
         bne     atomic_fire_deduct_ammo
         ldy     #$01
         jsr     weapon_spawn_projectile
@@ -4051,7 +4058,7 @@ leaf_shield_form:  lsr     ent_flags + $03 ; despawn leaves in slots 3-5
 ; ─── Leaf Shield formed-shield AI (type $32, state 1+) ───
 ; Shield tracks the player each frame; pressing a direction throws it
 ; (costs 3 more Leaf Shield ammo). Sound $31 loops while orbiting.
-leaf_shield_launch_ai:  lda     boss_fight_flag
+leaf_shield_launch_ai:  lda     player_y_screen
         beq     leaf_launch_check_anim
         lda     #$06
         bne     leaf_launch_set_anim
@@ -4074,14 +4081,14 @@ leaf_launch_track_player:  lda     ent_x_px ; shield follows the player
         sta     ent_x_screen,x
         lda     ent_y_px
         sta     ent_y_px,x
-        lda     boss_fight_flag
+        lda     player_y_screen
         beq     leaf_launch_check_input
         lda     #$00
         sta     ent_y_px,x
 leaf_launch_check_input:  lda     controller_1
         and     #$F0                    ; any direction pressed?
         beq     leaf_launch_done
-        ldy     boss_fight_flag
+        ldy     player_y_screen
         beq     leaf_launch_dir
         lsr     ent_flags,x
         rts
@@ -4834,7 +4841,7 @@ check_player_collision:  lda     #$00
         beq     player_collision_done
         lda     boss_state_flag
         bne     player_collision_done
-        lda     boss_fight_flag
+        lda     player_y_screen
         bne     player_collision_done
 ; --- X-axis distance: |player_x - enemy_x| ---
         sec
@@ -4890,10 +4897,10 @@ player_collision_done:  rts
 
 ; --- Item pickup: despawn item and clear parent's child HP ---
 player_collision_item:
-        lda     weapon_counter_3
+        lda     item_pickup_type
         bne     player_collision_return
         lsr     ent_flags,x             ; deactivate item entity
-        sty     weapon_counter_3        ; store item type for pickup handler
+        sty     item_pickup_type        ; store item type for pickup handler
         inc     temp_01
         lda     ent_state,x
         bne     player_collision_return
@@ -6219,31 +6226,31 @@ item_drop_calc:  lda     rng_seed            ; read RNG seed
         lda     difficulty                     ; difficulty flag: 0=Normal, 1=Difficult
         beq     item_drop_normal_mode
         ; Difficult mode thresholds (50% total drop rate):
-        ;   0-47: nothing (48%), 48-72: large weapon (25%), 73-87: large health (15%)
-        ;   88-92: small health (5%), 93-96: small weapon (4%), 97: nothing (1%)
+        ;   0-47: nothing (48%), 48-72: small weapon (25%), 73-87: small health (15%)
+        ;   88-92: large weapon (5%), 93-96: large health (4%), 97: nothing (1%)
         ;   98: extra life (1%), 99: nothing (1%)
         lda     temp_04
         cmp     #$30
         bcc     item_drop_nothing
         cmp     #$49
-        bcc     item_drop_large_weapon
-        cmp     #$58
-        bcc     item_drop_large_health
-        cmp     #$5D
-        bcc     item_drop_small_health
-        cmp     #$61
         bcc     item_drop_small_weapon
+        cmp     #$58
+        bcc     item_drop_small_health
+        cmp     #$5D
+        bcc     item_drop_large_weapon
+        cmp     #$61
+        bcc     item_drop_large_health
         cmp     #$62
         beq     item_drop_extra_life
 item_drop_nothing:  rts
 
-item_drop_large_weapon:  lda     #$79
+item_drop_small_weapon:  lda     #$79   ; ENTITY_SMALL_WEAPON
         bne     item_drop_spawn
-item_drop_large_health:  lda     #$77
+item_drop_small_health:  lda     #$77   ; ENTITY_SMALL_HEALTH
         bne     item_drop_spawn
-item_drop_small_health:  lda     #$78
+item_drop_large_weapon:  lda     #$78   ; ENTITY_LARGE_WEAPON
         bne     item_drop_spawn
-item_drop_small_weapon:  lda     #$76
+item_drop_large_health:  lda     #$76   ; ENTITY_LARGE_HEALTH
         bne     item_drop_spawn
 item_drop_extra_life:  lda     #$7B
         bne     item_drop_spawn
@@ -6260,20 +6267,20 @@ item_drop_spawn:  jsr     spawn_entity_from_parent
 item_drop_failed:  rts
 
         ; Normal mode thresholds (71% total drop rate):
-        ;   0-27: nothing (28%), 28-37: large weapon (10%), 38-47: large health (10%)
-        ;   48-77: small health (30%), 78-97: small weapon (20%), 98: nothing (1%)
+        ;   0-27: nothing (28%), 28-37: small weapon (10%), 38-47: small health (10%)
+        ;   48-77: large weapon (30%), 78-97: large health (20%), 98: nothing (1%)
         ;   99: extra life (1%)
 item_drop_normal_mode:  lda     temp_04
         cmp     #$1C
         bcc     item_drop_nothing
         cmp     #$26
-        bcc     item_drop_large_weapon
-        cmp     #$30
-        bcc     item_drop_large_health
-        cmp     #$4E
-        bcc     item_drop_small_health
-        cmp     #$62
         bcc     item_drop_small_weapon
+        cmp     #$30
+        bcc     item_drop_small_health
+        cmp     #$4E
+        bcc     item_drop_large_weapon
+        cmp     #$62
+        bcc     item_drop_large_health
         cmp     #$63
         beq     item_drop_extra_life
         rts

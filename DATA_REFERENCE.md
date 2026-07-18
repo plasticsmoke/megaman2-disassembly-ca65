@@ -32,22 +32,22 @@ A lookup-oriented companion to [ENGINE.md](ENGINE.md). Use this file to find the
 | Boss HP | All bosses use `MAX_HP` ($1C = 28) — `include/constants.inc` |
 | Weapon damage to bosses | `weapon_base_damage_table` + per-weapon tables — `bank0B:5023` |
 | Boss contact damage | `boss_contact_damage_table` — `bank0B:5050` |
-| Enemy contact damage | `contact_damage_to_player_tbl` — `bank0F:5510` |
+| Enemy contact damage | `contact_damage_to_player_tbl` — `bank0F:5517` |
 | Enemy spawns per stage | Spawn tables at bank offsets $3600-$39FF — `bank00`–`bank09` |
 | Player walk speed | `max_speed_sub` / `max_speed_hi` ($3E/$3F) — `include/zeropage.inc` |
-| Gravity | `gravity_hi_table` — `bank0E:1447` |
-| Item drop rates | `item_drop_calc` — `bank0F:6177` |
+| Gravity | `gravity_hi_table` — `bank0E:1474` |
+| Item drop rates | `item_drop_calc` — `bank0F:6184` |
 | Difficulty flag | `difficulty` ($CB) — `include/zeropage.inc` |
-| Stage → bank mapping | `stage_bank_table` — `bank0E:333` |
-| Weapon palettes | `weapon_palette_data` — `bank0F:2804` |
+| Stage → bank mapping | `stage_bank_table` — `bank0E:334` |
+| Weapon palettes | `weapon_palette_data` — `bank0F:2808` |
 | Stage BG palettes | Bank offset $3E00 in stage banks $00–$09 |
 | Music triggers | `sound_queue_push` with sound ID — `bank0F:271` |
 | Password encoding | `password_all_dots_placed` — `bank0D:3685` |
-| Tile collision types | `stage_collision_table` — `bank0F:1879` |
-| Entity AI handlers | `entity_ai_ptr_lo/hi/bank` — `bank0E:2629` |
-| Entity flags/hitboxes | `entity_flags_table` — `bank0F:3324` |
-| Entity AI behavior | `entity_ai_behavior_tbl` — `bank0F:3374` |
-| Sprite definitions | `sprite_def_ptr_lo/hi` — `bank0F:6453` |
+| Tile collision types | `stage_collision_table` — `bank0F:1883` |
+| Entity AI handlers | `entity_ai_ptr_lo/hi/bank` — `bank0E:2656` |
+| Entity flags/hitboxes | `entity_flags_table` — `bank0F:3331` |
+| Entity AI behavior | `entity_ai_behavior_tbl` — `bank0F:3381` |
+| Sprite definitions | `sprite_def_ptr_lo/hi` — `bank0F:6460` |
 | Text tile encoding | CHR tile indices: $C1=A ... $DA=Z — `bank0D:4805` |
 
 ---
@@ -172,7 +172,7 @@ Contact damage is a flat value subtracted from player HP — **not** affected by
 | `boss_hit_timer` | $05A8 | Hit stun timer (set to $12, decrements) |
 | `boss_work_var2` | $05A9 | General-purpose work variable 2 (aliased per-boss) |
 | `boss_hit_count` | $05AA | Weapon hit counter |
-| `boss_fight_flag` | $F9 | Boss fight active flag |
+| `player_y_screen` | $F9 | Boss fight active flag |
 | `boss_state_flag` | $BD | Boss-specific state flag |
 | `boss_mode_flag` | $BC | Boss mode / sound state flag |
 
@@ -197,7 +197,7 @@ Boss AI is dispatched through `enemy_ai_routine_lo/hi` (bank0B:87). Each boss's 
 | Wily Machine | 12 | bank0B:2899 | Movement and bouncing ball attacks |
 | Alien | 13 | bank0B:3253 | Hologram movement and shot patterns |
 
-Boss sub-entity AI for Wily bosses (dragon segments, turrets, etc.) is in bank0E:6780–7170.
+Boss sub-entity AI for Wily bosses (dragon segments, turrets, etc.) is in bank0E:6827–7170.
 
 ---
 
@@ -205,18 +205,18 @@ Boss sub-entity AI for Wily bosses (dragon segments, turrets, etc.) is in bank0E
 
 ### HP System
 
-All enemies have **HP = 20** ($14). This value comes from entity array aliasing: `entity_init_from_type` (bank0F:3258) writes `#$14` to `ent_timer,x` for the entity slot. Due to the 16-byte array layout, `ent_timer` for enemy init slots ($00-$0F) maps to the same physical RAM as `ent_hp` for enemy AI slots ($10-$1F): `$06D0+slot`.
+All enemies have **HP = 20** ($14). This value comes from entity array aliasing: `entity_init_from_type` (bank0F:3265) writes `#$14` to `ent_timer,x` for the entity slot. Due to the 16-byte array layout, `ent_timer` for enemy init slots ($00-$0F) maps to the same physical RAM as `ent_hp` for enemy AI slots ($10-$1F): `$06D0+slot`.
 
-The number of buster hits to kill depends on the per-type damage value in `weapon_dmg_buster_tbl` (bank0F:5377, 128 entries indexed by entity type). On **Normal** difficulty, `apply_difficulty_modifier` (bank0F:5368) doubles weapon damage via `ASL temp_00`, so enemies die in roughly half the hits.
+The number of buster hits to kill depends on the per-type damage value in `weapon_dmg_buster_tbl` (bank0F:5384, 128 entries indexed by entity type). On **Normal** difficulty, `apply_difficulty_modifier` (bank0F:5375) doubles weapon damage via `ASL temp_00`, so enemies die in roughly half the hits.
 
 Formula: **buster hits = ceil(20 / (base_damage x difficulty_multiplier))**
 
-Where difficulty_multiplier = 2 (Normal) or 1 (Difficult). Enemies with base_damage = 0 are **immune to buster** but may be vulnerable to other weapons via separate collision handlers (9 weapon handlers at `weapon_handler_ptr_lo/hi`, bank0F:5373).
+Where difficulty_multiplier = 2 (Normal) or 1 (Difficult). Enemies with base_damage = 0 are **immune to buster** but may be vulnerable to other weapons via separate collision handlers (9 weapon handlers at `weapon_handler_ptr_lo/hi`, bank0F:5380).
 
 Special cases:
 - **Tanishi** ($0A): AI checks `ent_hp < $14` — any hit that reduces HP below 20 triggers shell-shed, spawning Tanishi Bare ($0B) as a new entity with fresh HP=20. On Normal, buster does 20 damage (instant kill, no shell-shed). On Difficult, buster does 10 (HP drops to 10, shell sheds, bare form needs 2 more hits).
-- **Collision gating**: `ent_flags` bits 0-1 control collision eligibility (bank0F:5645). Bit 0 = player contact, bit 1 = weapon collidable. Entities with both bits clear (e.g. flags $A0) skip all collision checks: Goblin ($40/$41), Laser Beam ($14), and controller-type entities ($1C/$47).
-- **Multi-entity hitboxes**: Some large enemies render as background metatiles via a controller entity (flags $A0, immune) and spawn a child entity that serves as the hitbox. Examples: Friender ($1C controller → $19 hitbox, reuses ENTITY_AIR_TORNADO1 type), Mole ($47 controller → child hitbox). The child carries the actual HP and weapon damage values.
+- **Collision gating**: `ent_flags` bits 0-1 control collision eligibility (bank0F:5652). Bit 0 = player contact, bit 1 = weapon collidable. Entities with both bits clear (e.g. flags $A0) skip all collision checks: Goblin ($40/$41), Laser Beam ($14), and controller-type entities ($1C/$47).
+- **Multi-entity hitboxes**: Some large enemies render as background metatiles via a controller entity (flags $A0, immune) and spawn a child entity that serves as the hitbox. Examples: Friender ($1C controller → $19 hitbox, reuses ENTITY_FIRE_PROJ_A type), Mole ($47 controller → child hitbox). The child carries the actual HP and weapon damage values.
 - **Neo Metall** ($34/$56): Switches between hittable ($34, helmet up) and invulnerable ($56, helmet down) entity types.
 
 ### Weapon Damage Tables
@@ -237,11 +237,11 @@ The weapon damage system uses multiple sub-tables in bank0F, all indexed by enti
 | Crash Bomber | `weapon_dmg_crash_tbl` ($EC6C) | `weapon_hit_crash` |
 | Time Stopper | — (no collision damage) | `apply_difficulty_modifier` (no-op) |
 
-On Normal mode, `apply_difficulty_modifier` (bank0F:5368) doubles weapon damage via `ASL temp_00`.
+On Normal mode, `apply_difficulty_modifier` (bank0F:5375) doubles weapon damage via `ASL temp_00`.
 
 ### AI Dispatch
 
-All entity AI is dispatched via `entity_ai_ptr_lo/hi/bank` (bank0E:2629) — 128 entries for types $00-$7F. Main AI code lives in bank $0E. NULL AI stub at `kerog_physics_rts` (bank0E:3151, just an RTS) is shared by entity types that need no per-frame update (projectiles using physics only).
+All entity AI is dispatched via `entity_ai_ptr_lo/hi/bank` (bank0E:2656) — 128 entries for types $00-$7F. Main AI code lives in bank $0E. NULL AI stub at `kerog_physics_rts` (bank0E:3178, just an RTS) is shared by entity types that need no per-frame update (projectiles using physics only).
 
 For the complete entity type constant list, see `include/constants.inc`.
 
@@ -253,12 +253,12 @@ Stage $00 — entity bank $00 (shared with Wily 1)
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Telly (spawn) | $21 | -- | `telly_spawn_ai` (bank0E:4419) | Invisible spawner; creates Telly body |
-| Telly (body) | $22 | 1/1 | `telly_ai` (bank0E:4438) | Homing movement toward player |
-| Springer | $46 | -- | `springer_ai` (bank0E:5775) | Bouncing; immune to buster |
-| Appear Block A | $53 | -- | `appear_block_a_ai` (bank0E:6399) | Yoku block, cycle timer $7D |
-| Appear Block B | $54 | -- | `appear_block_b_ai` (bank0E:6402) | Yoku block, cycle timer $BB |
-| Appear Block C | $55 | -- | `appear_block_c_ai` (bank0E:6405) | Yoku block, cycle timer $FA |
+| Telly (spawn) | $21 | -- | `telly_spawn_ai` (bank0E:4448) | Invisible spawner; creates Telly body |
+| Telly (body) | $22 | 1/1 | `telly_ai` (bank0E:4467) | Homing movement toward player |
+| Springer | $46 | -- | `springer_ai` (bank0E:5811) | Bouncing; immune to buster |
+| Appear Block A | $53 | -- | `appear_block_a_ai` (bank0E:6446) | Yoku block, cycle timer $7D |
+| Appear Block B | $54 | -- | `appear_block_b_ai` (bank0E:6449) | Yoku block, cycle timer $BB |
+| Appear Block C | $55 | -- | `appear_block_c_ai` (bank0E:6452) | Yoku block, cycle timer $FA |
 
 ### Air Man Stage
 
@@ -266,23 +266,23 @@ Stage $01 — entity bank $01 (shared with Wily 2)
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Goblin A | $40 | -- | `goblin_ai_init` (bank0E:5553) | **Invulnerable** (no_collide) |
-| Goblin B | $41 | -- | `goblin_ai_init` (bank0E:5553) | **Invulnerable** (no_collide) |
-| Goblin Horn | $44 | -- | `goblin_horn_ai` (bank0E:5713) | Child of Goblin; **invulnerable**, contact dmg |
-| Petit Goblin | $45 | 1/1 | `petit_goblin_ai` (bank0E:5744) | Child of Goblin; max 3 active |
-| Kaminari Goro | $3E | -- | `kaminari_goro_ai` (bank0E:5499) | Spawner; immune to buster (dmg=$00). Spawns Cloud ($3D) + Bolt ($3F) |
-| Kaminari Cloud | $3D | -- | `kaminari_cloud_ai` (bank0E:5457) | Body child; flags $83. Buster dmg=$07 but practically unreachable (cloud stays above player) |
+| Goblin A | $40 | -- | `goblin_ai_init` (bank0E:5589) | **Invulnerable** (no_collide) |
+| Goblin B | $41 | -- | `goblin_ai_init` (bank0E:5589) | **Invulnerable** (no_collide) |
+| Goblin Horn | $44 | -- | `goblin_horn_ai` (bank0E:5749) | Child of Goblin; **invulnerable**, contact dmg |
+| Petit Goblin | $45 | 1/1 | `petit_goblin_ai` (bank0E:5780) | Child of Goblin; max 3 active |
+| Kaminari Goro | $3E | -- | `kaminari_goro_ai` (bank0E:5535) | Spawner; immune to buster (dmg=$00). Spawns Cloud ($3D) + Bolt ($3F) |
+| Kaminari Cloud | $3D | -- | `kaminari_cloud_ai` (bank0E:5493) | Body child; flags $83. Buster dmg=$07 but practically unreachable (cloud stays above player) |
 | Kaminari Bolt | $3F | -- | NULL stub | Lightning projectile |
-| Matasaburo | $36 | 3/5 | `matasaburo_wind_push` (bank0E:5241) | Wind-pushing fan |
-| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5259) | Chain: $37 → $38 bird → $3A egg → $3C Copipi |
-| Pipi (bird) | $38 | 1/1 | `pipi_ai` (bank0E:5317) | Dynamic child |
-| Scworm Nest | $50 | 3/5 | `scworm_nest_ai` (bank0E:6291) | Spawns up to 3x Scworm ($51); dmg=$04 |
-| Scworm | $51 | 3/5 | `scworm_worm_ai` (bank0E:6319) | Jumping worm child; dmg=$04 |
-| Fly Boy (spawn) | $2B | -- | `fly_boy_spawn_ai` (bank0E:4715) | Invisible; spawns body ($2C) |
-| Fly Boy (body) | $2C | 3/5 | `fly_boy_ai` (bank0E:4734) | Propeller enemy |
-| Press | $30 | -- | `press_ai` (bank0E:4825) | Descending crusher; immune to buster |
-| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:5997) | Stationary cannon |
-| Mole | $47 | 3/5 | bank0E:5876 (data overlap) | Controller (flags $A0, immune); in-game 3/5 via child hitbox. Spawns copies + shots ($48/$49) |
+| Matasaburo | $36 | 3/5 | `matasaburo_wind_push` (bank0E:5277) | Wind-pushing fan |
+| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5295) | Chain: $37 → $38 bird → $3A egg → $3C Copipi |
+| Pipi (bird) | $38 | 1/1 | `pipi_ai` (bank0E:5353) | Dynamic child |
+| Scworm Nest | $50 | 3/5 | `scworm_nest_ai` (bank0E:6338) | Spawns up to 3x Scworm ($51); dmg=$04 |
+| Scworm | $51 | 3/5 | `scworm_worm_ai` (bank0E:6366) | Jumping worm child; dmg=$04 |
+| Fly Boy (spawn) | $2B | -- | `fly_boy_spawn_ai` (bank0E:4747) | Invisible; spawns body ($2C) |
+| Fly Boy (body) | $2C | 3/5 | `fly_boy_ai` (bank0E:4766) | Propeller enemy |
+| Press | $30 | -- | `press_ai` (bank0E:4857) | Descending crusher; immune to buster |
+| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:6044) | Stationary cannon |
+| Mole | $47 | 3/5 | bank0E:5911 (data overlap) | Controller (flags $A0, immune); in-game 3/5 via child hitbox. Spawns copies + shots ($48/$49) |
 
 ### Wood Man Stage
 
@@ -292,14 +292,14 @@ Stage $02 — entity bank $02 (shared with Wily 3)
 |---|---|---|---|---|
 | Robbit | $17 | 5/10 | bank0E:$9F22 | Jumping rabbit |
 | Batton | $16 | 1/2 | bank0E:$9E81 | Bat; swoops from ceiling |
-| Friender | $1C | 10/20 | `friender_ai` (bank0E:4082) | Fire dog; BG-tile controller (flags $A0). Invisible hitbox child reuses type $19 (ENTITY_AIR_TORNADO1, dmg=$01). Spawns fire projectile $1A (ENTITY_AIR_TORNADO2) |
+| Friender | $1C | 10/20 | `friender_ai` (bank0E:4110) | Fire dog; BG-tile controller (flags $A0). Invisible hitbox child reuses type $19 (ENTITY_FIRE_PROJ_A, dmg=$01). Spawns fire projectile $1A (ENTITY_FIRE_PROJ_B) |
 | Monking | $1D | 2/3 | bank0E:$A2F4 | Monkey; throws projectiles |
-| Kukku (spawn) | $1E | -- | `kukku_spawner_ai` (bank0E:4339) | Invisible; tracks player X, spawns body every 31 frames |
-| Kukku (body) | $1F | 5/10 | `kukku_body_ai` (bank0E:4381) | Bouncing chicken |
-| Kukku (despawn) | $20 | -- | `kukku_despawn_ai` (bank0E:4414) | Clears all $1E at screen transitions |
-| Tanishi | $0A | 1/2 | `tanishi_ai_main` (bank0E:3067) | Shell-shed on damage; see HP System |
+| Kukku (spawn) | $1E | -- | `kukku_spawner_ai` (bank0E:4368) | Invisible; tracks player X, spawns body every 31 frames |
+| Kukku (body) | $1F | 5/10 | `kukku_body_ai` (bank0E:4410) | Bouncing chicken |
+| Kukku (despawn) | $20 | -- | `kukku_despawn_ai` (bank0E:4443) | Clears all $1E at screen transitions |
+| Tanishi | $0A | 1/2 | `tanishi_ai_main` (bank0E:3094) | Shell-shed on damage; see HP System |
 | Tanishi (bare) | $0B | 1/2 | NULL stub | Spawned after shell-shed |
-| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5259) | Chain: $37 → $38 → $3A → $3C |
+| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5295) | Chain: $37 → $38 → $3A → $3C |
 
 ### Bubble Man Stage
 
@@ -307,15 +307,15 @@ Stage $03 — entity bank $03 (shared with Wily 4)
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Shrink | $00 | 2/3 | `met_ai_preamble` (bank0E:2681) | Shrimp enemy |
-| Anko (body) | $01 | 2/3 | `met_ai_preamble` (bank0E:2681) | Multi-part anglerfish; dmg=$07. Wiki claims 5/10 — discrepancy unresolved (possible custom HP) |
-| Anko (segment) | $03 | 1/1 | `anko_seg_entry` (bank0E:2787) | Body segment, tracks parent |
+| Shrink | $00 | 2/3 | `shrink_ai_preamble` (bank0E:2708) | Shrimp enemy |
+| Anko (body) | $01 | 2/3 | `shrink_ai_preamble` (bank0E:2708) | Multi-part anglerfish; dmg=$07. Wiki claims 5/10 — discrepancy unresolved (possible custom HP) |
+| Anko (segment) | $03 | 1/1 | `anko_seg_entry` (bank0E:2814) | Body segment, tracks parent |
 | M-445 | $04 | 1/1 | bank0E:$95D7 | Jellyfish |
-| Claw | $07 | 1/1 | `claw_ai_entry` (bank0E:2937) | Crab enemy |
-| Claw (variant) | $08 | 1/1 | `claw_var_ai_entry` (bank0E:2997) | Dropping crab variant |
-| Kerog | $0C | 5/10 | `kerog_ai_entry` (bank0E:3158) | Large frog; spawns Petit Kerog ($0D) |
+| Claw | $07 | 1/1 | `claw_ai_entry` (bank0E:2964) | Crab enemy |
+| Claw (variant) | $08 | 1/1 | `claw_var_ai_entry` (bank0E:3024) | Dropping crab variant |
+| Kerog | $0C | 5/10 | `kerog_ai_entry` (bank0E:3185) | Large frog; spawns Petit Kerog ($0D) |
 | Petit Kerog | $0D | 1/1 | bank0E:$988F | Small froglet child |
-| Tanishi | $0A | 1/2 | `tanishi_ai_main` (bank0E:3067) | Shell-shed on damage |
+| Tanishi | $0A | 1/2 | `tanishi_ai_main` (bank0E:3094) | Shell-shed on damage |
 | Crumble Block | $13 | -- | bank0E:$9C5B | Falls when stepped on; not hittable |
 
 ### Quick Man Stage
@@ -324,13 +324,13 @@ Stage $04 — entity bank $04 (shared with Wily 5)
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Springer | $46 | -- | `springer_ai` (bank0E:5775) | Bouncing; immune to buster |
-| Changkey | $23 | 5/10 | `changkey_ai` (bank0E:4453) | Flame enemy; spawns projectile ($24) |
+| Springer | $46 | -- | `springer_ai` (bank0E:5811) | Bouncing; immune to buster |
+| Changkey | $23 | 5/10 | `changkey_ai` (bank0E:4482) | Flame enemy; spawns projectile ($24) |
 | Changkey Proj | $24 | -- | NULL stub | Fireball; physics-only movement |
-| Laser Beam | $14 | -- | `laser_beam_ai` (bank0E:3574) | **Instant kill**; **invulnerable** (no_collide) |
-| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6103) | Armored; converts to Joe ($4F) on armor break |
-| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6236) | Unarmored; fires 3x Generic Proj ($35) |
-| Blackout Trigger | $25 | -- | `blackout_trigger_ai` (bank0E:4525) | Screen darkening mechanic |
+| Laser Beam | $14 | -- | `laser_beam_ai` (bank0E:3602) | **Instant kill**; **invulnerable** (no_collide) |
+| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6150) | Armored; converts to Joe ($4F) on armor break |
+| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6283) | Unarmored; fires 3x Generic Proj ($35) |
+| Blackout Trigger | $25 | -- | `blackout_trigger_ai` (bank0E:4554) | Screen darkening mechanic |
 | Blackout End | $27 | -- | NULL stub | Permanent light restore marker |
 
 ### Flash Man Stage
@@ -339,13 +339,13 @@ Stage $05 — entity bank $05
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6103) | Armored; converts to Joe ($4F) |
-| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6236) | Unarmored; fires $35 projectiles |
-| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:5997) | Stationary cannon |
-| Scworm Nest | $50 | 3/5 | `scworm_nest_ai` (bank0E:6291) | Spawns up to 3x Scworm ($51); dmg=$04 |
-| Scworm | $51 | 3/5 | `scworm_worm_ai` (bank0E:6319) | Jumping worm child; dmg=$04 |
-| Blocky | $31 | 1/2 | `blocky_ai` (bank0E:4941) | Block enemy; multi-phase ($32/$33) |
-| Flash Hazard | $72/$73 | -- | `flash_hazard_ai` (bank0E:7231) | Stage-specific hazard entities |
+| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6150) | Armored; converts to Joe ($4F) |
+| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6283) | Unarmored; fires $35 projectiles |
+| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:6044) | Stationary cannon |
+| Scworm Nest | $50 | 3/5 | `scworm_nest_ai` (bank0E:6338) | Spawns up to 3x Scworm ($51); dmg=$04 |
+| Scworm | $51 | 3/5 | `scworm_worm_ai` (bank0E:6366) | Jumping worm child; dmg=$04 |
+| Blocky | $31 | 1/2 | `blocky_ai` (bank0E:4973) | Block enemy; multi-phase ($32/$33) |
+| Flash Hazard | $72/$73 | -- | `flash_hazard_ai` (bank0E:7278) | Stage-specific hazard entities |
 
 ### Metal Man Stage
 
@@ -353,14 +353,14 @@ Stage $06 — entity bank $06
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Press | $30 | -- | `press_ai` (bank0E:4825) | Descending crusher; immune to buster |
-| Press (retract) | $52 | -- | `press_retract_ai` (bank0E:6389) | Ascending return phase |
-| Mole | $47 | 3/5 | bank0E:5876 (data overlap) | Controller (flags $A0, immune); in-game 3/5 via child hitbox. Spawns copies + shots ($48/$49) |
+| Press | $30 | -- | `press_ai` (bank0E:4857) | Descending crusher; immune to buster |
+| Press (retract) | $52 | -- | `press_retract_ai` (bank0E:6436) | Ascending return phase |
+| Mole | $47 | 3/5 | bank0E:5911 (data overlap) | Controller (flags $A0, immune); in-game 3/5 via child hitbox. Spawns copies + shots ($48/$49) |
 | Mole (despawn) | $4A | -- | bank0E:$B20B | Clears all Mole entities on screen exit |
-| Gear | $29 | 2/4 | `gear_ai` (bank0E:4603) | Rotating cog platform |
-| Pierrobot | $2A | 1/1 | `pierrobot_ai` (bank0E:4699) | Rides Gear; child entity |
-| Blocky | $31 | 1/2 | `blocky_ai` (bank0E:4941) | Block enemy |
-| Springer | $46 | -- | `springer_ai` (bank0E:5775) | Bouncing; immune to buster |
+| Gear | $29 | 2/4 | `gear_ai` (bank0E:4635) | Rotating cog platform |
+| Pierrobot | $2A | 1/1 | `pierrobot_ai` (bank0E:4731) | Rides Gear; child entity |
+| Blocky | $31 | 1/2 | `blocky_ai` (bank0E:4973) | Block enemy |
+| Springer | $46 | -- | `springer_ai` (bank0E:5811) | Bouncing; immune to buster |
 
 ### Crash Man Stage
 
@@ -368,16 +368,16 @@ Stage $07 — entity bank $07
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Telly (spawn) | $21 | -- | `telly_spawn_ai` (bank0E:4419) | Spawns Telly body ($22) |
-| Telly (body) | $22 | 1/1 | `telly_ai` (bank0E:4438) | Homing movement |
+| Telly (spawn) | $21 | -- | `telly_spawn_ai` (bank0E:4448) | Spawns Telly body ($22) |
+| Telly (body) | $22 | 1/1 | `telly_ai` (bank0E:4467) | Homing movement |
 | Neo Metall | $34 | 1/1 | bank0E:$AA4E | Hittable when helmet is up |
-| Neo Metall (flip) | $56 | -- | `neo_metall_flip_ai` (bank0E:6455) | **Invulnerable** hiding phase (no_collide) |
-| Rail Platform | $12 | -- | `rail_platform_ai` (bank0E:3413) | Moving platform |
-| Blocky | $31 | 1/2 | `blocky_ai` (bank0E:4941) | Block enemy |
-| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5259) | Chain: $37 → $38 → $3A → $3C |
-| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:5997) | Stationary cannon |
-| Fly Boy (spawn) | $2B | -- | `fly_boy_spawn_ai` (bank0E:4715) | Spawns body ($2C) |
-| Fly Boy (body) | $2C | 3/5 | `fly_boy_ai` (bank0E:4734) | Propeller enemy |
+| Neo Metall (flip) | $56 | -- | `neo_metall_flip_ai` (bank0E:6502) | **Invulnerable** hiding phase (no_collide) |
+| Rail Platform | $12 | -- | `rail_platform_ai` (bank0E:3441) | Moving platform |
+| Blocky | $31 | 1/2 | `blocky_ai` (bank0E:4973) | Block enemy |
+| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5295) | Chain: $37 → $38 → $3A → $3C |
+| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:6044) | Stationary cannon |
+| Fly Boy (spawn) | $2B | -- | `fly_boy_spawn_ai` (bank0E:4747) | Spawns body ($2C) |
+| Fly Boy (body) | $2C | 3/5 | `fly_boy_ai` (bank0E:4766) | Propeller enemy |
 
 ---
 
@@ -387,10 +387,10 @@ Stage $08 — entity bank $00 (shared with Heat Man)
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6103) | Armored |
-| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6236) | Child of Sniper Armor |
-| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5259) | Full chain: bird → egg → Copipi |
-| Scworm Nest | $50 | 3/5 | `scworm_nest_ai` (bank0E:6291) | Spawns Scworm ($51); dmg=$04 |
+| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6150) | Armored |
+| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6283) | Child of Sniper Armor |
+| Pipi (spawn) | $37 | -- | `pipi_spawn_ai` (bank0E:5295) | Full chain: bird → egg → Copipi |
+| Scworm Nest | $50 | 3/5 | `scworm_nest_ai` (bank0E:6338) | Spawns Scworm ($51); dmg=$04 |
 
 Boss sub-entities: Mecha Dragon fireball ($33), body segments ($63/$64), body parts ($65/$66/$67), breath ($68).
 
@@ -400,9 +400,9 @@ Stage $09 — entity bank $01 (shared with Air Man)
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Mole | $47 | 3/5 | bank0E:5876 (data overlap) | Controller (flags $A0, immune); in-game 3/5 via child hitbox |
-| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:5997) | Stationary cannon |
-| Crazy Cannon (flip) | $4C | 3/5 | `crazy_cannon_ai` (bank0E:5997) | Flipped variant; same AI |
+| Mole | $47 | 3/5 | bank0E:5911 (data overlap) | Controller (flags $A0, immune); in-game 3/5 via child hitbox |
+| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:6044) | Stationary cannon |
+| Crazy Cannon (flip) | $4C | 3/5 | `crazy_cannon_ai` (bank0E:6044) | Flipped variant; same AI |
 
 Boss sub-entities: Picopico-kun block halves ($6A).
 
@@ -412,10 +412,10 @@ Stage $0A — entity bank $02 (shared with Wood Man)
 
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
-| Tanishi | $0A | 1/2 | `tanishi_ai_main` (bank0E:3067) | Shell-shed on damage |
-| Big Fish | $71 | -- | `big_fish_ai_main` (bank0E:7171) | Gray fish; HP=1, immune to buster. Only Quick Boomerang + Crash Bomber work (1 hit) |
-| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:5997) | Stationary cannon |
-| Neo Metall (flip) | $56 | -- | `neo_metall_flip_ai` (bank0E:6455) | **Invulnerable** hiding phase |
+| Tanishi | $0A | 1/2 | `tanishi_ai_main` (bank0E:3094) | Shell-shed on damage |
+| Big Fish | $71 | -- | `big_fish_ai_main` (bank0E:7218) | Gray fish; HP=1, immune to buster. Only Quick Boomerang + Crash Bomber work (1 hit) |
+| Crazy Cannon | $4B | 3/5 | `crazy_cannon_ai` (bank0E:6044) | Stationary cannon |
+| Neo Metall (flip) | $56 | -- | `neo_metall_flip_ai` (bank0E:6502) | **Invulnerable** hiding phase |
 
 Boss sub-entities: Guts-Dozer body ($63), turret ($69).
 
@@ -426,11 +426,11 @@ Stage $0B — entity bank $03 (shared with Bubble Man)
 | Enemy | Type | Buster (N/D) | AI Routine | Notes |
 |---|---|---|---|---|
 | Neo Metall | $34 | 1/1 | bank0E:$AA4E | Hittable when helmet up |
-| Telly (spawn) | $21 | -- | `telly_spawn_ai` (bank0E:4419) | Spawns body ($22) |
-| Telly (body) | $22 | 1/1 | `telly_ai` (bank0E:4438) | Homing movement |
-| Rail Platform | $12 | -- | `rail_platform_ai` (bank0E:3413) | Moving platform |
-| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6103) | Armored |
-| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6236) | Child of Sniper Armor |
+| Telly (spawn) | $21 | -- | `telly_spawn_ai` (bank0E:4448) | Spawns body ($22) |
+| Telly (body) | $22 | 1/1 | `telly_ai` (bank0E:4467) | Homing movement |
+| Rail Platform | $12 | -- | `rail_platform_ai` (bank0E:3441) | Moving platform |
+| Sniper Armor | $4E | 10/20 | `sniper_armor_ai` (bank0E:6150) | Armored |
+| Sniper Joe | $4F | 5/10 | `sniper_joe_ai` (bank0E:6283) | Child of Sniper Armor |
 
 Boss sub-entities: Boobeam turrets ($6D, 5 placed), Boobeam shots ($6E). Only vulnerable to Crash Bomber.
 
@@ -450,14 +450,14 @@ No regular stage enemies — **final boss encounter only**.
 
 Boss sub-entities: Alien shot ($6F), Alien body ($70), red liquid drip ($74). Only vulnerable to Bubble Lead.
 
-### Entity Property Tables (bank0F:3324)
+### Entity Property Tables (bank0F:3331)
 
 | Table | Location | Entries | Description |
 |---|---|---|---|
-| `entity_flags_table` | bank0F:3324 | 128 | Default spawn flags per entity type |
-| `entity_hitbox_width_idx_tbl` | bank0F:3340 | 128 | Hitbox width lookup index |
-| `entity_hitbox_height_idx_tbl` | bank0F:3356 | 128 | Hitbox height lookup index |
-| `entity_ai_behavior_tbl` | bank0F:3374 | 128 | AI behavior mode index |
+| `entity_flags_table` | bank0F:3331 | 128 | Default spawn flags per entity type |
+| `entity_hitbox_width_idx_tbl` | bank0F:3347 | 128 | Hitbox width lookup index |
+| `entity_hitbox_height_idx_tbl` | bank0F:3363 | 128 | Hitbox height lookup index |
+| `entity_ai_behavior_tbl` | bank0F:3381 | 128 | AI behavior mode index |
 
 Entity flag bitmasks (`ent_spawn_flags` / `ent_flags`):
 
@@ -486,7 +486,7 @@ Banks $00–$04 share tables between the Robot Master stage and a Wily stage (us
 
 ### Dynamic Spawn Chains
 
-Several enemy types use parent→child spawn relationships via `spawn_entity_from_parent` (bank0F:6019):
+Several enemy types use parent→child spawn relationships via `spawn_entity_from_parent` (bank0F:6026):
 
 | System | Chain | Despawner |
 |---|---|---|
@@ -498,7 +498,7 @@ Several enemy types use parent→child spawn relationships via `spawn_entity_fro
 
 ### Contact Damage to Player
 
-`contact_damage_to_player_tbl` (bank0F:5510) — 128 entries indexed by entity type ($00–$7F). Damage is subtracted directly from player HP in `check_player_collision` (bank0F:4799). **Not affected by difficulty** — values are the same on Normal and Difficult.
+`contact_damage_to_player_tbl` (bank0F:5517) — 128 entries indexed by entity type ($00–$7F). Damage is subtracted directly from player HP in `check_player_collision` (bank0F:4806). **Not affected by difficulty** — values are the same on Normal and Difficult.
 
 Boss contact damage uses a separate table: `boss_contact_damage_table` (bank0B:5050) — see Section 3.
 
@@ -584,14 +584,14 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 | Parameter | Value | Location |
 |---|---|---|
-| Gravity (normal) | $40 (sub-pixel accel) | `gravity_hi_table` bank0E:1447 |
-| Gravity (water) | $1E | `gravity_hi_table+1` bank0E:1447 |
+| Gravity (normal) | $40 (sub-pixel accel) | `gravity_hi_table` bank0E:1474 |
+| Gravity (water) | $1E | `gravity_hi_table+1` bank0E:1474 |
 | Jump velocity | $04.DF (initial Y vel) | Set in player jump code |
 | Terminal velocity | $F4 (max Y fall speed) | Clamped in physics |
-| Knockback Y vel | $01.40 | `player_damage_knockback` bank0F:2827 |
-| Knockback X vel | $00.90 | `player_damage_knockback` bank0F:2831 |
-| I-frame duration | $6F (111 frames) | `player_damage_knockback` bank0F:2826 |
-| Default entity timer | $14 (20 frames) | `entity_init_from_type` bank0F:3266 |
+| Knockback Y vel | $01.40 | `player_damage_knockback` bank0F:2831 |
+| Knockback X vel | $00.90 | `player_damage_knockback` bank0F:2835 |
+| I-frame duration | $6F (111 frames) | `player_damage_knockback` bank0F:2830 |
+| Default entity timer | $14 (20 frames) | `entity_init_from_type` bank0F:3273 |
 
 ### Player State Variables
 
@@ -610,7 +610,7 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Weapon Projectile Base Types
 
-`weapon_base_type_tbl` (bank0F:2893) — maps weapon ID to base OAM/sprite type for player projectiles:
+`weapon_base_type_tbl` (bank0F:2897) — maps weapon ID to base OAM/sprite type for player projectiles:
 
 | Weapon ID | Weapon | Base Type |
 |---|---|---|
@@ -629,7 +629,7 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Weapon Fire Dispatch
 
-`weapon_dispatch_lo/hi_tbl` (bank0F:3732) — 12 entries indexed by `current_weapon`. Each handler checks B button and spawns a projectile entity via `weapon_spawn_projectile` (bank0F:2903).
+`weapon_dispatch_lo/hi_tbl` (bank0F:3739) — 12 entries indexed by `current_weapon`. Each handler checks B button and spawns a projectile entity via `weapon_spawn_projectile` (bank0F:2910).
 
 | Index | Weapon | Fire Handler | Spawn Y | Entity Type | Flags | Position Handler |
 |---|---|---|---|---|---|---|
@@ -646,7 +646,7 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 | 10 | Item 2 | `fire_weapon_item2` | Y=A | $39 | $82 | `item2_jet_ai` |
 | 11 | Item 3 | `fire_weapon_item3` | Y=B | $3A | $86 | `item3_climber_ai` |
 
-**Dual-purpose entity types**: Projectile entity types ($23, $2F–$3E) are reused IDs that also serve as enemy types (Changkey, Boss Door, Press, Blocky, etc.). When spawned as weapon projectiles they occupy weapon renderer slots ($10–$1F) and use separate AI via `entity_special_dispatch` (bank0F:3785) instead of the main entity AI table.
+**Dual-purpose entity types**: Projectile entity types ($23, $2F–$3E) are reused IDs that also serve as enemy types (Changkey, Boss Door, Press, Blocky, etc.). When spawned as weapon projectiles they occupy weapon renderer slots ($10–$1F) and use separate AI via `entity_special_dispatch` (bank0F:3792) instead of the main entity AI table.
 
 **Projectile flags bit 1**: Determines position update path. Set = `entity_special_dispatch` (custom handler). Clear = normal `apply_entity_physics`. Buster ($23) and Metal Blade ($36) use normal physics; all others use custom handlers.
 
@@ -656,7 +656,7 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Stage → Bank Mapping
 
-`stage_bank_table` (bank0E:333) — maps `current_stage` ($2A) to PRG bank for tile/map data:
+`stage_bank_table` (bank0E:334) — maps `current_stage` ($2A) to PRG bank for tile/map data:
 
 | Stage | Index | Tile Bank | Entity Bank (AND $07) | Boss |
 |---|---|---|---|---|
@@ -706,7 +706,7 @@ Each metatile is 4 bytes: 4 tile indices (TL, TR, BL, BR) packed into the tile d
 
 ### Stage Collision Type Table
 
-`stage_collision_table` (bank0F:1879) — maps collision bits 2 and 3 to specific types per stage:
+`stage_collision_table` (bank0F:1883) — maps collision bits 2 and 3 to specific types per stage:
 
 | Stage | Bit 2 → | Bit 3 → |
 |---|---|---|
@@ -741,7 +741,7 @@ Collision type values: $00=empty, $01=solid, $02=ladder, $03=spike (instant deat
 
 ### Weapon Palette Table
 
-`weapon_palette_data` (bank0F:2804) — 4 bytes per weapon. Bytes 1–3 are copied to `palette_sprite+1` ($0367–$0369). Byte 0 ($0F = black) is present in the table but skipped by the copy routine:
+`weapon_palette_data` (bank0F:2808) — 4 bytes per weapon. Bytes 1–3 are copied to `palette_sprite+1` ($0367–$0369). Byte 0 ($0F = black) is present in the table but skipped by the copy routine:
 
 | Weapon | Byte 0 | Color 1 | Color 2 | Color 3 |
 |---|---|---|---|---|
@@ -788,24 +788,27 @@ The CHR upload callback runs through `BANK_CHR_UPLOAD` (bank $0C). Stage CHR dat
 | What scales | Routine | Location | Effect |
 |---|---|---|---|
 | Weapon damage to bosses | `weapon_difficulty_scale` | bank0B:5009 | `ASL temp_00` on Normal → 2× damage |
-| Weapon damage to enemies | `apply_difficulty_modifier` | bank0F:5368 | `ASL temp_00` on Normal → 2× damage |
-| Item drop rates | `item_drop_calc` | bank0F:6177 | Different RNG thresholds |
+| Weapon damage to enemies | `apply_difficulty_modifier` | bank0F:5375 | `ASL temp_00` on Normal → 2× damage |
+| Item drop rates | `item_drop_calc` | bank0F:6184 | Different RNG thresholds |
 
 Note: On Normal mode, weapon damage (to both bosses and regular enemies) is **doubled** — enemies die faster. Contact damage from enemies/projectiles to the player is **not** affected by difficulty. Difficult mode uses base weapon damage values as-is.
 
 ### Item Drop Rate Comparison
 
-`item_drop_calc` (bank0F:6177) uses `rng_seed MOD 100` against threshold tables:
+`item_drop_calc` (bank0F:6184) uses `rng_seed MOD 100` against threshold tables:
 
-| Item | Normal (72% total) | Difficult (52% total) |
+| Item | Normal (71% total) | Difficult (50% total) |
 |---|---|---|
 | Nothing | 28% | 48% |
-| Large weapon energy | 10% | 25% |
-| Large health | 10% | 15% |
-| Small health | 30% | 5% |
-| Small weapon energy | 20% | 4% |
-| Extra life (1-UP) | 1% | 1% |
+| Small weapon energy ($79) | 10% | 25% |
+| Small health ($77) | 10% | 15% |
+| Large weapon energy ($78) | 30% | 5% |
+| Large health ($76) | 20% | 4% |
+| Extra life ($7B) | 1% | 1% |
 | Nothing (tail) | 1% | 2% |
+
+Rolls 98/99 map to nothing/1-UP (Normal) and 1-UP/nothing (Difficult); the
+E-Tank drop ($7A) exists in the spawn code but is never rolled.
 
 ---
 
@@ -869,7 +872,7 @@ Sound IDs $00-$17 are music tracks. IDs $00-$09 double as stage bank numbers —
 | $08 | Dr. Wily Stage 1-2 | `stage_bank_table[$08/$09]` |
 | $09 | Dr. Wily Stage 3-4 | `stage_bank_table[$0A/$0B/$0C]` |
 | $0A | Dr. Wily Map | Fortress gate cinematic (bank0D:288) |
-| $0B | Boss Battle | Boss fight start (bank0E:617) |
+| $0B | Boss Battle | Boss fight start (bank0E:621) |
 | $0C | Stage Select | Stage select screen (bank0D:147) |
 | $0D | Title / Ending | Title screen + ending (bank0D:3400, 5517) |
 | $0E | Opening | Ending text scroll (bank0D:3220) — reuses opening theme |
@@ -889,37 +892,37 @@ SFX IDs ($18+) index past the pointer table into embedded sound data. Listed by 
 
 | ID | Sound | Primary call sites |
 |---|---|---|
-| $21 | Metal Blade fire | bank0F:3669, bank0E:4855 |
-| $23 | Crash Bomber fire | bank0F:3620, bank0B:1415 |
-| $24 | Weapon fire (generic) | bank0F:3443 — Bubble, Leaf, Air, Quick |
-| $25 | Enemy shoot / Sniper fire | bank0E:5146, 6062, 6190, 6262 |
-| $26 | Mega Buster shot | bank0F:2815 |
-| $27 | Heavy impact | bank0E:3657 |
+| $21 | Metal Blade fire | bank0F:3676, bank0E:4887 |
+| $23 | Crash Bomber fire | bank0F:3627, bank0B:1415 |
+| $24 | Weapon fire (generic) | bank0F:3450 — Bubble, Leaf, Air, Quick |
+| $25 | Enemy shoot / Sniper fire | bank0E:5182, 6062, 6190, 6262 |
+| $26 | Mega Buster shot | bank0F:2819 |
+| $27 | Heavy impact | bank0E:3686 |
 | $28 | HP bar fill tick | bank0B:191, bank0D:1777 |
-| $29 | Landing / thud | bank0E:945 |
+| $29 | Landing / thud | bank0E:963 |
 | $2A | Block break (Picopico-kun) | bank0B:3625 |
-| $2B | Weapon hit (damage dealt) | bank0F:4955 — all 9 weapon handlers |
+| $2B | Weapon hit (damage dealt) | bank0F:4962 — all 9 weapon handlers |
 | $2C | Dragon fire breath | bank0B:1828, 1922 |
-| $2D | Weapon immune / deflect | bank0F:4985 — all 9 weapon handlers |
-| $2E | Quick Boomerang hit | bank0F:4218 |
+| $2D | Weapon immune / deflect | bank0F:4992 — all 9 weapon handlers |
+| $2E | Quick Boomerang hit | bank0F:4225 |
 | $2F | Cursor / menu move | bank0D:1711, 3576, 3631 |
-| $30 | Boss fight music start | bank0F:1209, bank0D:1895 |
-| $31 | Weapon get fanfare | bank0F:4033 |
-| $32 | Boss intro transition | bank0F:951 |
-| $38 | Large pickup / E-Tank | bank0F:3885, bank0B:301 |
-| $39 | Pipi egg hatch | bank0E:4757 |
+| $30 | Boss fight music start | bank0F:1213, bank0D:1895 |
+| $31 | Weapon get fanfare | bank0F:4040 |
+| $32 | Boss intro transition | bank0F:955 |
+| $38 | Large pickup / E-Tank | bank0F:3892, bank0B:301 |
+| $39 | Pipi egg hatch | bank0E:4789 |
 | $3A | Victory jingle | bank0D:191, bank0B:3940 |
-| $3B | Screen transition | bank0E:1492 |
-| $3C | Appear block sound | bank0E:6422 |
-| $3F | Atomic Fire charge | bank0F:3490, bank0B:446 |
-| $41 | Boss death explosion | bank0F:399, bank0B:3879 |
-| $42 | Extra life (1-UP) | bank0D:3668, bank0E:574 |
+| $3B | Screen transition | bank0E:1519 |
+| $3C | Appear block sound | bank0E:6469 |
+| $3F | Atomic Fire charge | bank0F:3497, bank0B:446 |
+| $41 | Boss death explosion | bank0F:403, bank0B:3879 |
+| $42 | Extra life (1-UP) | bank0D:3668, bank0E:576 |
 
 $2B (weapon hit) and $2D (weapon immune) are by far the most common — used in every weapon collision handler in both bank0F and bank0B.
 
 ### Stage-to-Music Mapping
 
-Music is loaded by enqueuing `stage_bank_table[current_stage]` (bank0E:249). Since stage bank numbers = music IDs for $00-$09, the tile bank table doubles as a stage-to-music mapping:
+Music is loaded by enqueuing `stage_bank_table[current_stage]` (bank0E:250). Since stage bank numbers = music IDs for $00-$09, the tile bank table doubles as a stage-to-music mapping:
 
 | Stage | Bank/Music ID | Track |
 |---|---|---|
@@ -1093,10 +1096,10 @@ Four 128-byte pointer tables in fixed bank $0F map entity types ($00–$7F) to s
 
 | Table | Location | Purpose |
 |---|---|---|
-| `sprite_def_ptr_lo` | bank0F:6453 | Sprite def pointer low byte (entity rendering) |
-| `sprite_def_ptr_hi` | bank0F:6501 | Sprite def pointer high byte (entity rendering) |
-| `sprite_def_ptr_lo_wpn` | bank0F:6478 | Sprite def pointer low byte (weapon rendering) |
-| `sprite_def_ptr_hi_wpn` | bank0F:6517 | Sprite def pointer high byte (weapon rendering) |
+| `sprite_def_ptr_lo` | bank0F:6460 | Sprite def pointer low byte (entity rendering) |
+| `sprite_def_ptr_hi` | bank0F:6508 | Sprite def pointer high byte (entity rendering) |
+| `sprite_def_ptr_lo_wpn` | bank0F:6485 | Sprite def pointer low byte (weapon rendering) |
+| `sprite_def_ptr_hi_wpn` | bank0F:6524 | Sprite def pointer high byte (weapon rendering) |
 
 All high bytes are in the $FB–$FF range, placing all sprite definition data in the fixed bank ($FB00–$FFEF region).
 
@@ -1116,7 +1119,7 @@ A sprite def offset of `$00` signals **entity deactivation** (`LSR ent_flags` cl
 
 ### Animation State Machine
 
-`render_entity_normal` (bank0F:2090) runs each frame for active entities:
+`render_entity_normal` (bank0F:2094) runs each frame for active entities:
 
 1. Load sprite def pointer from `sprite_def_ptr_lo/hi` using `ent_type`
 2. Increment `ent_anim_frame` → compare against byte +1 (duration)
@@ -1127,10 +1130,10 @@ A sprite def offset of `$00` signals **entity deactivation** (`LSR ent_flags` cl
 
 | Routine | Location | Purpose |
 |---|---|---|
-| `render_entity_normal` | bank0F:2090 | Main entity animation + OAM write |
-| `render_entity_get_sprite_ptr` | bank0F:2048 | Special mode entity rendering (no animation advance) |
-| `render_weapon_get_sprite_ptr` | bank0F:2071 | Weapon/projectile rendering via `_wpn` tables |
-| `render_begin_oam_write` | bank0F:2126 | OAM assembly from sprite definition data |
+| `render_entity_normal` | bank0F:2094 | Main entity animation + OAM write |
+| `render_entity_get_sprite_ptr` | bank0F:2052 | Special mode entity rendering (no animation advance) |
+| `render_weapon_get_sprite_ptr` | bank0F:2075 | Weapon/projectile rendering via `_wpn` tables |
+| `render_begin_oam_write` | bank0F:2130 | OAM assembly from sprite definition data |
 
 ### Flash Effects
 
@@ -1163,13 +1166,13 @@ All PPU writes occur during NMI (vertical blank) via a queued buffer system:
 | Column update addr | $03B6–$03B7 | 2 bytes | VRAM target address (hi/lo) |
 | Column update tiles | $03B8–$03D7 | 32 bytes | Tile column data (32 tiles vertical) |
 
-`ppu_buffer_count` tracks the number of pending update entries. `ppu_buffer_transfer` (bank0F:2545) processes the queue during NMI in two modes:
+`ppu_buffer_count` tracks the number of pending update entries. `ppu_buffer_transfer` (bank0F:2549) processes the queue during NMI in two modes:
 - **Positive count**: Multi-entry structured writes (4×4 tile blocks per entry)
 - **Negative count**: Alternate mode — 8-byte row writes with attribute table merge
 
 ### Column Update System
 
-`ppu_scroll_column_update` (bank0F:2644) writes one 32-tile vertical column to the nametable during scrolling. The VRAM address is stored in `col_update_addr_lo/hi` ($03B6–$03B7), tile data in `col_update_tiles` ($03B8–$03D7). Also used for text rendering during stage intros.
+`ppu_scroll_column_update` (bank0F:2648) writes one 32-tile vertical column to the nametable during scrolling. The VRAM address is stored in `col_update_addr_lo/hi` ($03B6–$03B7), tile data in `col_update_tiles` ($03B8–$03D7). Also used for text rendering during stage intros.
 
 ### Text Encoding
 

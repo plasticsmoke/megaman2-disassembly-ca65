@@ -60,7 +60,7 @@
 .include "include/constants.inc"
 .include "include/fixed_bank.inc"
 
-banked_entry           := $C05D
+mmc1_write_control := $C05D  ; bank0F: serial write to MMC1 control reg ($9FFF)
 boss_beaten_check           := $C071
 boss_beaten_mask_lo         := $C279
 wait_for_vblank           := $C07F
@@ -83,7 +83,7 @@ lookup_cached_tile           := $CBA2
 lookup_tile_from_map           := $CBC3
 clear_oam_buffer           := $CC6C
 render_all_sprites           := $CC77
-weapon_set_base_type           := $D3A8
+player_set_sprite           := $D3A8
 entity_spawn_scan           := $D658
 fire_weapon_dispatch           := $DA51
 update_entity_positions           := $DCD0
@@ -124,8 +124,8 @@ clear_ram_loop:  sta     (temp_00),y        ; zero out RAM page
         ldx     temp_01
         cpx     #$08
         bne     clear_ram_loop
-        lda     #$0E
-        jsr     banked_entry
+        lda     #$0E                    ; MMC1 control: PRG mode 3, vertical mirroring
+        jsr     mmc1_write_control
         lda     #$01
         sta     mmc1_shift_register
         lsr     a
@@ -159,31 +159,32 @@ game_init:  jsr     nametable_init      ; initialize nametable data
         bne     game_init
         lda     beaten_bosses
         cmp     #$FF
-        bne     game_init_set_scroll_bank
+        bne     game_init_restart
         lda     #$08
         sta     current_stage
-        bne     game_init_check_wily
-game_init_set_scroll_bank:  lda     #$03
+        bne     game_init_wily_check
+game_init_restart:  lda     #$03    ; $8072: restart entry — reset lives
         sta     current_lives
         jsr     nametable_stage_setup
-game_init_check_wily:  lda     current_stage
+game_init_wily_check:  lda     current_stage   ; $8079 entry
         cmp     #WILY_STAGE_START                    ; stages 8+ are Wily fortress
-        bcc     game_init_fill_weapon_ammo
+        bcc     game_init_refill
         jsr     boss_beaten_check
         lda     current_stage
         cmp     #$09
-        bcs     game_init_set_boss_offset
-game_init_fill_weapon_ammo:  ldx     #$0A
+        bcs     game_init_checkpoint
+game_init_refill:  ldx     #$0A    ; $8088 entry — refill all 11 weapon energies
         lda     #MAX_HP                    ; $1C = full weapon energy (28)
-fill_weapon_ammo_loop:  sta     $9C,x
+fill_weapon_ammo_loop:  sta     weapon_ammo,x
         dex
         bpl     fill_weapon_ammo_loop
-game_init_set_boss_offset:  ldx     #$00
+game_init_checkpoint:  ldx     #$00
         lda     current_stage
         and     #$08
-        beq     game_init_store_boss_offset
+        beq     game_init_store_checkpoint
         ldx     #$03
-game_init_store_boss_offset:  stx     $B0 ; boss table offset (0=Robot Master, 3=Wily)
+game_init_store_checkpoint:  stx     checkpoint_idx ; Wily stages use checkpoint slots 3-5
+                                        ; (checkpoint tables shared with paired RM stage)
         lda     #$14
         ldx     #$1F
 game_init_fill_timers:  sta     ent_child_hp,x
@@ -191,10 +192,10 @@ game_init_fill_timers:  sta     ent_child_hp,x
         bpl     game_init_fill_timers
         lda     #$00
         sta     boss_mode_flag
-        lda     #$00
-        sta     palette_toggle_b
-        lda     #$40
-        sta     palette_toggle_a
+game_init_respawn:  lda     #$00        ; $80AB: respawn entry (keeps lives/ammo)
+        sta     conveyor_face_l         ; conveyor facing constants read by
+        lda     #$40                    ;   player_floor_tile_check (via $44+type)
+        sta     conveyor_face_r
         lda     #$10
         sta     ppuctrl_shadow
         sta     PPUCTRL
@@ -246,8 +247,8 @@ game_init_fill_timers:  sta     ent_child_hp,x
         lda     #$00
         sta     gravity_sub_hi
         ldx     current_stage
-        lda     stage_bank_table,x
-        jsr     sound_queue_push
+        lda     stage_bank_table,x      ; stage music ID == stage tile bank number
+        jsr     sound_queue_push        ;   (shared table — queue stage music)
         ldx     #$13
 game_init_copy_stage_sprites:  lda     stage_intro_oam_data,x
         sta     oam_buffer,x
@@ -291,7 +292,7 @@ blink_sprite_store:  tya
 ; final positions. Spawning before AI ensures new entities get processed.
 ; =============================================================================
 main_game_loop:
-        lda     $AD
+        lda     item_pickup_type
         beq     main_loop_check_start
         jsr     item_collection_handler ; process pending item pickup
 main_loop_check_start:
@@ -311,7 +312,7 @@ main_loop_update_entities:
         beq     main_loop_check_scroll
         jsr     check_screen_transition ; handle room/boss door transitions
 main_loop_check_scroll:
-        lda     $FB                     ; frame skip throttle (performance)
+        lda     frame_skip_lo           ; frame skip throttle (performance)
         beq     main_loop_wait_frame
         inc     frame_skip_hi
         cmp     frame_skip_hi
@@ -326,11 +327,12 @@ main_loop_wait_frame:
         jmp     main_game_loop
 
         .byte   $10,$10,$10,$15,$15,$10
-stage_intro_oam_data:  .byte   $60,$96,$01,$6C,$60,$97,$01,$74
+stage_intro_oam_data:  .byte   $60,$96,$01,$6C,$60,$97,$01,$74 ; "READY" text sprites
         .byte   $60,$98,$01,$7C,$60,$99,$01,$84
         .byte   $60,$9A,$01
         .byte   $8C
-stage_bank_table:                        ; PRG bank per stage index ($2A)
+stage_bank_table:                        ; PRG tile bank per stage ($2A); doubles as
+                                         ; the stage MUSIC track ID at stage start
         .byte   $03                      ; $00 Heat Man   → bank $03
         .byte   $04                      ; $01 Air Man    → bank $04
         .byte   $01                      ; $02 Wood Man   → bank $01
@@ -349,7 +351,7 @@ stage_bank_table:                        ; PRG bank per stage index ($2A)
 ; =============================================================================
 ; wily_spawn_gate_entities -- Wily Fortress Gate — spawn gate entities from bitmask ($81DE)
 ; =============================================================================
-wily_spawn_gate_entities:  lda     $BC
+wily_spawn_gate_entities:  lda     boss_mode_flag
         cmp     #$FF
         bne     wily_spawn_gate_loop
         ldx     #$00
@@ -371,9 +373,9 @@ wily_spawn_check_done:  bcs     wily_spawn_next_bit
         lda     #ENTITY_WILY_GATE_BOSS
         ldx     temp_02
         jsr     spawn_entity_init
-        lda     wily_gate_anim_table,y
+        lda     wily_gate_y_table,y
         sta     ent_y_spawn_px,y
-        lda     wily_gate_y_pos_table,y
+        lda     wily_gate_x_table,y
         sta     ent_x_spawn_px,y
 wily_spawn_next_bit:  inc     temp_02
         lda     temp_02
@@ -401,7 +403,7 @@ wily_loop_update_entities:  jsr     build_active_list
         lda     transition_type
         beq     wily_loop_check_scroll
         jsr     check_screen_transition
-wily_loop_check_scroll:  lda     $FB
+wily_loop_check_scroll:  lda     frame_skip_lo
         beq     wily_loop_wait_frame
         inc     frame_skip_hi
         cmp     frame_skip_hi
@@ -413,8 +415,8 @@ wily_loop_frame_skip:  jsr     wait_one_rendering_frame
 wily_loop_wait_frame:  jsr     wait_for_vblank ; wait for NMI
         jmp     wily_loop_main
 
-wily_gate_anim_table:  .byte   $3B,$7B,$BB,$BB,$BB,$3B,$7B,$BB ; animation frame per gate position
-wily_gate_y_pos_table:                   ; Y pixel position per gate
+wily_gate_y_table:  .byte   $3B,$7B,$BB,$BB,$BB,$3B,$7B,$BB ; Y pixel position per gate
+wily_gate_x_table:                       ; X pixel position per gate
         .byte   $20,$20,$20,$70,$90,$E0,$E0,$E0
 
 ; =============================================================================
@@ -460,7 +462,7 @@ check_scroll_right:  cpx     scroll_screen_hi             ; at right boundary na
 scroll_transition_done:  jmp     clear_scroll_request
 
 check_vertical_transition:  lda     transition_type
-        cmp     #$03                    ; transition_type $03 = boss entrance
+        cmp     #$03                    ; transition_type $03 = fell into pit
         bne     clear_scroll_request
         lda     #$01
         sta     game_substate
@@ -477,11 +479,11 @@ scroll_right_mask_table:  .byte   $20,$80,$20,$40,$00 ; bitmask for right scroll
 ; item_collection_handler -- Item Collection Handler — dispatch item pickup via pointer table ($82D5)
 ; =============================================================================
 item_collection_handler:  sec
-        lda     weapon_counter_3
+        lda     item_pickup_type
         sbc     #$76
         tay
         lda     #$00
-        sta     weapon_counter_3
+        sta     item_pickup_type
         lda     item_handler_ptr_lo,y
         sta     jump_ptr
         lda     item_handler_ptr_hi,y
@@ -534,13 +536,13 @@ weapon_refill_set:
         lda     current_weapon
         beq     refill_exit
         ldx     current_weapon
-        lda     beaten_bosses_hi,x
+        lda     weapon_ammo - 1,x       ; ammo for current weapon (1-indexed)
         cmp     #MAX_HP
         beq     refill_exit
         lda     #$07
         sta     game_mode
 weapon_refill_loop:  ldx     current_weapon
-        lda     beaten_bosses_hi,x
+        lda     weapon_ammo - 1,x
         cmp     #MAX_HP                    ; $1C = max energy (28)
         bcs     refill_complete
         lda     frame_counter
@@ -548,7 +550,7 @@ weapon_refill_loop:  ldx     current_weapon
         bne     weapon_refill_render
         dec     general_counter
         bmi     refill_complete
-        inc     beaten_bosses_hi,x
+        inc     weapon_ammo - 1,x
         lda     #$28
         jsr     sound_queue_push
 weapon_refill_render:  jsr     render_all_sprites
@@ -561,7 +563,7 @@ refill_complete:  lda     #$00
         sta     game_mode
         lda     #$03
         sta     game_substate
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
 refill_exit:  rts
 
 ; ─── Collect E-Tank pickup ───
@@ -586,11 +588,13 @@ extra_life_pickup:
 extra_life_done:
         rts
 
+; ─── Touch Wily gate ($7C): teleport into the boss chamber ───
+wily_gate_enter_boss:
         jsr     wily_teleport_sequence
         lda     #$00
         sta     general_counter
         ldx     wily_stage_index
-        lda     wily_door_bank_table,x
+        lda     wily_gate_overlay_tbl,x
         sta     general_ptr_lo
         dex
         stx     current_stage
@@ -619,15 +623,14 @@ wily_door_transition:  jsr     set_palette_colors
         sta     boss_id
         dec     boss_id
         jsr     boss_wily_entrance
-wily_door_bank_table:  rts
-
-        .byte   $06,$04,$0D,$07,$11,$09,$04,$10
+wily_gate_overlay_tbl:  rts             ; (rts byte doubles as unused entry 0)
+        .byte   $06,$04,$0D,$07,$11,$09,$04,$10 ; CHR overlay/palette index per teleporter
 ; ─── Play Wily teleport animation ───
 wily_teleport_sequence:  lda     #$30
         jsr     sound_queue_push
         lda     #$0B
         sta     game_substate
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         jsr     reset_entity_slots
 wily_teleport_wait:  lda     ent_anim_id
         cmp     #$03
@@ -647,7 +650,7 @@ reset_player_state:  lda     #$C0
         lda     #$00
         sta     general_timer
         sta     game_substate
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         rts
 
 ; ─── Wait for screen fade transition ───
@@ -693,10 +696,10 @@ wily_set_palette:
         sta     boss_phase
         ldx     boss_id
         clc
-        lda     wily_gate_anim_table,x
+        lda     wily_gate_y_table,x
         adc     #$07
         sta     ent_y_px
-        lda     wily_gate_y_pos_table,x
+        lda     wily_gate_x_table,x
         sta     ent_x_px
         jsr     reset_player_state
         lda     #$09
@@ -719,6 +722,9 @@ set_palette_loop:  lda     palette_color_data,x
 
 palette_color_data:                      ; NES palette indices (PPU $3F00 values)
         .byte   $21,$11,$01,$19,$09,$0A,$19,$09,$21
+
+; ─── Touch open Wily gate ($7E): teleport to the final corridor ───
+wily_gate_enter_final:
         jsr     wily_teleport_sequence
         lda     #$29
         jsr     render_full_nametable
@@ -744,10 +750,16 @@ palette_color_data:                      ; NES palette indices (PPU $3F00 values
         jsr     boss_trigger_entrance
         rts
 
-item_handler_ptr_lo:                     ; item pickup handler address low bytes
-        .byte   $EC,$F0,$27,$2B,$6F,$7D,$8B,$23,$A3
-item_handler_ptr_hi:  .byte   $82,$82,$83,$83,$83,$83,$83,$84 ; item handler pointer table (high)
-        .byte   $84
+; Pickup handler per item type ($76-$7E). $76=lg health, $77=sm health,
+; $78=lg weapon, $79=sm weapon, $7A=E-Tank, $7B=1UP, $7C-$7E=Wily gates.
+item_handler_ptr_lo:
+        .byte   <health_refill_large,<health_refill_small,<weapon_refill_large
+        .byte   <weapon_refill_small,<etank_pickup,<extra_life_pickup
+        .byte   <wily_gate_enter_boss,<wily_gate_mark_beaten,<wily_gate_enter_final
+item_handler_ptr_hi:
+        .byte   >health_refill_large,>health_refill_small,>weapon_refill_large
+        .byte   >weapon_refill_small,>etank_pickup,>extra_life_pickup
+        .byte   >wily_gate_enter_boss,>wily_gate_mark_beaten,>wily_gate_enter_final
 
 ; =============================================================================
 ; entity_update_dispatch -- Entity Update / Player State Machine — dispatch based on $2C ($84EE)
@@ -766,7 +778,8 @@ entity_dispatch_setup:  lda     #$00
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-        lda     ent_anim_id
+; ─── Player state 0: teleport-in — wait for landing animation ───
+player_state_teleport_in:  lda     ent_anim_id
         cmp     #$04
         bne     player_state_rts
         lda     #$C0
@@ -777,7 +790,7 @@ entity_dispatch_setup:  lda     #$00
         sta     game_mode
         lda     #$03
         sta     game_substate
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         lda     ent_x_px
         sta     jump_ptr
         lda     ent_x_screen
@@ -794,9 +807,10 @@ entity_dispatch_setup:  lda     #$00
         sta     frame_skip_lo
 player_state_rts:  rts
 
-        rts
-; ─── Player state: post-teleport gun update ───
-player_state_gun_update:
+player_state_null:  rts                 ; state 1: inactive
+
+; ─── Player state 2: hurt/knockback — no input, ride out recoil ───
+player_state_hurt:
         lda     ent_flags             ; player entity flags
         and     #$40              ; check flip bit
         eor     #$40              ; toggle
@@ -805,7 +819,7 @@ player_state_gun_update:
         jsr     player_vertical_physics
         lda     ent_anim_id
         beq     player_select_ground_state
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         rts
 player_select_ground_state:
         ldy     #$06
@@ -815,9 +829,10 @@ player_select_ground_state:
 player_set_state:  sty     game_substate
         rts
 
-        jsr     player_check_fire_weapon
+; ─── Player state 3: airborne (falling/knockback recovery) ───
+player_state_air:  jsr     player_check_fire_weapon
         lda     controller_1               ; controller input
-        and     #$C0              ; check A+B buttons
+        and     #$C0              ; A or B held?
         beq     player_state_skip_facing
         lda     #$04
         sta     game_substate
@@ -830,7 +845,7 @@ player_state_skip_facing:
         bne     player_state_common_exit
         lda     #$06
         sta     game_substate
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         rts
 
 player_state_common_exit:  lda     p1_new_presses
@@ -842,10 +857,11 @@ player_state_common_exit:  lda     p1_new_presses
         sta     ent_y_vel
         lda     #$06
         sta     game_substate
-player_state_set_weapon:  jsr     weapon_set_base_type
+player_state_set_weapon:  jsr     player_set_sprite
         rts
 
-        jsr     player_check_fire_weapon
+; ─── Player state 4: moving airborne ───
+player_state_air_move:  jsr     player_check_fire_weapon
         jsr     player_update_facing
         jsr     player_set_max_speed
         jsr     player_horiz_movement
@@ -865,7 +881,8 @@ player_state_check_land:  lda     ent_anim_id
         sta     game_substate
 player_state_jump_exit:  jmp     player_state_common_exit
 
-        jsr     player_check_fire_weapon
+; ─── Player state 5: walking ───
+player_state_walk:  jsr     player_check_fire_weapon
         jsr     player_update_facing
         jsr     player_set_max_speed
         jsr     player_horiz_movement
@@ -874,7 +891,7 @@ player_state_jump_exit:  jmp     player_state_common_exit
         bne     player_state_walk_check
 player_state_to_idle:  lda     #$06
         sta     game_substate
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         rts
 
 player_state_walk_check:
@@ -885,7 +902,8 @@ player_state_walk_check:
         sta     game_substate
 player_state_check_dir:  jmp     player_state_common_exit
 
-        jsr     player_check_fire_weapon
+; ─── Player state 6: standing/idle — decelerate, handle conveyors ───
+player_state_idle:  jsr     player_check_fire_weapon
         lda     #$00
         sta     ent_x_vel_sub             ; clear X velocity (sub-pixel)
         sta     ent_x_vel             ; clear X velocity (high byte)
@@ -952,10 +970,11 @@ player_state_climbing:  jsr     player_vertical_physics
 player_state_climb_dir:  stx     game_substate
         jmp     player_state_common_exit
 
-player_state_climb_set_weapon:  jsr     weapon_set_base_type
+player_state_climb_set_weapon:  jsr     player_set_sprite
         rts
 
-        jsr     player_check_fire_weapon
+; ─── Player states 7/8: running ───
+player_state_run:  jsr     player_check_fire_weapon
         jsr     player_update_facing
         jsr     player_set_max_speed
         jsr     player_horiz_movement
@@ -1006,9 +1025,9 @@ player_ladder_check_updown:  and     #$30
         sec
         sbc     #$0C
         sta     ent_y_px
-        lda     boss_fight_flag
+        lda     player_y_screen
         sbc     #$00
-        sta     boss_fight_flag
+        sta     player_y_screen
         ldx     #$03
         jmp     player_ladder_set_state
 
@@ -1017,16 +1036,16 @@ player_ladder_check_left:  and     #$08
         lda     #$0A
         sta     game_substate
         bne     player_ladder_check_solid
-player_ladder_move_down:  lda     $35
+player_ladder_move_down:  lda     is_on_ground
         cmp     #$01
         bne     player_ladder_set_vel
         lda     ent_y_px
         clc
         adc     #$0C
         sta     ent_y_px
-        lda     boss_fight_flag
+        lda     player_y_screen
         adc     #$00
-        sta     boss_fight_flag
+        sta     player_y_screen
 player_ladder_set_vel:  ldy     #$FF
         ldx     #$40
         lda     is_on_ground
@@ -1034,7 +1053,7 @@ player_ladder_set_vel:  ldy     #$FF
         bne     player_ladder_check_solid
         lda     #$0A
         sta     game_substate
-player_ladder_check_solid:  lda     $3D
+player_ladder_check_solid:  lda     weapon_fire_dir
         beq     player_ladder_store_vel
         ldy     #$00
         ldx     #$00
@@ -1059,7 +1078,7 @@ player_ladder_set_state:  stx     game_substate
         bne     player_ladder_exit
 player_ladder_clear_vel:  lda     #$00
         sta     ent_anim_frame
-player_ladder_exit:  jsr     weapon_set_base_type
+player_ladder_exit:  jsr     player_set_sprite
         rts
 
 ; ─── Player state: fire weapon while on ladder ───
@@ -1083,10 +1102,18 @@ player_ladder_clear_rts:
 ; =============================================================================
 ; player_state_ptr_lo -- Player State Dispatch Table — 12 states (idle, walk, jump, etc.) ($8783)
 ; =============================================================================
-player_state_ptr_lo:                     ; player state handler address low bytes (12 states)
-        .byte   $08,$45,$46,$69,$A6,$D3,$FB,$8C,$8C,$BC,$BC,$76
-player_state_ptr_hi:  .byte   $85,$85,$85,$85,$85,$85,$85,$86 ; player state pointer table (high)
-        .byte   $86,$86,$86,$87
+; States: 0=teleport-in 1=null 2=hurt 3=air 4=air-move 5=walk 6=idle
+;         7/8=run 9/A=ladder B=anim-clear (Wily teleport)
+player_state_ptr_lo:
+        .byte   <player_state_teleport_in,<player_state_null,<player_state_hurt
+        .byte   <player_state_air,<player_state_air_move,<player_state_walk
+        .byte   <player_state_idle,<player_state_run,<player_state_run
+        .byte   <player_state_ladder_idle,<player_state_ladder_idle,<player_ladder_clear_anim
+player_state_ptr_hi:
+        .byte   >player_state_teleport_in,>player_state_null,>player_state_hurt
+        .byte   >player_state_air,>player_state_air_move,>player_state_walk
+        .byte   >player_state_idle,>player_state_run,>player_state_run
+        .byte   >player_state_ladder_idle,>player_state_ladder_idle,>player_ladder_clear_anim
 
 ; =============================================================================
 ; player_check_fire_weapon -- Player Weapon Fire — check A button, fire weapon, check ladder ($879B)
@@ -1098,7 +1125,7 @@ player_check_fire_weapon:  lda     controller_1
         sta     weapon_counter_1
         beq     player_check_ladder_rts
 player_fire_weapon:  jsr     fire_weapon_dispatch ; call weapon fire handler
-player_check_ladder_rts:  lda     $35
+player_check_ladder_rts:  lda     is_on_ground
         bne     player_check_ladder_snap
 player_fire_rts:  rts
 
@@ -1130,7 +1157,7 @@ player_snap_left:  eor     #$FF
 player_snap_update_facing:  lda     ent_flags
         eor     #$40
         sta     ent_flags
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         pla
         pla
         jmp     player_state_ladder_idle
@@ -1168,7 +1195,7 @@ player_set_max_speed:  ldx     game_substate      ; player state index for speed
         lda     #$00
         sta     ent_x_vel_sub
         sta     ent_x_vel
-player_check_accel_start:  lda     $40
+player_check_accel_start:  lda     conveyor_type
         bmi     player_check_facing_change
         lda     max_speed_sub
         ora     max_speed_hi
@@ -1203,7 +1230,7 @@ player_speed_zero:  lda     #$00
         sta     max_speed_sub
         sta     max_speed_hi
         beq     player_set_face_dir
-player_store_max_speed:  lda     $3E
+player_store_max_speed:  lda     max_speed_sub
         sta     ent_x_vel_sub
         lda     max_speed_hi
         sta     ent_x_vel
@@ -1222,7 +1249,7 @@ player_accelerate:  sec
 player_set_face_dir:  lda     ent_flags
         and     #$40
         sta     scroll_dir_flags
-player_handle_conveyor:  lda     $40
+player_handle_conveyor:  lda     conveyor_type
         bpl     player_conveyor_check
         rts
 
@@ -1268,7 +1295,7 @@ player_conveyor_forward:  clc
         sta     scroll_dir_flags
         rts
 
-player_no_conveyor:  lda     $3F
+player_no_conveyor:  lda     max_speed_hi
         ora     max_speed_sub
         beq     player_conveyor_idle
         rts
@@ -1412,7 +1439,7 @@ tile_check_loop:  ldx     temp_01
         lda     ent_y_px
         adc     tile_y_offset_table,x
         sta     temp_0A
-        lda     boss_fight_flag
+        lda     player_y_screen
         adc     tile_y_page_table,x
         sta     temp_0B
         jsr     lookup_cached_tile
@@ -1424,7 +1451,7 @@ tile_check_loop:  ldx     temp_01
         lda     #$00
         sta     temp_00
         ldx     #$02
-tile_eval_loop:  ldy     $32,x
+tile_eval_loop:  ldy     floor_tile_type,x
         lda     tile_type_flags,y
         bpl     tile_check_spike
         ldy     #$02
@@ -1467,7 +1494,7 @@ ground_tile_loop:  ldx     temp_01
         lda     ent_y_px
         adc     tile_y_offset_table,x
         sta     temp_0A
-        lda     boss_fight_flag
+        lda     player_y_screen
         adc     tile_y_page_table,x
         sta     temp_0B
         jsr     lookup_tile_from_map
@@ -1482,7 +1509,7 @@ ground_tile_loop:  ldx     temp_01
         lda     boss_id
         cmp     #$03
         beq     ground_spawn_item
-ground_check_lava:  lda     $33
+ground_check_lava:  lda     floor_tile_type + 1
         cmp     #$04
         bne     ground_store_params
         lda     frame_skip_lo
@@ -1501,7 +1528,7 @@ ground_check_lava:  lda     $33
         sbc     #$04
         and     #$F0
         sta     ent_y_px + $0E
-ground_spawn_item:  inc     $39
+ground_spawn_item:  inc     column_attr_byte
         lda     column_attr_byte
         cmp     #$60
         bcc     ground_set_params
@@ -1510,7 +1537,7 @@ ground_spawn_item:  inc     $39
         bcc     ground_set_params
         lda     #$00
         sta     column_attr_byte
-ground_spawn_random_item:  lda     $F9
+ground_spawn_random_item:  lda     player_y_screen
         bne     ground_set_params
         stx     current_entity_slot
         lda     #$0E
@@ -1534,7 +1561,7 @@ ground_store_params:  lda     gravity_hi_table,x
         lda     #$02
         sta     temp_01
         ldx     #$02
-ground_calc_platform_dir:  lda     $32,x
+ground_calc_platform_dir:  lda     floor_tile_type,x
         cmp     #$02
         bne     ground_shift_platform
         lda     temp_01
@@ -1553,16 +1580,16 @@ ground_shift_platform:  asl     temp_01
         sec
         sbc     #$0C
         sta     temp_0A
-        lda     boss_fight_flag
+        lda     player_y_screen
         sbc     #$00
         jmp     ground_store_above
 
 ground_check_above:  clc
         adc     #$0C
         sta     temp_0A
-        lda     boss_fight_flag
+        lda     player_y_screen
         adc     #$00
-ground_store_above:  sta     $0B
+ground_store_above:  sta     temp_0B
         jsr     lookup_tile_from_map
         lda     temp_00
         cmp     #$02
@@ -1572,7 +1599,7 @@ ground_store_above:  sta     $0B
         lda     #$10
         bne     ground_store_dir
 ground_above_left:  lda     #$01
-ground_store_dir:  ora     $35
+ground_store_dir:  ora     is_on_ground
         sta     is_on_ground
 ground_collision_rts:  rts
 
@@ -1606,9 +1633,9 @@ player_apply_gravity:
         sbc     ent_y_vel
         sta     ent_y_px
         tax
-        lda     boss_fight_flag         ; extend subtraction to page byte
+        lda     player_y_screen         ; extend subtraction to page byte
         sbc     temp_00
-        sta     boss_fight_flag
+        sta     player_y_screen
 ; --- Bounds checking: death triggers ---
         cpx     #$04
         bcs     player_check_fall_limit
@@ -1624,7 +1651,7 @@ player_set_scroll_trigger:
 player_check_fall_limit:
         cpx     #$E8                    ; Y >= $E8: fell off bottom
         bcc     player_gravity_falling
-        lda     boss_fight_flag
+        lda     player_y_screen
         bmi     player_gravity_falling  ; ignore during boss fights
         lda     #$03                    ; trigger death transition
         sta     transition_type
@@ -1636,7 +1663,7 @@ player_gravity_falling:
         lda     ent_y_px
         sbc     #$0C                    ; scan 12px below feet
         sta     temp_0A
-        lda     boss_fight_flag
+        lda     player_y_screen
         sbc     #$00
         sta     temp_0B
         jsr     player_floor_tile_check
@@ -1679,7 +1706,7 @@ player_gravity_rising:
         lda     ent_y_px
         adc     #$0C                    ; scan 12px above head
         sta     temp_0A
-        lda     boss_fight_flag
+        lda     player_y_screen
         adc     #$00
         sta     temp_0B
         jsr     player_floor_tile_check
@@ -1701,9 +1728,9 @@ player_ceiling_snap:
         sec
         sbc     ent_y_px                ; snap downward to grid
         sta     ent_y_px
-        lda     boss_fight_flag
+        lda     player_y_screen
         sbc     #$00
-        sta     boss_fight_flag
+        sta     player_y_screen
         jmp     player_gravity_stop
 
 player_ceiling_set_flag:
@@ -1733,7 +1760,7 @@ floor_tile_loop:  ldx     temp_01
         lda     #$00
         sta     conveyor_type
         ldx     #$01
-floor_tile_eval:  lda     $32,x
+floor_tile_eval:  lda     floor_tile_type,x
         cmp     #$08
         bcs     floor_check_spike
         cmp     #$05
@@ -1770,7 +1797,7 @@ floor_store_result:  sta     temp_00
         beq     floor_tile_rts
         cmp     #$01
         beq     floor_set_scroll_trigger
-        ldx     boss_fight_flag
+        ldx     player_y_screen
         bpl     floor_tile_rts
         lda     controller_1
         and     #$30
@@ -1812,7 +1839,7 @@ platform_skip_primary:  dex
         clc
         rts
 
-platform_check_y:  lda     $F9
+platform_check_y:  lda     player_y_screen
         bne     platform_skip_primary
         sec
         lda     ent_x_spawn_px,x
@@ -1840,9 +1867,9 @@ platform_land_on:  sec
         lda     ent_plat_type,x
         sbc     #$0C
         sta     ent_y_px
-        lda     boss_fight_flag
+        lda     player_y_screen
         sbc     #$00
-        sta     boss_fight_flag
+        sta     player_y_screen
         lda     #$00
         sta     ent_y_sub
         sta     ent_y_vel_sub
@@ -1860,7 +1887,7 @@ platform_land_on:  sec
         sec
         rts
 
-platform_check_secondary:  lda     $F9
+platform_check_secondary:  lda     player_y_screen
         bne     platform_not_found
         sec
         lda     ent_x_px + $02,x
@@ -1890,9 +1917,9 @@ platform_sec_land_on:  sec
         lda     ent_hitbox_width + $05,x
         sbc     #$0C
         sta     ent_y_px
-        lda     boss_fight_flag
+        lda     player_y_screen
         sbc     #$00
-        sta     boss_fight_flag
+        sta     player_y_screen
         lda     #$00
         sta     ent_y_sub
         sta     ent_y_vel_sub
@@ -2110,7 +2137,7 @@ transition_screen_left:  jsr     reset_entity_slots ; clear all entities for new
         sbc     #$01
         jsr     render_full_nametable   ; render adjacent nametable
         lda     #$00
-        sta     boss_fight_flag
+        sta     player_y_screen
         lda     #$00
         sta     scroll_dir_flags
         jsr     entity_spawn_scan       ; repopulate enemies for new room
@@ -2148,7 +2175,7 @@ transition_right_attr_loop:  ldx     current_stage
         and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_attr_step
         lda     #$34
-        jsr     sound_queue_push     ; switch to metatile data bank
+        jsr     sound_queue_push     ; sound cmd $34: sound-engine bank switch
         lda     nametable_select
         sta     jump_ptr_hi
         lda     #$F0
@@ -2166,7 +2193,7 @@ transition_right_attr_step:  jsr     wait_for_vblank ; let NMI process queued PP
         dec     general_counter
         bpl     transition_right_attr_loop
         lda     #$FE
-        jsr     sound_queue_push     ; restore bank
+        jsr     sound_queue_push     ; sound cmd $FE: restore sound-engine bank
 transition_right_scroll:  lda     current_screen
         sta     general_ptr_lo
         inc     general_ptr_lo                     ; $FE = destination screen index
@@ -2204,7 +2231,7 @@ transition_right_scroll:  lda     current_screen
         adc     #$00
         sta     metatile_ptr_hi
         lda     #$00
-        sta     boss_fight_flag
+        sta     player_y_screen
         lda     transition_type
         and     #$01                    ; vertical transition? skip post-fill
         bne     transition_right_done
@@ -2224,7 +2251,7 @@ transition_right_col_loop:  ldx     current_stage
         beq     transition_right_col_step
         cmp     #WILY_STAGE_START
         bcs     transition_right_done
-transition_right_col_step:  lda     $FD
+transition_right_col_step:  lda     general_counter
         and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_wait_frame
         lda     #$34
@@ -2249,7 +2276,7 @@ transition_right_wait_frame:  jsr     wait_for_vblank
         cmp     #$19                    ; 25 columns rendered?
         bne     transition_right_col_loop
         lda     #$FE
-        jsr     sound_queue_push     ; restore bank
+        jsr     sound_queue_push     ; sound cmd $FE: restore sound-engine bank
 transition_right_done:  lda     #$40
         sta     scroll_dir_flags
         jsr     entity_spawn_scan       ; repopulate enemies for new room
@@ -2359,7 +2386,7 @@ transition_scroll_frame_loop:  tya
         lda     current_weapon
         cmp     #$01
         bne     transition_scroll_render
-        jsr     vert_scroll_update_entity ; sync companion entity (Item-1 riding)
+        jsr     vert_scroll_update_entity ; keep Atomic Fire charge (slot 2) on player
 transition_scroll_render:  jsr     render_all_sprites
         jsr     scroll_column_render    ; queue tile column updates for NMI
         jsr     wait_for_vblank         ; let NMI apply PPU writes + scroll
@@ -2420,7 +2447,7 @@ transition_scroll_vertical:  lda     transition_type
         ldx     #$09                    ; transition_type 0 with vertical = boss warp
         stx     game_substate
         pha
-        jsr     weapon_set_base_type
+        jsr     player_set_sprite
         pla
 vert_scroll_setup:  tax                     ; X = direction index (0=up, 1=down)
         lda     vert_scroll_y_start,x  ; initial frame counter value
@@ -2440,7 +2467,7 @@ vert_scroll_frame_loop:  txa
         lda     current_weapon
         cmp     #$01
         bne     vert_scroll_update_pos
-        jsr     vert_scroll_update_entity ; sync companion entity
+        jsr     vert_scroll_update_entity ; keep Atomic Fire charge (slot 2) on player
 vert_scroll_update_pos:  clc
         lda     ent_y_sub               ; update player Y sub-pixel
         adc     vert_scroll_sub_step,x  ; up: +$BF (~+3.75px), down: +$41 (~-3.75px)
@@ -2448,9 +2475,9 @@ vert_scroll_update_pos:  clc
         lda     ent_y_px                ; update player Y pixel
         adc     vert_scroll_pixel_step,x ; up: +$03 (up=+3), down: +$FC (down=-4)
         sta     ent_y_px
-        lda     boss_fight_flag
+        lda     player_y_screen
         adc     vert_scroll_page_step,x ; up: +$00, down: +$FF (page decrement)
-        sta     boss_fight_flag
+        sta     player_y_screen
         clc
         lda     scroll_y                ; update scroll Y position
         adc     vert_scroll_y_delta,x   ; up: -4, down: +4
@@ -2470,8 +2497,8 @@ vert_scroll_finish:  lda     #$00
         jsr     render_all_sprites
         rts
 
-; ─── Sync Item-1 entity with player position ───
-vert_scroll_update_entity:  lda     ent_x_px ; sync Item-1 entity position with player
+; ─── Keep the slot-2 weapon entity (Atomic Fire charge) on the player ───
+vert_scroll_update_entity:  lda     ent_x_px
         sta     ent_x_px + $02
         lda     ent_x_screen
         sta     ent_x_screen + $02
@@ -2495,9 +2522,9 @@ vert_scroll_page_step:  .byte   $00,$FF ; Y page step: up=0, down=-1 (page decre
 ; =============================================================================
 reset_entity_slots:  ldx     #$00
         lda     current_weapon
-        cmp     #$06                    ; state 6 = boss fight active
+        cmp     #$06                    ; Time Stopper: freeze entity lives in slot 2
         beq     reset_entity_save_boss
-        cmp     #$01
+        cmp     #$01                    ; Atomic Fire: charge entity lives in slot 2
         bne     reset_entity_clear
 reset_entity_save_boss:  ldx     ent_flags + $02
 reset_entity_clear:  txa
@@ -2678,17 +2705,17 @@ entity_special_ai_ptr_lo:  .byte   $B3,$AF,$D8,$F1,$0A,$23,$23,$7C ; special AI 
         .byte   $B5,$B5,$B5,$B5,$B5,$B5,$B5
 entity_special_ai_ptr_hi:  .byte   $EF,$EF,$ED,$ED,$EE,$EE,$EE,$EE ; special AI pointer (high bytes)
         .byte   $EE,$EE,$E6,$EE,$EE,$EE,$BD
-met_ai_preamble:
+shrink_ai_preamble:
         cpx     #$04
-        bne     met_update_timer
+        bne     shrink_update_timer
         sta     ent_anim_frame,x
         lda     ent_parent_slot,x
-        bne     met_reset_state
+        bne     shrink_reset_state
 
 ; =============================================================================
-; met_init_shoot -- Enemy AI: Met (Hard Hat) — hide/shoot pattern ($949A)
+; shrink_lunge_start -- Enemy AI: Met (Hard Hat) — hide/shoot pattern ($949A)
 ; =============================================================================
-met_init_shoot:
+shrink_lunge_start:
         lda     #$01
         sta     ent_parent_slot,x
         lda     #$14
@@ -2697,16 +2724,16 @@ met_init_shoot:
         sta     ent_anim_id,x
         lda     rng_seed
         and     #$03
-        beq     met_calc_aim
+        beq     shrink_calc_aim
         lda     #$02
         sta     jump_ptr_hi
         lda     #$0C
         sta     jump_ptr
         jsr     calc_entity_velocity
         ldx     current_entity_slot
-        jmp     met_update_timer
+        jmp     shrink_update_timer
 
-met_calc_aim:  jsr     entity_face_player
+shrink_calc_aim:  jsr     entity_face_player
         lda     $DA01
         sta     ent_x_vel,x
         lda     $DA02
@@ -2715,15 +2742,15 @@ met_calc_aim:  jsr     entity_face_player
         sta     ent_y_vel,x
         lda     $DA22
         sta     ent_y_vel_sub,x
-        bne     met_update_timer
-met_reset_state:
+        bne     shrink_update_timer
+shrink_reset_state:
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_parent_slot,x
         lda     rng_seed
         and     #$01
         tay
-        lda     met_delay_table,y
+        lda     shrink_delay_table,y
         sta     ent_state,x
         lda     #$00
         sta     ent_x_vel_sub,x
@@ -2732,22 +2759,22 @@ met_reset_state:
         sta     ent_y_vel_sub,x
         lda     #$FF
         sta     ent_y_vel,x
-met_update_timer:  dec     ent_state,x
+shrink_update_timer:  dec     ent_state,x
         lda     ent_anim_id,x
         cmp     #$04
-        bcc     met_apply_physics
-        bne     met_check_state_4
+        bcc     shrink_apply_physics
+        bne     shrink_check_anim_7
         lda     #$00
         sta     ent_anim_id,x
-        beq     met_apply_physics
-met_check_state_4:  cmp     #$07
-        bne     met_apply_physics
+        beq     shrink_apply_physics
+shrink_check_anim_7:  cmp     #$07
+        bne     shrink_apply_physics
         lda     #$00
         sta     ent_anim_frame,x
-met_apply_physics:  jsr     apply_entity_physics
+shrink_apply_physics:  jsr     apply_entity_physics
         rts
 
-met_delay_table:  .byte   $19,$4A                         ; Met hide/shoot delay timings
+shrink_delay_table:  .byte   $19,$4A                         ; Met hide/shoot delay timings
 ; --- anko_spawner_ai_entry -- Anko spawner (type $02) — state check, spawns shrimp children ---
 anko_spawner_ai_entry:
         lda     ent_state,x
@@ -3386,18 +3413,19 @@ boss_debris_y_table:                     ; Y pixel position per debris piece (30
         .byte   $B8,$B8,$A8,$B8,$98,$B8,$A8,$98
         .byte   $B8,$98,$B8,$A8,$B8,$88,$98,$88
         .byte   $B8,$B8,$88,$A8,$A8,$98
-        lda     ent_state,x
-        bne     atomic_fire_check_state
+; ─── Anko sub-part AI (type $10) — timed animation, simple physics ───
+anko_10_ai:  lda     ent_state,x
+        bne     anko_10_check_anim
         lda     #$01
         sta     ent_anim_id,x
         lda     #$70
         sta     ent_state,x
-atomic_fire_check_state:  lda     ent_anim_id,x
+anko_10_check_anim:  lda     ent_anim_id,x
         cmp     #$04
-        bcc     atomic_fire_update
+        bcc     anko_10_update
         lda     #$00
         sta     ent_anim_frame,x
-atomic_fire_update:  dec     ent_state,x
+anko_10_update:  dec     ent_state,x
         jsr     apply_simple_physics
         rts
 
@@ -3542,35 +3570,35 @@ rail_platform_wily_path_entry:
         .byte   $00,$38,$03,$80,$00,$38,$01,$60
         .byte   $02,$48,$03,$A0,$00,$88,$03,$C0
         .byte   $00,$D8,$03,$50,$02,$58,$01
-        lda     #$18
+; ─── Crumble Block AI (type $13) — rideable platform that falls when stepped on ───
+crumble_block_ai:  lda     #$18
         sta     ent_plat_height,x
         lda     ent_flags,x
         and     #$04
-        bne     metalman_set_throw_flag
+        bne     crumble_block_falling
         lda     ent_state,x
         cmp     #$06
-        bcs     metalman_set_throw_flag
+        bcs     crumble_block_falling
         jsr     apply_entity_physics_alt
-        jmp     metalman_physics
+        jmp     crumble_block_physics
 
 ; =============================================================================
-; metalman_set_throw_flag -- Boss AI: Metal Man — blade throw with pattern tables ($9C74)
-; Spawns entity $15 (Metal Blade projectile).
+; crumble_block_falling -- Crumble Block — platform drops after being stood on ($9C74)
 ; =============================================================================
-metalman_set_throw_flag:  lda     ent_flags,x
+crumble_block_falling:  lda     ent_flags,x
         ora     #$04
         sta     ent_flags,x
         jsr     apply_entity_physics
-metalman_physics:  bcc     metalman_hitbox_rts
+crumble_block_physics:  bcc     crumble_block_hitbox
         lda     #$00
         sta     ent_plat_height,x
-metalman_hitbox_rts:  sec
+crumble_block_hitbox:  sec
         lda     ent_y_px,x
         sbc     #$08
         sta     ent_plat_y,x
         rts
 
-; ─── Metal Man AI: spawn blades from pattern table ───
+; ─── Laser spawner AI (type $14) — spawns beam segments ($15) from per-screen tables ───
 laser_beam_ai:
         sec
         lda     ent_x_screen,x
@@ -3580,7 +3608,7 @@ laser_beam_ai:
         sta     temp_02
         lda     laser_beam_blade_src_table,y
         sta     temp_01
-laser_beam_spawn_blade:  lda     #ENTITY_METAL_BLADE
+laser_beam_spawn_blade:  lda     #ENTITY_LASER_SEG
         jsr     spawn_entity_from_parent
         ldx     temp_01
         lda     laser_beam_blade_flags,x
@@ -3643,44 +3671,45 @@ laser_beam_blade_timer_table:              ; frame timing per throw pattern (52 
         .byte   $01,$1F,$1F,$3E,$01,$1F,$3E,$5D
         .byte   $7C,$01,$1F,$01,$1F,$3E,$5D,$7C
         .byte   $01,$1F,$3E,$5D
-; --- woodman_ai_timer_check -- Wood Man boss AI (bank0E) — timer countdown, Leaf Shield trigger (ptr table: type $15) ---
-woodman_ai_timer_check:
+; --- laser_seg_ai -- Laser beam segment (type $15) — Quick Man stage force beam.
+; Extends toward target X drawing BG tiles ($74/$76); instant-kills on contact. ---
+laser_seg_ai:
         lda     ent_state,x
-        beq     woodman_timer_expired
+        beq     laser_seg_timer_expired
         dec     ent_state,x
-        beq     woodman_timer_just_zero
+        beq     laser_seg_timer_just_zero
         rts
-woodman_timer_just_zero:
+laser_seg_timer_just_zero:
         lda     ent_flags,x
         and     #$DF
         sta     ent_flags,x
         lda     #$27
         jsr     sound_queue_push
-woodman_timer_expired:
+laser_seg_timer_expired:
         lda     ent_flags,x
         and     #$20
-        bne     woodman_check_contact
+        bne     laser_seg_check_contact
         lda     ent_flags,x
         and     #$40
-        bne     woodman_check_leaf_wall
+        bne     laser_seg_check_extend
         lda     ent_x_px,x
         cmp     ent_parent_slot,x
-        bcs     woodman_walk_step
-        bcc     woodman_at_target_x
+        bcs     laser_seg_draw_step
+        bcc     laser_seg_at_target_x
 
 ; =============================================================================
-; woodman_check_leaf_wall -- Boss AI: Wood Man — walk, leaf shield, contact check ($9DFE)
+; laser_seg_check_extend -- Laser segment — extend across screen, draw BG tiles ($9DFE)
 ; =============================================================================
-woodman_check_leaf_wall:  lda     ent_x_px,x
+laser_seg_check_extend:  lda     ent_x_px,x
         cmp     ent_parent_slot,x
-        bcc     woodman_walk_step
-woodman_at_target_x:  lda     ent_parent_slot,x
+        bcc     laser_seg_draw_step
+laser_seg_at_target_x:  lda     ent_parent_slot,x
         sta     ent_x_px,x
         lda     ent_flags,x
         ora     #$20
         sta     ent_flags,x
-        bne     woodman_check_contact
-woodman_walk_step:  lda     ent_x_screen,x
+        bne     laser_seg_check_contact
+laser_seg_draw_step:  lda     ent_x_screen,x
         sta     jump_ptr_hi
         lda     ent_x_px,x
         sta     jump_ptr
@@ -3691,80 +3720,80 @@ woodman_walk_step:  lda     ent_x_screen,x
         ldy     #$74
         lda     col_update_tiles + $04,x
         and     #$01
-        beq     woodman_set_tile
+        beq     laser_seg_set_tile
         ldy     #$76
-woodman_set_tile:  tya
+laser_seg_set_tile:  tya
         sta     col_update_tiles + $0A,x
         inc     attr_update_count
         ldx     current_entity_slot
         jsr     apply_entity_physics
-        bcc     woodman_check_contact
+        bcc     laser_seg_check_contact
         lda     ent_flags,x
         asl     a
         ora     #$20
         sta     ent_flags,x
-woodman_check_contact:  lda     invincibility_timer
-        bne     woodman_rts
+laser_seg_check_contact:  lda     invincibility_timer
+        bne     laser_seg_rts
         sec
         lda     ent_y_px,x
         sbc     ent_y_px
-        bcs     woodman_check_y_range
+        bcs     laser_seg_check_y_range
         eor     #$FF
         adc     #$01
-woodman_check_y_range:  cmp     #$10
-        bcs     woodman_rts
+laser_seg_check_y_range:  cmp     #$10
+        bcs     laser_seg_rts
         lda     ent_flags,x
         and     #$40
-        bne     woodman_facing_left
+        bne     laser_seg_facing_left
         lda     ent_x_px,x
         cmp     ent_x_px
-        bcs     woodman_rts
-        bcc     woodman_trigger_shield
-woodman_facing_left:  lda     ent_x_px,x
+        bcs     laser_seg_rts
+        bcc     laser_seg_kill_player
+laser_seg_facing_left:  lda     ent_x_px,x
         cmp     ent_x_px
-        bcc     woodman_rts
-woodman_trigger_shield:  lda     #$00
+        bcc     laser_seg_rts
+laser_seg_kill_player:  lda     #$00
         sta     game_substate
         jmp     player_death_sequence
 
-woodman_rts:  rts
+laser_seg_rts:  rts
 
-; --- bubbleman_ai_init -- Bubble Man boss AI (bank0E) — state init, jump/shoot pattern (ptr table: type $16) ---
-bubbleman_ai_init:
+; --- batton_ai -- Batton bat (type $16) — hang on timer, then swoop at player ---
+batton_ai:
         lda     ent_state,x
-        bne     bubbleman_check_state
+        bne     batton_check_state
         lda     rng_seed
         eor     #$01
         sta     rng_seed
         and     #$01
         tay
-        lda     bubbleman_timer_table,y
+        lda     batton_timer_table,y
         sta     ent_state,x
         lda     #$8B
         sta     ent_flags,x
-        bne     bubbleman_apply_physics
-bubbleman_check_state:
+        bne     batton_apply_physics
+batton_check_state:
         cmp     #$01
-        beq     bubbleman_state_swim
+        beq     batton_swoop
         cmp     #$FF
-        beq     bubbleman_state_fall
+        beq     batton_land
         dec     ent_state,x
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
-bubbleman_apply_physics:
+batton_apply_physics:
         jsr     apply_entity_physics_alt
         rts
 
 ; =============================================================================
-; bubbleman_state_swim -- Boss AI: Bubble Man — swim/fall physics, bubble shot ($9EB3)
+; batton_swoop -- Batton — unfold and swoop toward the player ($9EB3)
 ; =============================================================================
-bubbleman_state_swim:  lda     ent_flags,x
+batton_swoop:  lda     ent_flags,x
         and     #$F7
         sta     ent_flags,x
         lda     ent_anim_id,x
         cmp     #$08
-        bne     bubbleman_swim_physics
+        bne     batton_swoop_physics
         lda     #$05
         sta     ent_anim_id,x
         lda     #$00
@@ -3772,9 +3801,9 @@ bubbleman_state_swim:  lda     ent_flags,x
         lda     #$83
         sta     jump_ptr
         jsr     calc_entity_velocity
-bubbleman_swim_physics:  jsr     apply_entity_physics
+batton_swoop_physics:  jsr     apply_entity_physics
         lda     temp_01
-        beq     bubbleman_swim_rts
+        beq     batton_swoop_rts
         lda     #$00
         sta     ent_x_vel,x
         sta     ent_x_vel_sub,x
@@ -3783,20 +3812,20 @@ bubbleman_swim_physics:  jsr     apply_entity_physics
         sta     ent_y_vel,x
         lda     #$FF
         sta     ent_state,x
-bubbleman_swim_rts:  rts
+batton_swoop_rts:  rts
 
-bubbleman_state_fall:  lda     ent_anim_id,x
+batton_land:  lda     ent_anim_id,x
         cmp     #$08
-        bne     bubbleman_fall_setup
+        bne     batton_land_setup
         lda     #$05
         sta     ent_anim_id,x
-bubbleman_fall_setup:  lda     #$04
+batton_land_setup:  lda     #$04
         sta     temp_01
         lda     #$08
         sta     temp_02
         jsr     check_vert_tile_collision
         lda     temp_00
-        beq     bubbleman_fall_physics
+        beq     batton_land_physics
         lda     #$00
         sta     ent_y_vel,x
         sta     ent_y_vel_sub,x
@@ -3804,12 +3833,12 @@ bubbleman_fall_setup:  lda     #$04
         sta     ent_flags,x
         lda     #$3E
         sta     ent_state,x
-bubbleman_fall_physics:  jsr     apply_entity_physics
+batton_land_physics:  jsr     apply_entity_physics
         rts
 
-bubbleman_timer_table:  .byte   $3E,$9C         ; Bubble Man AI timer values (62/156 frames)
-; --- quickman_ai_init -- Quick Man boss AI (bank0E) — tile collision, dash/jump pattern (ptr table: type $17) ---
-quickman_ai_init:
+batton_timer_table:  .byte   $3E,$9C         ; Bubble Man AI timer values (62/156 frames)
+; --- robbit_ai -- Robbit (type $17) — hopping rabbit, fires aimed shots ---
+robbit_ai:
         lda     ent_y_vel,x
         sta     temp_04
         lda     #$0C
@@ -3818,9 +3847,9 @@ quickman_ai_init:
         sta     temp_02
         jsr     check_horiz_tile_collision
         lda     ent_parent_slot,x
-        bne     quickman_check_pattern
+        bne     robbit_check_pattern
         lda     ent_state,x
-        bne     quickman_dec_timer
+        bne     robbit_dec_timer
         lda     #$C0
         sta     ent_x_vel_sub,x
         sta     ent_y_vel_sub,x
@@ -3831,14 +3860,14 @@ quickman_ai_init:
         inc     ent_parent_slot,x
         lda     #$01
         sta     ent_anim_id,x
-quickman_check_pattern:
+robbit_check_pattern:
         lda     ent_parent_slot,x
         cmp     #$01
-        bne     quickman_check_timer
+        bne     robbit_check_timer
         lda     temp_04
-        bpl     quickman_dec_timer
+        bpl     robbit_dec_timer
         lda     temp_00
-        beq     quickman_dec_timer
+        beq     robbit_dec_timer
         lda     #$00
         sta     ent_x_vel_sub,x
         inc     ent_parent_slot,x
@@ -3846,18 +3875,17 @@ quickman_check_pattern:
         sta     ent_state,x
         lda     #$03
         sta     ent_anim_id,x
-        bne     quickman_dec_timer
+        bne     robbit_dec_timer
 
 ; =============================================================================
-; quickman_check_timer -- Boss AI: Quick Man — timer-based movement, boomerang throw ($9F79)
-; Spawns entity $18 (Quick Boomerang projectile).
+; robbit_check_timer -- Robbit — fire aimed carrot shot (type $18) on timer ($9F79)
 ; =============================================================================
-quickman_check_timer:  lda     ent_state,x
-        bne     quickman_dec_timer
+robbit_check_timer:  lda     ent_state,x
+        bne     robbit_dec_timer
         jsr     entity_face_player
-        lda     #ENTITY_QUICK_BOOM      ; spawn Quick Boomerang projectile
+        lda     #ENTITY_ROBBIT_SHOT      ; spawn aimed carrot shot
         jsr     spawn_entity_from_parent
-        bcs     quickman_set_timer
+        bcs     robbit_set_timer
         lda     current_entity_slot
         pha
         tya
@@ -3873,108 +3901,108 @@ quickman_check_timer:  lda     ent_state,x
         pla
         sta     current_entity_slot
         tax
-quickman_set_timer:  lda     #$3E
+robbit_set_timer:  lda     #$3E
         sta     ent_state,x
         inc     ent_parent_slot,x
         lda     ent_parent_slot,x
         cmp     #$05
-        bne     quickman_dec_timer
+        bne     robbit_dec_timer
         lda     #$00
         sta     ent_parent_slot,x
-quickman_dec_timer:  dec     ent_state,x
+robbit_dec_timer:  dec     ent_state,x
         ldy     ent_parent_slot,x
         lda     ent_anim_id,x
-        cmp     quickman_anim_threshold,y
-        bne     quickman_state_table
+        cmp     robbit_anim_threshold,y
+        bne     robbit_physics
         lda     #$00
         sta     ent_anim_frame,x
-quickman_state_table:  jsr     apply_entity_physics
+robbit_physics:  jsr     apply_entity_physics
         rts
 
-quickman_anim_threshold:  .byte   $00,$02,$00,$00,$00             ; Quick Man animation speed thresholds
-; ─── Heat Man boss AI: palette, fire pattern, charge ───
-air_tornado_proj_ai:
+robbit_anim_threshold:  .byte   $00,$02,$00,$00,$00             ; Quick Man animation speed thresholds
+; ─── Friender flame AI (types $19/$1A) — flame wall + fire bursts ───
+friender_flame_ai:
         ldy     #$02
         lda     ent_hp,x
-        bne     heatman_palette_check
-        jmp     heatman_check_state_entry
-heatman_palette_check:
+        bne     friender_flame_palette_check
+        jmp     friender_flame_burst_entry
+friender_flame_palette_check:
         cmp     ent_y_vel_sub,x
-        beq     heatman_palette_set
+        beq     friender_flame_palette_set
         ldy     #$05
-heatman_palette_set:  sta     ent_y_vel_sub,x
+friender_flame_palette_set:  sta     ent_y_vel_sub,x
         ldx     #$0F
-heatman_palette_loop:  lda     heatman_palette_data,y
+friender_flame_palette_loop:  lda     friender_flame_palette_data,y
         sta     palette_ram,x
         dey
         dex
         cpx     #$0C
-        bne     heatman_palette_loop
+        bne     friender_flame_palette_loop
         ldx     current_entity_slot
         lda     ent_x_vel_sub,x
-        bne     heatman_check_state
+        bne     friender_flame_check_state
         lda     #$01
         sta     ent_anim_id,x
         lda     #$00
         sta     ent_anim_frame,x
         lda     ent_state,x
-        bne     heatman_dec_timer
-        lda     #ENTITY_ATOMIC_FIRE     ; spawn Atomic Fire projectile
+        bne     friender_flame_dec_timer
+        lda     #ENTITY_FIREBALL     ; spawn arcing fireball
         jsr     spawn_entity_from_parent
-        bcs     heatman_spawn_fire
+        bcs     friender_flame_spawned
         clc
         lda     ent_y_spawn_px,y
         adc     #$0C
         sta     ent_y_spawn_px,y
 
 ; =============================================================================
-; heatman_spawn_fire -- Boss AI: Heat Man — flame pattern, charge attack ($A019)
-; Spawns entity $1B (Atomic Fire projectile).
+; friender_flame_spawned -- Friender flame — burst pattern, fireball spawning ($A019)
+; Spawns entity $1B (arcing fireball).
 ; =============================================================================
-heatman_spawn_fire:  lda     #$02
+friender_flame_spawned:  lda     #$02
         sta     ent_state,x
         dec     ent_x_vel,x
-        bne     heatman_apply_physics
+        bne     friender_flame_physics
         inc     ent_x_vel_sub,x
-        bne     heatman_apply_physics
-heatman_dec_timer:  dec     ent_state,x
-heatman_check_state:  lda     ent_anim_id,x
-        bne     heatman_apply_physics
+        bne     friender_flame_physics
+friender_flame_dec_timer:  dec     ent_state,x
+friender_flame_check_state:  lda     ent_anim_id,x
+        bne     friender_flame_physics
         lda     #$00
         sta     ent_x_vel_sub,x
         lda     #$03
         sta     ent_x_vel,x
         lda     rng_seed
         and     #$03
-        beq     heatman_apply_physics
+        beq     friender_flame_physics
         asl     ent_x_vel,x
         and     #$01
-        bne     heatman_apply_physics
+        bne     friender_flame_physics
         clc
         lda     ent_x_vel,x
         adc     #$03
         sta     ent_x_vel,x
-heatman_apply_physics:  jsr     apply_entity_physics_alt
-        bcc     heatman_rts
+friender_flame_physics:  jsr     apply_entity_physics_alt
+        bcc     friender_flame_rts
         lda     #$80
         sta     ent_flags,x
-        lda     #ENTITY_AIR_TORNADO1    ; convert self to fire/tornado projectile
+        lda     #ENTITY_FIRE_PROJ_A    ; convert self to secondary flame
         sta     ent_type,x
         lda     #$00
         sta     ent_state,x
         sta     ent_x_vel_sub,x
         sta     ent_hit_count,x
-heatman_rts:  rts
+friender_flame_rts:  rts
 
-heatman_check_state_entry:
+friender_flame_burst_entry:
         lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
         lda     ent_x_vel_sub,x
-        beq     heatman_flame_pattern
-        jmp     heatman_dec_cooldown
+        beq     friender_flame_pattern
+        jmp     friender_flame_dec_cooldown
 
-heatman_flame_pattern:  lda     ent_state,x
+friender_flame_pattern:  lda     ent_state,x
         and     #$03
         sta     temp_00
         asl     a
@@ -3985,41 +4013,41 @@ heatman_flame_pattern:  lda     ent_state,x
         jsr     sound_queue_push
         lda     #$05
         sta     temp_02
-heatman_flame_loop:  lda     #ENTITY_DEATH_EXPLODE
+friender_flame_loop:  lda     #ENTITY_DEATH_EXPLODE
         jsr     spawn_entity_from_parent
-        bcs     heatman_flame_done
+        bcs     friender_flame_done
         ldx     temp_01
         clc
         lda     ent_x_spawn_px,y
-        adc     heatman_flame_x_offset,y
+        adc     friender_flame_x_offset,y
         sta     ent_x_spawn_px,y
         clc
         lda     ent_y_spawn_px,y
-        adc     heatman_flame_y_offset,y
+        adc     friender_flame_y_offset,y
         sta     ent_y_spawn_px,y
         .byte   $E6                      ; code: INC $01 (advance flame slot)
-heatman_flame_inc:  .byte   $01,$C6,$02  ; dual-use: data table AND code (DEC $02)
-        bne     heatman_flame_loop
-heatman_flame_done:  ldx     current_entity_slot
+friender_flame_inc:  .byte   $01,$C6,$02  ; dual-use: data table AND code (DEC $02)
+        bne     friender_flame_loop
+friender_flame_done:  ldx     current_entity_slot
         inc     ent_state,x
         lda     ent_state,x
         cmp     #$08
-        bne     heatman_set_cooldown
+        bne     friender_flame_set_cooldown
         lda     #$1A
         jsr     find_entity_by_type
-        bcs     heatman_deactivate_parts
+        bcs     friender_flame_kill_parent
         lda     #$00
         sta     ent_spawn_flags,y
         lda     #$FF
         sta     ent_hit_count,y
-heatman_deactivate_parts:  lda     #$1C
+friender_flame_kill_parent:  lda     #$1C
         jsr     find_entity_by_type
-        bcs     heatman_deactivate_more
+        bcs     friender_flame_kill_fire
         lda     #$FF
         sta     ent_drop_flag,y
-heatman_deactivate_more:  lda     #$2E
+friender_flame_kill_fire:  lda     #$2E
         jsr     find_entity_by_type
-        bcs     heatman_deactivate_final
+        bcs     friender_flame_kill_done
         lda     #$00
         sta     ent_spawn_flags,y
         lda     #$FF
@@ -4028,47 +4056,47 @@ heatman_deactivate_more:  lda     #$2E
         tay
         lda     #$00
         sta     ent_child_hp,y
-        beq     heatman_deactivate_more
-heatman_deactivate_final:  sta     a:$F0,x
+        beq     friender_flame_kill_fire
+friender_flame_kill_done:  sta     a:$F0,x
         asl     ent_flags,x
-heatman_set_cooldown:  lda     #$08
+friender_flame_set_cooldown:  lda     #$08
         sta     ent_x_vel_sub,x
-heatman_dec_cooldown:  dec     ent_x_vel_sub,x
+friender_flame_dec_cooldown:  dec     ent_x_vel_sub,x
         rts
 
-heatman_palette_data:                    ; Heat Man intro palette (6 bytes)
+friender_flame_palette_data:                    ; Heat Man intro palette (6 bytes)
         .byte   $08,$2C,$12,$08,$20,$20
-heatman_flame_x_offset:  .byte   $FC    ; Heat Man flame X offset per slot
+friender_flame_x_offset:  .byte   $FC    ; Heat Man flame X offset per slot
         .byte   $FC,$14,$1C,$2C,$F4,$04,$0C,$14
         .byte   $24,$F4,$04,$14,$2C,$2C,$04,$0C
-heatman_flame_data_end:  .byte   $14,$24,$24
-heatman_flame_y_offset:                  ; Heat Man flame Y pixel offsets (11 entries)
+friender_flame_x_off_end:  .byte   $14,$24,$24
+friender_flame_y_offset:                  ; Heat Man flame Y pixel offsets (11 entries)
         .byte   $F8,$10,$08,$F0,$F8,$00,$E8,$10
         .byte   $F8,$08,$08
-heatman_flame_y_data_2:                  ; Heat Man flame Y offsets continued (9 entries)
+friender_flame_y_off_2:                  ; Heat Man flame Y offsets continued (9 entries)
         .byte   $F8,$00,$E8,$08,$00,$E8,$F8,$F0
         .byte   $08
-        ; code: Friender fire init (check timer, set animation state)
+        ; Friender flame #2 (type $1A): timed fade, simple physics
         lda     ent_state,x
-        bne     air_tornado2_check_state
+        bne     friender_flame2_check_state
         lda     #$6E
         sta     ent_state,x
         lda     #$01
         sta     ent_anim_id,x
-air_tornado2_check_state:
+friender_flame2_check_state:
         lda     ent_anim_id,x
-        bne     air_tornado2_dec_timer
+        bne     friender_flame2_dec_timer
         sta     ent_anim_frame,x
 
 ; =============================================================================
-; air_tornado2_dec_timer -- Air Tornado2 AI (entity $1A) — timer decrement ($A14D)
+; friender_flame2_dec_timer -- Friender flame #2 (type $1A) — timer decrement ($A14D)
 ; =============================================================================
-air_tornado2_dec_timer:  dec     ent_state,x
+friender_flame2_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics_alt
         rts
 
-; ─── Atomic Fire projectile: gravity acceleration ───
-atomic_fire_ai:
+; ─── Fireball AI (type $1B) — arcing flame with gravity ───
+fireball_ai:
         clc
         lda     ent_y_vel_sub,x
         adc     #$40
@@ -4164,7 +4192,7 @@ friender_copy_tiles:  lda     friender_tile_data,x
         bne     friender_rts
         lda     ent_state,x
         bne     friender_rts
-        lda     #ENTITY_AIR_TORNADO1    ; spawn Air Shooter tornado (primary)
+        lda     #ENTITY_FIRE_PROJ_A    ; spawn Air Shooter tornado (primary)
         jsr     spawn_entity_from_parent
         lda     #$08
         sta     ent_drop_flag,y
@@ -4186,7 +4214,7 @@ friender_copy_tiles:  lda     friender_tile_data,x
         lda     ent_hitbox_w_lo,y
         adc     #$03
         sta     ent_hitbox_w_lo,y
-friender_spawn_fire:  lda     #ENTITY_AIR_TORNADO2    ; spawn Air Shooter tornado (secondary)
+friender_spawn_fire:  lda     #ENTITY_FIRE_PROJ_B    ; spawn Air Shooter tornado (secondary)
         jsr     spawn_entity_from_parent
         clc
         lda     ent_x_spawn_px,y
@@ -4224,20 +4252,21 @@ friender_tile_data:                         ; 128 bytes — CHR tile indices for
         .byte   $84,$86,$84,$86,$85,$87,$85,$87
         .byte   $84,$86,$84,$86,$85,$87,$85,$87
         .byte   $84,$86,$84,$86,$85,$87,$85,$87
-        jsr     entity_face_player
+; ─── Monking AI (type $1D) — ceiling monkey: drop, hop, pounce at player ───
+monking_ai:  jsr     entity_face_player
         lda     ent_flags,x
         and     #$20
-        beq     flashman_state_walk
+        beq     monking_check_anim
         lda     temp_00
         cmp     #$50
-        bcc     flashman_stop_freeze
+        bcc     monking_drop_start
         jsr     apply_entity_physics_alt
         rts
 
 ; =============================================================================
-; flashman_stop_freeze -- Boss AI: Flash Man — time stopper, walk/jump/shoot ($A308)
+; monking_drop_start -- Monking — drop from ceiling, pounce pattern ($A308)
 ; =============================================================================
-flashman_stop_freeze:  lda     #$00
+monking_drop_start:  lda     #$00
         sta     ent_anim_id,x
         sta     ent_anim_frame,x
         lda     ent_flags,x
@@ -4245,8 +4274,8 @@ flashman_stop_freeze:  lda     #$00
         sta     ent_flags,x
         lda     #$04
         sta     ent_y_vel,x
-flashman_state_walk:  lda     ent_anim_id,x
-        bne     flashman_check_shoot
+monking_check_anim:  lda     ent_anim_id,x
+        bne     monking_check_pounce
         lda     #$00
         sta     ent_anim_frame,x
         lda     #$07
@@ -4255,39 +4284,39 @@ flashman_state_walk:  lda     ent_anim_id,x
         sta     temp_02
         jsr     check_vert_tile_collision
         lda     temp_00
-        bne     flashman_wall_stop
-        jmp     flashman_physics
+        bne     monking_land_stop
+        jmp     monking_physics
 
-flashman_wall_stop:  lda     #$00
+monking_land_stop:  lda     #$00
         sta     ent_y_vel,x
         inc     ent_anim_id,x
-        jmp     flashman_physics
+        jmp     monking_physics
 
-flashman_check_shoot:  lda     ent_anim_id,x
+monking_check_pounce:  lda     ent_anim_id,x
         cmp     #$02
-        bne     flashman_check_height
+        bne     monking_check_height
         clc
         lda     ent_y_px,x
         adc     #$05
         sta     ent_y_px,x
         inc     ent_anim_id,x
-flashman_check_height:  lda     ent_anim_id,x
+monking_check_height:  lda     ent_anim_id,x
         cmp     #$08
-        bcs     flashman_state_air
+        bcs     monking_state_air
         lda     temp_00
         cmp     #$20
-        bcc     flashman_jump
+        bcc     monking_jump
         inc     ent_state,x
         lda     ent_state,x
         cmp     #$7D
-        beq     flashman_jump
+        beq     monking_jump
         lda     ent_anim_id,x
         cmp     #$07
-        bne     flashman_physics
+        bne     monking_physics
         lda     #$03
         sta     ent_anim_id,x
-        bne     flashman_physics
-flashman_jump:  sec
+        bne     monking_physics
+monking_jump:  sec
         lda     ent_y_px,x
         sbc     #$20
         sta     ent_y_px,x
@@ -4300,8 +4329,8 @@ flashman_jump:  sec
         sta     ent_anim_id,x
         lda     #$00
         sta     ent_anim_frame,x
-        bne     flashman_physics
-flashman_state_air:  lda     #$08
+        bne     monking_physics
+monking_state_air:  lda     #$08
         sta     temp_01
         lda     #$10
         sta     temp_02
@@ -4310,9 +4339,9 @@ flashman_state_air:  lda     #$08
         sta     ent_anim_frame,x
         lda     ent_anim_id,x
         cmp     #$09
-        beq     flashman_state_land
+        beq     monking_state_land
         dec     ent_state,x
-        bne     flashman_physics
+        bne     monking_physics
         lda     #$03
         sta     ent_y_vel,x
         lda     #$76
@@ -4322,9 +4351,9 @@ flashman_state_air:  lda     #$08
         lda     #$7B
         sta     ent_x_vel_sub,x
         inc     ent_anim_id,x
-        bne     flashman_physics
-flashman_state_land:  lda     temp_00
-        beq     flashman_physics
+        bne     monking_physics
+monking_state_land:  lda     temp_00
+        beq     monking_physics
         lda     #$08
         sta     ent_anim_id,x
         lda     #$32
@@ -4332,7 +4361,7 @@ flashman_state_land:  lda     temp_00
         lda     #$00
         sta     ent_x_vel_sub,x
         sta     ent_x_vel,x
-flashman_physics:  jsr     apply_entity_physics
+monking_physics:  jsr     apply_entity_physics
         rts
 
 ; --- kukku_spawner_ai -- Kukku spawner (type $1E) — tracks player X, spawns Kukku bodies ---
@@ -4418,18 +4447,18 @@ kukku_despawn_ai:
 ; --- telly_spawn_ai -- Telly spawner (type $21) — timer-based, spawns up to 3 Telly bodies ---
 telly_spawn_ai:
         lda     ent_state,x
-        bne     boss_telly_dec_timer
+        bne     telly_spawn_dec_timer
         lda     #$03
         sta     temp_01
         lda     #ENTITY_TELLY
         jsr     find_entity_count_check
-        bcs     boss_telly_store_timer
+        bcs     telly_spawn_store_timer
         lda     #ENTITY_TELLY
         jsr     spawn_entity_from_parent
-boss_telly_store_timer:
+telly_spawn_store_timer:
         lda     #$DA
         sta     ent_state,x
-boss_telly_dec_timer:
+telly_spawn_dec_timer:
         dec     ent_state,x
         jsr     apply_entity_physics_alt
         rts
@@ -4437,7 +4466,7 @@ boss_telly_dec_timer:
 ; ─── Telly AI: home toward player position ───
 telly_ai:
         lda     ent_state,x
-        bne     boss_spawn_dec_timer
+        bne     telly_dec_timer
         lda     #$00
         sta     jump_ptr_hi
         lda     #$42
@@ -4445,14 +4474,14 @@ telly_ai:
         jsr     calc_entity_velocity
         lda     #$10
         sta     ent_state,x
-boss_spawn_dec_timer:  dec     ent_state,x
+telly_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics
         rts
 
 ; --- changkey_ai -- Changkey flame enemy (type $23) — movement pattern, spawns projectile children ---
 changkey_ai:
         lda     ent_x_vel_sub,x
-        bne     boss_shot_check_timer
+        bne     changkey_check_timer
         lda     #$6E
         sta     ent_state,x
         inc     ent_x_vel_sub,x
@@ -4464,28 +4493,28 @@ changkey_ai:
         jsr     find_entity_count_check
         lda     #$83
         sta     ent_flags,x
-        bcs     boss_dec_timer
+        bcs     changkey_dec_timer
         lda     #ENTITY_LIGHT_RESTORE
         jsr     spawn_entity_from_parent
-        jmp     boss_dec_timer
-boss_shot_check_timer:
+        jmp     changkey_dec_timer
+changkey_check_timer:
         lda     ent_state,x
-        beq     boss_check_anim_state
+        beq     changkey_check_anim
         lda     ent_anim_id,x
         cmp     #$02
-        bne     boss_dec_timer
+        bne     changkey_dec_timer
         lda     #$00
         sta     ent_anim_id,x
-        beq     boss_dec_timer
-boss_check_anim_state:  lda     ent_anim_id,x
+        beq     changkey_dec_timer
+changkey_check_anim:  lda     ent_anim_id,x
         cmp     #$04
-        bne     boss_check_physics
+        bne     changkey_physics
         lda     ent_anim_frame,x
-        bne     boss_check_physics
+        bne     changkey_physics
         jsr     entity_face_player
         lda     #ENTITY_CHANGKEY_PROJ
         jsr     spawn_entity_from_parent
-        bcs     boss_random_timer
+        bcs     changkey_random_timer
         sec
         lda     rng_seed
         and     #$1F
@@ -4504,22 +4533,22 @@ boss_check_anim_state:  lda     ent_anim_id,x
         sta     ent_hitbox_w_lo,y
         lda     temp_00
         sta     ent_hitbox_w_hi,y
-boss_random_timer:  lda     rng_seed
+changkey_random_timer:  lda     rng_seed
         and     #$03
         tay
-        lda     boss_random_timer_table,y
+        lda     changkey_timer_table,y
         sta     ent_state,x
-boss_dec_timer:  dec     ent_state,x
-boss_check_physics:  jsr     apply_entity_physics_alt
-        bcc     boss_misc_rts
+changkey_dec_timer:  dec     ent_state,x
+changkey_physics:  jsr     apply_entity_physics_alt
+        bcc     changkey_rts
         lda     #ENTITY_CHANGKEY
         jsr     find_entity_by_type
-        bcc     boss_misc_rts
+        bcc     changkey_rts
         lda     #ENTITY_BLACKOUT_RE
         jsr     spawn_entity_from_parent
-boss_misc_rts:  rts
+changkey_rts:  rts
 
-boss_random_timer_table:  .byte   $12,$1F,$1F,$3D             ; random timer values for boss AI
+changkey_timer_table:  .byte   $12,$1F,$1F,$3D             ; random timer values for boss AI
 ; ─── Blackout trigger AI: darken palette, spawn Changkey ───
 blackout_trigger_ai:
         lda     palette_ram + $01
@@ -4532,13 +4561,13 @@ blackout_trigger_ai:
         jsr     find_entity_by_type
         bcc     blackout_trigger_ai_done
         lda     ent_state,x
-        bne     boss_palette_flash_dec
+        bne     blackout_dec_timer
         lda     ent_x_vel_sub,x
 
 ; =============================================================================
-; boss_palette_flash -- Boss Palette Flash — cycle palette during death/hit animation ($A577)
+; blackout_palette_set -- Boss Palette Flash — cycle palette during death/hit animation ($A577)
 ; =============================================================================
-boss_palette_flash:  asl     a
+blackout_palette_set:  asl     a
         asl     a
         sta     temp_00
         asl     a
@@ -4546,49 +4575,52 @@ boss_palette_flash:  asl     a
         adc     temp_00
         tax
         ldy     #$00
-boss_palette_flash_loop:  lda     boss_palette_flash_data,x
+blackout_palette_loop:  lda     blackout_palette_data,x
         sta     palette_ram,y
         inx
         iny
         cpy     #$0C
-        bne     boss_palette_flash_loop
+        bne     blackout_palette_loop
         ldx     current_entity_slot
         inc     ent_x_vel_sub,x
         lda     ent_x_vel_sub,x
         cmp     #$04
 blackout_trigger_ai_done:
-        bne     boss_palette_flash_timer
+        bne     blackout_set_timer
         lsr     ent_flags,x
         lda     #$FF
         sta     a:$F0,x
-boss_palette_flash_timer:  lda     #$08
+blackout_set_timer:  lda     #$08
         sta     ent_state,x
-boss_palette_flash_dec:  dec     ent_state,x
+blackout_dec_timer:  dec     ent_state,x
         rts
 
-        lda     ent_state,x
-        bne     boss_palette_flash_dec
+; ─── Light restore AI (type $26) — step palette back toward lit ───
+light_restore_ai:  lda     ent_state,x
+        bne     blackout_dec_timer
         clc
         lda     ent_x_vel_sub,x
         adc     #$03
-        bne     boss_palette_flash
-        lda     ent_state,x
-        bne     boss_palette_flash_dec
+        bne     blackout_palette_set
+
+; ─── Blackout zone end AI (type $27) — reverse palette step ───
+blackout_end_ai:  lda     ent_state,x
+        bne     blackout_dec_timer
         lda     ent_x_vel_sub,x
         eor     #$03
-        jmp     boss_palette_flash
+        jmp     blackout_palette_set
 
 ; ─── Blackout restore AI: fade palette back to normal ───
 blackout_restore_ai:
         lda     ent_state,x
-        bne     boss_palette_flash_dec
+        bne     blackout_dec_timer
         sec
         lda     ent_x_vel_sub,x
         eor     #$03
         clc
         adc     #$03
-        jmp     boss_palette_flash
-boss_palette_flash_data:  .byte   $0F,$2C,$10,$1C,$0F,$37,$27,$07 ; palette flash color cycle data
+        jmp     blackout_palette_set
+blackout_palette_data:  .byte   $0F,$2C,$10,$1C,$0F,$37,$27,$07 ; palette flash color cycle data
         .byte   $0F,$28,$16,$07,$0F,$1C,$00,$0C
         .byte   $0F,$37,$27,$08,$0F,$17,$06,$08
         .byte   $0F,$0C,$0C,$0F,$0F,$37,$27,$08
@@ -5033,7 +5065,9 @@ blocky_debris_y_off:  .byte   $F0,$10,$20 ; Blocky debris Y offset
 blocky_debris_vel_hi:  .byte   $03,$02,$01 ; debris X velocity (high byte)
 blocky_debris_vel_lo:  .byte   $00,$40,$00 ; debris X velocity (low byte)
 blocky_fire_timer:  .byte   $01,$06,$0B ; fire attack cooldown timers
-        ldy     ent_state,x           ; Guts Tank AI entry
+
+; ─── Guts-Dozer child AI — track parent boss entity ───
+guts_tank_child_ai:  ldy     ent_state,x
         lda     ent_flags,y
         bpl     guts_tank_deactivate
         and     #$08
@@ -5052,7 +5086,8 @@ guts_tank_track_parent:  lda     ent_x_px,y
         jsr     apply_entity_physics_alt
         rts
 
-        ldy     ent_parent_slot,x
+; ─── Blocky phase-2 AI (type $32) — stacked-block segment ───
+blocky_phase2_ai:  ldy     ent_parent_slot,x
         bpl     blocky_phase2_check_timer
         lda     #$07
         sta     temp_01
@@ -5100,7 +5135,8 @@ blocky_phase2_check_player:  lda     ent_y_px,x
 blocky_phase2_physics:  jsr     apply_entity_physics
         rts
 
-        lda     current_stage                   ; check if Wily stage 3 (Guts-Dozer)
+; ─── Mecha fireball AI (type $33) — Blocky phase shots / Picopico in Wily 3 ───
+mecha_fire_ai:  lda     current_stage           ; Wily 3 → Picopico-kun variant
         cmp     #$0A
         bne     blocky_phase2_begin_hitbox
         jmp     picopico_wily3_entry  ; alternate AI for Wily 3
@@ -5457,10 +5493,10 @@ copipi_physics:
 kaminari_cloud_ai:
         ldy     ent_parent_slot,x
         lda     ent_flags,y
-        bpl     multi_boss_deactivate
+        bpl     kaminari_cloud_deactivate
         lda     ent_type,y
         cmp     #$3E
-        bne     multi_boss_deactivate
+        bne     kaminari_cloud_deactivate
         sec
         lda     ent_y_px,y
         sbc     #$14
@@ -5473,7 +5509,7 @@ kaminari_cloud_ai:
         inc     ent_state,x
         lda     ent_state,x
         cmp     #$9D
-        bne     multi_boss_anim_check
+        bne     kaminari_cloud_anim_check
         lda     #ENTITY_KAMINARI_BOLT
         jsr     spawn_entity_from_parent
         lda     #$03
@@ -5481,17 +5517,17 @@ kaminari_cloud_ai:
         lda     #$00
         sta     ent_anim_frame,x
         sta     ent_state,x
-multi_boss_anim_check:
+kaminari_cloud_anim_check:
         lda     ent_anim_id,x
         cmp     #$02
-        bne     multi_boss_child_physics
+        bne     kaminari_cloud_physics
         lda     #$00
         sta     ent_anim_id,x
-multi_boss_child_physics:
+kaminari_cloud_physics:
         jsr     apply_entity_physics
         rts
 
-multi_boss_deactivate:
+kaminari_cloud_deactivate:
         lsr     ent_flags,x
         rts
 
@@ -5712,7 +5748,7 @@ goblin_cleanup_ai:
 ; --- goblin_horn_ai -- Goblin horn (type $44): phase/timer check ($AFA1) ---
 goblin_horn_ai:
         lda     ent_state,x
-        bne     turret_dec_timer
+        bne     goblin_horn_dec_timer
         lda     ent_parent_slot,x
         cmp     #$01
         bcs     goblin_horn_check_deactivate
@@ -5722,9 +5758,9 @@ goblin_horn_ai:
         sta     ent_y_vel,x
         sta     ent_y_vel_sub,x
         inc     ent_parent_slot,x
-        bne     turret_dec_timer
+        bne     goblin_horn_dec_timer
 goblin_horn_check_deactivate:
-        bne     turret_deactivate
+        bne     goblin_horn_deactivate
         lda     #$C0
         sta     ent_y_vel_sub,x
         lda     #$FE
@@ -5732,11 +5768,11 @@ goblin_horn_check_deactivate:
         lda     #$0B
         sta     ent_state,x
         inc     ent_parent_slot,x
-        bne     turret_dec_timer
-turret_deactivate:  lsr     ent_flags,x
+        bne     goblin_horn_dec_timer
+goblin_horn_deactivate:  lsr     ent_flags,x
         rts
 
-turret_dec_timer:  dec     ent_state,x
+goblin_horn_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics
         rts
 
@@ -5744,13 +5780,13 @@ turret_dec_timer:  dec     ent_state,x
 petit_goblin_ai:
         lda     ent_parent_slot,x
         cmp     #$02
-        bne     drop_boss_active
+        bne     petit_goblin_active
         jmp     telly_ai
-drop_boss_active:
+petit_goblin_active:
         lda     ent_state,x
-        bne     drop_boss_dec_timer
+        bne     petit_goblin_dec_timer
         lda     ent_parent_slot,x
-        bne     drop_boss_advance
+        bne     petit_goblin_advance
         lda     #$1A
         sta     ent_state,x
         lda     #$00
@@ -5761,11 +5797,11 @@ drop_boss_active:
         lda     #$33
         sta     ent_y_vel_sub,x
         inc     ent_parent_slot,x
-        bne     drop_boss_dec_timer
-drop_boss_advance:  inc     ent_parent_slot,x
+        bne     petit_goblin_dec_timer
+petit_goblin_advance:  inc     ent_parent_slot,x
         rts
 
-drop_boss_dec_timer:  dec     ent_state,x
+petit_goblin_dec_timer:  dec     ent_state,x
         jsr     apply_entity_physics
         rts
 
@@ -5872,9 +5908,17 @@ springer_physics:  jsr     apply_entity_physics_alt
         rts
 
 springer_x_offset_table:  .byte   $08,$F8 ; Springer X check offset
-springer_x_page_table:  .byte   $00,$FF,$BD,$20,$06,$D0,$08,$A9
-        .byte   $47,$20,$B5,$95,$90,$01,$60
-        lda     ent_x_px
+springer_x_page_table:  .byte   $00,$FF
+
+; ─── Mole controller AI (type $47) — tracks player, spawns shot columns ───
+mole_ai:  lda     ent_x_vel_sub,x
+        bne     mole_track_player
+        lda     #ENTITY_MOLE            ; only one controller may be active
+        jsr     check_entity_collision_scan
+        bcc     mole_track_player
+        rts
+
+mole_track_player:  lda     ent_x_px
         sta     ent_x_px,x
         lda     ent_x_screen
         sta     ent_x_screen,x
@@ -5931,19 +5975,22 @@ mole_shot_type_table:  .byte   ENTITY_MOLE_SHOT_DN,ENTITY_MOLE_SHOT_UP,ENTITY_MO
 mole_shot_x_offset:  .byte   $18,$58,$50,$20,$28,$60 ; X offsets for Mole shot spawn
 
 mole_shot_y_table:  .byte   $10,$D0,$10,$D0,$10,$D0 ; Mole shot Y-position lookup table
-        lda     #$00
+
+; ─── Mole shot AI: upward variant (type $48) ───
+mole_shot_up_ai:  lda     #$00
         sta     temp_01
         sec
         lda     ent_y_px,x
         sbc     #$0C
         jmp     mole_shot_store_a
 
-        lda     #$04
+; ─── Mole shot AI: downward variant (type $49) ───
+mole_shot_dn_ai:  lda     #$04
         sta     temp_01
         clc
         lda     ent_y_px,x
         adc     #$0C
-mole_shot_store_a:  sta     $0A
+mole_shot_store_a:  sta     temp_0A
         lda     #$00
         sta     temp_0B
         lda     ent_x_px,x
@@ -6003,54 +6050,54 @@ crazy_cannon_ai:
         lda     #$00
         sta     ent_anim_frame,x
         lda     ent_state,x
-        bne     boss_proj_mgr_dec_timer
+        bne     cannon_dec_timer
         lda     #$00
         sta     temp_01
-        jsr     boss_proj_mgr_fire
+        jsr     cannon_fire_shot
         dec     ent_x_vel_sub,x
         beq     crazy_cannon_dec
         lda     #$1F
         sta     ent_state,x
-        bne     boss_proj_mgr_dec_timer
+        bne     cannon_dec_timer
 crazy_cannon_dec:
         dec     ent_parent_slot,x
 crazy_cannon_jmp:
-        jmp     boss_proj_mgr_physics
+        jmp     cannon_physics
 
 crazy_cannon_init:
         lda     ent_anim_id,x
-        bne     boss_proj_mgr_physics
+        bne     cannon_physics
         lda     #$00
         sta     ent_anim_frame,x
         lda     ent_state,x
-        bne     boss_proj_mgr_dec_timer
+        bne     cannon_dec_timer
         lda     #$0A
         sta     temp_01
-        jsr     boss_proj_mgr_fire
+        jsr     cannon_fire_shot
         inc     ent_x_vel_sub,x
         lda     ent_x_vel_sub,x
         cmp     #$06
-        bne     boss_proj_mgr_set_timer
+        bne     cannon_set_timer
         inc     ent_parent_slot,x
-        bne     boss_proj_mgr_physics
+        bne     cannon_physics
 
 ; =============================================================================
-; boss_proj_mgr_set_timer -- Boss Projectile Manager — timer-based firing with RNG ($B266)
+; cannon_set_timer -- Boss Projectile Manager — timer-based firing with RNG ($B266)
 ; =============================================================================
-boss_proj_mgr_set_timer:  lda     #$1F
+cannon_set_timer:  lda     #$1F
         sta     ent_state,x
-boss_proj_mgr_dec_timer:  dec     ent_state,x
-boss_proj_mgr_physics:  jsr     apply_entity_physics_alt
+cannon_dec_timer:  dec     ent_state,x
+cannon_physics:  jsr     apply_entity_physics_alt
         rts
 
 ; ─── Fire projectile with RNG-based angle ───
-boss_proj_mgr_fire:  ldx     temp_01
+cannon_fire_shot:  ldx     temp_01
         lda     rng_seed
-        and     boss_fire_rng_mask,x
+        and     cannon_fire_rng_mask,x
         clc
-        adc     boss_fire_rng_base,x
+        adc     cannon_fire_rng_base,x
         sta     temp_0B
-        lda     boss_fire_rng_divisor,x
+        lda     cannon_fire_rng_divisor,x
         sta     temp_0D
         lda     #$00
         sta     temp_0A
@@ -6061,11 +6108,11 @@ boss_proj_mgr_fire:  ldx     temp_01
         jsr     sound_queue_push
         lda     #ENTITY_SHOTMAN
         jsr     spawn_entity_from_parent
-        bcs     boss_fire_done
+        bcs     cannon_fire_done
         ldx     temp_01
-        lda     boss_fire_vel_y_sub,x
+        lda     cannon_fire_vel_y_sub,x
         sta     ent_hitbox_h_hi,y
-        lda     boss_fire_vel_y_hi,x
+        lda     cannon_fire_vel_y_hi,x
         sta     ent_hitbox_h_lo,y
         lda     temp_0E
         sta     ent_hitbox_w_hi,y
@@ -6073,41 +6120,41 @@ boss_proj_mgr_fire:  ldx     temp_01
         sta     ent_hitbox_w_lo,y
         sec
         lda     ent_y_spawn_px,y
-        sbc     boss_fire_y_offset,x
+        sbc     cannon_fire_y_offset,x
         sta     ent_y_spawn_px,y
         lda     ent_spawn_flags,y
         and     #$40
-        bne     boss_fire_adjust_x
+        bne     cannon_fire_adjust_x
         inx
         inx
-boss_fire_adjust_x:  clc
+cannon_fire_adjust_x:  clc
         lda     ent_x_spawn_px,y
-        adc     boss_fire_x_offset,x
+        adc     cannon_fire_x_offset,x
         sta     ent_x_spawn_px,y
         lda     ent_x_spawn_scr,y
-        adc     boss_fire_x_offset_hi,x
+        adc     cannon_fire_x_offset_hi,x
         sta     ent_x_spawn_scr,y
-boss_fire_done:  ldx     current_entity_slot
+cannon_fire_done:  ldx     current_entity_slot
         rts
 
-boss_fire_rng_mask:  .byte   $23        ; boss fire RNG bitmask
-boss_fire_rng_base:  .byte   $18
-boss_fire_rng_divisor:  .byte   $30
-boss_fire_vel_y_sub:  .byte   $E6
-boss_fire_vel_y_hi:  .byte   $04
-boss_fire_y_offset:  .byte   $0C
-boss_fire_x_offset:  .byte   $0C
-boss_fire_x_offset_hi:  .byte   $00,$F4,$FF,$1F,$60,$18,$D4,$02
+cannon_fire_rng_mask:  .byte   $23        ; boss fire RNG bitmask
+cannon_fire_rng_base:  .byte   $18
+cannon_fire_rng_divisor:  .byte   $30
+cannon_fire_vel_y_sub:  .byte   $E6
+cannon_fire_vel_y_hi:  .byte   $04
+cannon_fire_y_offset:  .byte   $0C
+cannon_fire_x_offset:  .byte   $0C
+cannon_fire_x_offset_hi:  .byte   $00,$F4,$FF,$1F,$60,$18,$D4,$02
         .byte   $00,$08,$00,$F8,$FF  ; unknown data padding
 ; ─── Sniper Armor AI: jump, land, shoot, spawn Joe ───
 sniper_armor_ai:
         lda     ent_parent_slot,x
-        bne     multi_boss_state_check
+        bne     sniper_armor_state_check
         lda     ent_state,x
-        bne     boss_fire_anim_check
+        bne     sniper_armor_anim_check
         lda     ent_anim_id,x
         cmp     #$02
-        bne     multi_boss_physics
+        bne     sniper_armor_alt_physics
         lda     #$87
         sta     ent_flags,x
         jsr     entity_face_player
@@ -6120,27 +6167,27 @@ sniper_armor_ai:
         lda     #$01
         sta     ent_x_vel,x
         inc     ent_parent_slot,x
-        bne     multi_boss_physics
-boss_fire_anim_check:
+        bne     sniper_armor_alt_physics
+sniper_armor_anim_check:
         lda     ent_anim_id,x
-        bne     multi_boss_dec_main_timer
+        bne     sniper_armor_dec_main_timer
         sta     ent_anim_frame,x
-multi_boss_dec_main_timer:  dec     ent_state,x
+sniper_armor_dec_main_timer:  dec     ent_state,x
 
 ; =============================================================================
-; multi_boss_physics -- Multi-Phase Boss — state machine with timer-based phase changes ($B32D)
+; sniper_armor_alt_physics -- Multi-Phase Boss — state machine with timer-based phase changes ($B32D)
 ; =============================================================================
-multi_boss_physics:  jsr     apply_entity_physics_alt
-        bcc     multi_boss_rts
-        jmp     multi_boss_death_check
+sniper_armor_alt_physics:  jsr     apply_entity_physics_alt
+        bcc     sniper_armor_rts
+        jmp     sniper_armor_death_check
 
-multi_boss_rts:  rts
+sniper_armor_rts:  rts
 
-multi_boss_fallthrough:  jmp     multi_boss_full_physics
+sniper_armor_jmp_physics:  jmp     sniper_armor_physics
 
-multi_boss_state_check:
+sniper_armor_state_check:
         cmp     #$01
-        bne     multi_boss_state_2
+        bne     sniper_armor_state_2
         lda     #$02
         sta     ent_anim_id,x
         lda     ent_y_vel,x
@@ -6151,9 +6198,9 @@ multi_boss_state_check:
         sta     temp_02
         jsr     check_horiz_tile_collision
         plp
-        bpl     multi_boss_fallthrough
+        bpl     sniper_armor_jmp_physics
         lda     temp_00
-        beq     multi_boss_fallthrough
+        beq     sniper_armor_jmp_physics
         lda     #$21
         jsr     sound_queue_push
         lda     #$03
@@ -6174,64 +6221,64 @@ multi_boss_state_check:
         lda     ent_y_px
         sbc     ent_y_px,x
         cmp     #$10
-        bne     multi_boss_dec_timer
+        bne     sniper_armor_dec_timer
         lda     #$12
         sta     ent_state,x
         lda     #$02
         sta     ent_parent_slot,x
-        bne     multi_boss_dec_timer
-multi_boss_state_2:  lda     ent_anim_id,x
-        bne     multi_boss_check_timer
+        bne     sniper_armor_dec_timer
+sniper_armor_state_2:  lda     ent_anim_id,x
+        bne     sniper_armor_check_timer
         lda     #$00
         sta     ent_anim_frame,x
-multi_boss_check_timer:  lda     ent_state,x
-        bne     multi_boss_dec_timer
+sniper_armor_check_timer:  lda     ent_state,x
+        bne     sniper_armor_dec_timer
         lda     #$25
         jsr     sound_queue_push
         jsr     entity_face_player
         lda     #ENTITY_GENERIC_PROJ
         jsr     spawn_entity_from_parent
-        bcs     multi_boss_check_cycle
+        bcs     sniper_armor_check_cycle
         lda     ent_parent_slot,x
         tax
-        lda     multi_boss_shot_vel_y_sub,x
+        lda     sniper_armor_shot_vel_y_sub,x
         sta     ent_hitbox_h_hi,y
-        lda     multi_boss_shot_vel_y_hi,x
+        lda     sniper_armor_shot_vel_y_hi,x
         sta     ent_hitbox_h_lo,y
-        lda     multi_boss_shot_vel_x_sub,x
+        lda     sniper_armor_shot_vel_x_sub,x
         sta     ent_hitbox_w_hi,y
-        lda     multi_boss_shot_vel_x_hi,x
+        lda     sniper_armor_shot_vel_x_hi,x
         sta     ent_hitbox_w_lo,y
-multi_boss_check_cycle:  txa
+sniper_armor_check_cycle:  txa
         ldx     current_entity_slot
         cmp     #$06
-        bne     multi_boss_set_short_timer
+        bne     sniper_armor_short_timer
         lda     #$00
         sta     ent_parent_slot,x
         lda     #$3F
         sta     ent_state,x
-        bne     multi_boss_dec_timer
-multi_boss_set_short_timer:  lda     #$12
+        bne     sniper_armor_dec_timer
+sniper_armor_short_timer:  lda     #$12
         sta     ent_state,x
         inc     ent_parent_slot,x
-multi_boss_dec_timer:  dec     ent_state,x
-multi_boss_full_physics:  jsr     apply_entity_physics
-        bcc     multi_boss_rts_2
-        jmp     multi_boss_death_check
+sniper_armor_dec_timer:  dec     ent_state,x
+sniper_armor_physics:  jsr     apply_entity_physics
+        bcc     sniper_armor_rts_2
+        jmp     sniper_armor_death_check
 
-multi_boss_rts_2:  rts
+sniper_armor_rts_2:  rts
 
-multi_boss_death_check:  lda     ent_hp,x
-        bne     multi_boss_rts_2
+sniper_armor_death_check:  lda     ent_hp,x
+        bne     sniper_armor_rts_2
         lda     #ENTITY_SNIPER_JOE
         jsr     spawn_entity_from_parent
-        bcs     multi_boss_rts_2
+        bcs     sniper_armor_rts_2
         lda     #$7E
         .byte   $99,$F0           ; STA $04F0,Y (hi byte overlaps table below)
-multi_boss_shot_vel_y_sub:  .byte   $04,$60,$6A,$A0,$88 ; vel Y sub table (also STA hi byte + RTS)
-multi_boss_shot_vel_y_hi:  .byte   $12,$58,$FB,$FC,$FD
-multi_boss_shot_vel_x_sub:  .byte   $FE,$FF,$8C,$4E,$9A ; multi-boss shot X velocity table
-multi_boss_shot_vel_x_hi:  .byte   $C2,$D2,$06,$07,$07,$07,$07
+sniper_armor_shot_vel_y_sub:  .byte   $04,$60,$6A,$A0,$88 ; vel Y sub table (also STA hi byte + RTS)
+sniper_armor_shot_vel_y_hi:  .byte   $12,$58,$FB,$FC,$FD
+sniper_armor_shot_vel_x_sub:  .byte   $FE,$FF,$8C,$4E,$9A ; multi-boss shot X velocity table
+sniper_armor_shot_vel_x_hi:  .byte   $C2,$D2,$06,$07,$07,$07,$07
 ; --- sniper_joe_ai -- Sniper Joe unarmored (type $4F) — face player, 3-shot burst, walk after firing ---
 sniper_joe_ai:
         jsr     entity_face_player
@@ -6388,34 +6435,34 @@ scworm_worm_wall_physics:  jsr     apply_entity_physics_alt
 ; ─── Press retract AI: count down then deactivate ───
 press_retract_ai:
         dec     ent_state,x
-        beq     wily_gravity_deactivate
+        beq     press_retract_deactivate
         jsr     apply_entity_physics_alt
         rts
-wily_gravity_deactivate:
+press_retract_deactivate:
         lsr     ent_flags,x
         rts
 
 ; ─── Appear Block AI: timed blink with 3 timer variants ───
 appear_block_a_ai:
         lda     #$7D
-        bne     despawn_timer_store
+        bne     appear_block_store_timer
 appear_block_b_ai:
         lda     #$BB
-        bne     despawn_timer_store
+        bne     appear_block_store_timer
 appear_block_c_ai:
         lda     #$FA
-despawn_timer_store:
+appear_block_store_timer:
         sta     temp_00
         lda     ent_parent_slot,x
-        bne     despawn_timer_phase_1
+        bne     appear_block_phase_1
         lda     temp_00
         sta     ent_plat_y,x
         inc     ent_parent_slot,x
-        bne     despawn_timer_dec
-despawn_timer_phase_1:  cmp     #$01
-        bne     despawn_timer_phase_2
+        bne     appear_block_dec_timer
+appear_block_phase_1:  cmp     #$01
+        bne     appear_block_phase_2
         lda     ent_plat_y,x
-        bne     despawn_timer_dec
+        bne     appear_block_dec_timer
         lda     #$90
         sta     ent_flags,x
         lda     #$3C
@@ -6426,13 +6473,13 @@ despawn_timer_phase_1:  cmp     #$01
         lda     #$00
         sta     ent_anim_frame,x
         sta     ent_anim_id,x
-        beq     despawn_timer_dec
-despawn_timer_phase_2:  lda     ent_anim_id,x
+        beq     appear_block_dec_timer
+appear_block_phase_2:  lda     ent_anim_id,x
         cmp     #$05
-        bne     despawn_phase_3_setup
+        bne     appear_block_phase_3
         lda     #$00
         sta     ent_anim_frame,x
-despawn_phase_3_setup:  lda     #$01
+appear_block_phase_3:  lda     #$01
         sta     ent_state,x
         lda     ent_x_px,x
         and     ent_x_vel,x
@@ -6441,13 +6488,13 @@ despawn_phase_3_setup:  lda     #$01
         and     ent_x_vel_sub,x
         sta     ent_y_vel_sub,x
         lda     ent_plat_y,x
-        bne     despawn_timer_dec
+        bne     appear_block_dec_timer
         lda     #$A0
         sta     ent_flags,x
         lda     #$7D
         sta     ent_plat_y,x
         dec     ent_parent_slot,x
-despawn_timer_dec:  dec     ent_plat_y,x
+appear_block_dec_timer:  dec     ent_plat_y,x
         jsr     apply_entity_physics_alt
         rts
 

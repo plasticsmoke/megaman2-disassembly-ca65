@@ -160,11 +160,11 @@ ENTITY_MOLE_SHOT_UP = $48       ; Mole vertical shot (upward) — tile-bounce, t
 ENTITY_MOLE_SHOT_DN = $49       ; Mole vertical shot (downward) — tile-bounce, timer-reverse
 ENTITY_MOLE_DESPAWN = $4A       ; Mole despawner (destroys all type $47 on screen transition)
 ; Boss projectiles
-ENTITY_METAL_BLADE  = $15       ; Metal Man blade projectile
-ENTITY_QUICK_BOOM   = $18       ; Quick Man boomerang projectile
-ENTITY_AIR_TORNADO1 = $19       ; Air Man tornado / Heat Man fire (shared type)
-ENTITY_AIR_TORNADO2 = $1A       ; Air Man tornado (secondary)
-ENTITY_ATOMIC_FIRE  = $1B       ; Heat Man fire projectile
+ENTITY_LASER_SEG    = $15       ; Quick Man — moving laser beam segment (draws BG tiles, instant-kill)
+ENTITY_ROBBIT_SHOT  = $18       ; Wood Man — Robbit carrot shot (aimed, null AI)
+ENTITY_FIRE_PROJ_A  = $19       ; Fire projectile A — Friender flame (also $1A = player teleport sprite ID)
+ENTITY_FIRE_PROJ_B  = $1A       ; Fire projectile B — Friender flame (secondary)
+ENTITY_FIREBALL     = $1B       ; Fireball — arcing flame spawned by fire projectiles
 ENTITY_MECHA_FIRE   = $33       ; Mecha Dragon fireball
 ENTITY_GOBLIN_HORN  = $44       ; Goblin horn (indestructible, contact dmg)
 ENTITY_PETIT_GOBLIN = $45       ; Petit Goblin (1 HP, max 3, spawned by Goblin) (US: Gremlin)

@@ -303,7 +303,7 @@ The Friender's controller ($1C) has `weapon_dmg_buster_tbl[$1C] = $00` (immune),
 Large enemies bypass NES sprite limits by rendering directly as background metatiles. The entity's AI handler manipulates PPU buffers to draw tile data into the nametable:
 
 ```
-friender_ai (bank0E:4083):
+friender_ai (bank0E:4111):
   1. Look up landing height from friender_height_threshold table
   2. Compute metatile position from entity X/Y + offset tables
   3. Call metatile_render / metatile_attr_update for nametable address
@@ -311,7 +311,7 @@ friender_ai (bank0E:4083):
   5. NMI handler writes tiles to the nametable
 ```
 
-The entity has no sprite representation — its visual appearance is entirely background tiles. Animation frames are selected via `ent_anim_id`, indexing into 128 bytes of tile data (`friender_tile_data` at bank0E:4210 — 2 frames × 64 bytes per frame, covering a 4×4 metatile region). When the entity animates, the AI handler overwrites the nametable region with the new frame's tiles.
+The entity has no sprite representation — its visual appearance is entirely background tiles. Animation frames are selected via `ent_anim_id`, indexing into 128 bytes of tile data (`friender_tile_data` at bank0E:4238 — 2 frames × 64 bytes per frame, covering a 4×4 metatile region). When the entity animates, the AI handler overwrites the nametable region with the new frame's tiles.
 
 This technique allows arbitrarily large enemies (Friender fills a 4×4 metatile region) without hitting the 8-sprite-per-scanline limit. The tradeoff: background-tile enemies can't move smoothly (snapped to 16px metatile grid) and require the multi-entity hitbox pattern for collision.
 
@@ -428,7 +428,7 @@ ora (other bits)  ; merge back
 
 ### Collision Gating (ent_flags bits 0-1)
 
-Before running any collision checks, `apply_entity_physics_alt` tests the low 2 bits of `ent_flags` (bank0F:5645):
+Before running any collision checks, `apply_entity_physics_alt` tests the low 2 bits of `ent_flags` (bank0F:5652):
 
 ```asm
 lda  ent_flags,x
@@ -477,19 +477,19 @@ Frame alternation means at most 4 weapon slots are tested per entity per frame. 
 
 ### Weapon Damage Dispatch
 
-On a confirmed hit, `weapon_collision_dispatch` (bank0F:4935) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
+On a confirmed hit, `weapon_collision_dispatch` (bank0F:4942) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
 
 | Weapon ID | Weapon | Handler | Damage Sub-Table |
 |-----------|--------|---------|-----------------|
-| $00 | Mega Buster | bank0F:4943 | `weapon_dmg_buster_tbl` |
-| $01 | Atomic Fire | bank0F:4991 | `weapon_dmg_buster_tbl` (uncharged) / `weapon_dmg_atomic_tbl` (full charge) |
-| $02 | Air Shooter | bank0F:5050 | $EA8C |
-| $03 | Leaf Shield | bank0F:5097 | $EB04 |
-| $04 | Bubble Lead | bank0F:5151 | `weapon_dmg_bubble_tbl` |
-| $05 | Quick Boomerang | bank0F:5198 | $EBF4 |
+| $00 | Mega Buster | bank0F:4950 | `weapon_dmg_buster_tbl` |
+| $01 | Atomic Fire | bank0F:4998 | `weapon_dmg_buster_tbl` (uncharged) / `weapon_dmg_atomic_tbl` (full charge) |
+| $02 | Air Shooter | bank0F:5057 | $EA8C |
+| $03 | Leaf Shield | bank0F:5104 | $EB04 |
+| $04 | Bubble Lead | bank0F:5158 | `weapon_dmg_bubble_tbl` |
+| $05 | Quick Boomerang | bank0F:5205 | $EBF4 |
 | $06 | Time Stopper | — | Handled separately (continuous damage, no dispatch) |
-| $07 | Metal Blade | bank0F:5311 | $ECE4 |
-| $08 | Crash Bomber | bank0F:5258 | `weapon_dmg_crash_tbl` |
+| $07 | Metal Blade | bank0F:5318 | $ECE4 |
+| $08 | Crash Bomber | bank0F:5265 | `weapon_dmg_crash_tbl` |
 
 Each sub-table has one entry per entity type (124 entries for Buster/contact, 120 for the rest — high types are never checked). The handler reads `damage_table[entity_type]` into `temp_00`. A value of $00 means immune. The handler then calls `apply_difficulty_modifier`, which doubles `temp_00` on Normal difficulty (ASL). The resulting damage is subtracted from `ent_hp`.
 

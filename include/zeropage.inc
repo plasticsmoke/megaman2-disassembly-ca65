@@ -89,8 +89,8 @@ sound_pause_flag      = $41    ; sound engine pause flag — bit0 silences all c
 scroll_dir_flags      = $42    ; scroll direction flags ($42)
 palette_cycle_idx     = $43    ; palette animation cycle index ($43)
 palette_cycle_timer   = $44    ; palette animation cycle timer ($44)
-palette_toggle_a      = $45    ; palette animation toggle A ($45)
-palette_toggle_b      = $46    ; palette animation toggle B ($46)
+conveyor_face_r       = $45    ; conveyor facing value, type-1 belts ($40=right) ($45)
+conveyor_face_l       = $46    ; conveyor facing value, type-2 belts ($00=left) ($46)
 
 ; ─── PPU Column / Attribute Update ─────────────────────────────────────────
 col_update_count      = $47    ; PPU column tile write pending count, 0=done ($47)
@@ -135,7 +135,7 @@ current_weapon        = $A9    ; selected weapon ID ($A9)
 game_mode             = $AA    ; game mode / entity dispatch flag ($AA) — 0=normal, bit2=pause entities
 weapon_counter_1      = $AB    ; weapon-specific counter 1 ($AB)
 weapon_counter_2      = $AC    ; weapon-specific counter 2 ($AC)
-weapon_counter_3      = $AD    ; weapon-specific counter 3 ($AD)
+item_pickup_type      = $AD    ; pending item pickup entity type ($76+) ($AD)
 sprite_8x16_flag      = $AE    ; 8×16 sprite size flag ($AE)
 platform_facing       = $AF    ; platform/conveyor facing direction bit 6 ($AF)
 checkpoint_idx        = $B0    ; respawn checkpoint index ($B0)
@@ -189,7 +189,7 @@ freq_register_hi      = $F5    ; APU frequency hi-byte / temp pointer ($F5)
 ; ─── Engine Temporaries ─────────────────────────────────────────────────────
 ppuctrl_shadow        = $F7    ; PPUCTRL mirror ($F7)
 ppumask_shadow        = $F8    ; PPUMASK mirror ($F8)
-boss_fight_flag       = $F9    ; boss fight active flag ($F9)
+player_y_screen       = $F9    ; player Y screen/page byte (nonzero = vertically off-screen) ($F9)
 frame_skip_lo         = $FB    ; frame skip timer low ($FB)
 frame_skip_hi         = $FC    ; frame skip timer high ($FC)
 general_counter       = $FD    ; general-purpose counter / column index ($FD)

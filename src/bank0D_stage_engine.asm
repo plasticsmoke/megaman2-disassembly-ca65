@@ -1888,7 +1888,7 @@ wselect_restore_pal_loop:  lda     palette_save_buf,x
         sta     game_substate
         sta     ent_anim_frame
         sta     ent_anim_id
-        lda     #ENTITY_AIR_TORNADO2
+        lda     #ENTITY_FIRE_PROJ_B
         sta     ent_type
         lda     #$03
         sta     game_mode

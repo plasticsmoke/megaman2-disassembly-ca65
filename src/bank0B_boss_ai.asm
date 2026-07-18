@@ -1461,12 +1461,12 @@ metalman_palette_flash:  lda     #$0F
         sta     palette_sprite
         ldx     #$00
         ldy     #$00
-        lda     palette_toggle_a
+        lda     conveyor_face_r
         eor     #$40
-        sta     palette_toggle_a
-        lda     palette_toggle_b
+        sta     conveyor_face_r
+        lda     conveyor_face_l
         eor     #$40
-        sta     palette_toggle_b
+        sta     conveyor_face_l
         beq     metalman_palette_copy_loop
         inx
 metalman_palette_copy_loop:  lda     metalman_palette_data,x
@@ -4494,7 +4494,7 @@ setup_ppu_normal:  lda     #$00
         beq     proximity_check_rts
         lda     boss_state_flag
         bne     proximity_check_rts
-        lda     boss_fight_flag
+        lda     player_y_screen
         bne     proximity_check_rts
         sec
         lda     ent_x_px
