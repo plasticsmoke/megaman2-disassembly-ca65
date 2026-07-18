@@ -773,7 +773,7 @@ Mega Man 2 uses **CHR-RAM** — all tile graphics are uploaded from PRG-ROM at r
 - Pattern table $0000 = sprite tiles, $1000 = background tiles
 - Dynamic CHR updates are possible (e.g., animated water tiles in Bubble Man)
 
-The CHR upload callback runs through `BANK_CHR_UPLOAD` (bank $0C). Stage CHR data is loaded from the tile bank selected via `stage_bank_table`.
+Stage CHR data is loaded from the tile bank selected via `stage_bank_table` (see `chr_ram_bank_load`, bank0F).
 
 ---
 
@@ -816,26 +816,32 @@ E-Tank drop ($7A) exists in the spawn code but is never rolled.
 
 ### Sound Engine
 
-**Source**: `src/bank0C_weapons_ui.asm` (driver code at $8000), `src/bank0A_music.asm` (music/instrument data)
+**Source**: `src/bank0C_sound_engine.asm` — driver AND all music/SFX data; the bank is fully self-contained (the NSFe rip uses it alone)
 
-The sound engine processes 4 APU channels (2 pulse, 1 triangle, 1 noise) each frame. The per-frame update entry point is `sound_update_main` (bank0C:449), called via the NMI bank callback system.
+The sound engine processes 4 APU channels (2 pulse, 1 triangle, 1 noise) each frame. The per-frame update entry point is `sound_update_main` (bank0C:467), called via the NMI bank callback system.
 
-**Pointer table**: `weapon_data_ptr_lo/hi` at bank0C:1682 — interleaved lo/hi pairs for all 24 music/CHR data entries (IDs $00-$17).
+Music and SFX play concurrently. An SFX claims channels via a priority byte + channel mask; on claimed channels the music state keeps advancing silently and audio resumes when the SFX ends (`sound_channel_restore` reloads the music instrument). Current priorities live in `sound_priority` ($E0): lo nybble = music, hi nybble = SFX.
+
+**Pointer table**: `sound_header_ptr_lo/hi` at bank0C:1722 — 67 interleaved lo/hi entries for sound IDs $00-$42: music $00-$17, unused slots $18-$20, SFX $21-$42. Every track and SFX has a named label (`music_*`, `sfx_*`).
+
+**Header formats** (byte 0 = priority):
+- Music (all tracks priority $0F): byte 0, then 4 × 2-byte pattern pointer (sq1, sq2, tri, noise), then a 2-byte instrument table pointer.
+- SFX: byte 0 hi nybble = priority (a new SFX must be ≥ the current one), byte 1 lo nybble = channel mask, stream data from byte 2.
 
 ### Sound Channel Structure
 
-Each channel uses a 31-byte slot (`SND_*` fields defined at bank0C:19-49):
+Each channel uses a 31-byte slot (`SND_*` fields defined at bank0C:23-53):
 
 | Offset | Field | Purpose |
 |---|---|---|
-| $00-$01 | `SND_FREQ_LO/HI` | Current note frequency |
+| $00-$01 | `SND_PTN_PTR_LO/HI` | Music pattern read pointer (0 = channel off) |
 | $02-$03 | `SND_NOTE_DUR_LO/HI` | Note duration counter |
-| $04 | `SND_PERIOD` | Duty cycle period |
-| $05 | `SND_FLAGS` | Bit 7 = loop, bit 0 = double-speed |
+| $04 | `SND_PERIOD` | Tempo — note length multiplier |
+| $05 | `SND_FLAGS` | Bit 7 = speed-up flag, bits 0-6 = last pattern-jump ID |
 | $06 | `SND_VOL_ENV` | Volume/sweep envelope |
 | $07-$08 | `SND_FREQ_TBL_LO/HI` | Frequency table pointer |
 | $0D | `SND_PORTA_RATE` | Portamento rate (signed) |
-| $11-$12 | `SND_STREAM_LO/HI` | Stream data pointer |
+| $11-$12 | `SND_STREAM_LO/HI` | SFX note value (nonzero = SFX note active) |
 | $14-$15 | `SND_VIB_AMP/PHASE` | Vibrato amplitude and phase |
 | $16-$17 | `SND_SWEEP_CTRL/DELTA` | Sweep control and pitch delta |
 
@@ -848,12 +854,12 @@ lda     #$XX        ; sound/music ID
 jsr     sound_queue_push
 ```
 
-The dispatch at $8003 (bank0C:52-79) routes by value:
-- **$00-$FB** → `weapon_select_handler` — loads CHR tiles + sound data from pointer table
-- **$FC** → `weapon_cmd_fc_handler` — set frame repeat count
-- **$FD** → `password_mode_init` — enter password screen mode
-- **$FE** → `weapon_secondary_init` — reinit weapon display
-- **$FF** → `weapon_clear_display` — clear display + stop music
+The dispatch at $8003 (bank0C:56-93) routes by value:
+- **$00-$FB** → `sound_play_cmd` — load music track or SFX by ID (priority-gated)
+- **$FC** → `sound_cmd_speed` — set note ticks/frame = Y+1 (no in-game callers)
+- **$FD** → `sound_cmd_fade` — start music fade-out (Y = fade params; only use is Y=$A0)
+- **$FE** → `sound_cmd_sfx_off` — cancel SFX, return channels to music
+- **$FF** → `sound_cmd_music_off` — stop music (SFX unaffected)
 
 ### Music Track IDs
 
@@ -871,54 +877,63 @@ Sound IDs $00-$17 are music tracks. IDs $00-$09 double as stage bank numbers —
 | $07 | Bubble Man Stage | `stage_bank_table[$03]` |
 | $08 | Dr. Wily Stage 1-2 | `stage_bank_table[$08/$09]` |
 | $09 | Dr. Wily Stage 3-4 | `stage_bank_table[$0A/$0B/$0C]` |
-| $0A | Dr. Wily Map | Fortress gate cinematic (bank0D:270) |
-| $0B | Boss Battle | Boss fight start (bank0E:621) |
-| $0C | Stage Select | Stage select screen (bank0D:129) |
-| $0D | Title / Ending | Title screen + ending (bank0D:3382, 5517) |
-| $0E | Opening | Ending text scroll (bank0D:3202) — reuses opening theme |
-| $0F | Game Over | Game over screen (bank0D:5019) |
-| $10 | Password | Password screen (bank0D:3527, 5069) |
-| $11 | Game Start | Intro jingle (bank0D:2457, 2834) |
-| $12 | Robot Master Walk-in | Boss entrance sequence (bank0D:2238) |
-| $13 | All Stage Clear | Credits complete (bank0D:5399) |
-| $14 | Dr. Wily UFO | Wily walk-away (bank0D:5559) |
-| $15 | Stage Clear | Fortress defeat transition (bank0B:3980) |
-| $16 | Clear Demo | Fortress explosion (bank0B:3848) |
-| $17 | Last Stage (Wily 5-6) | Final fortress stages (bank0D:5842) |
+| $0A | Stage Intro | Boss intro screen (bank0D:271) |
+| $0B | Boss Battle | Boss door (bank0E:621, 749), Picopico-kun (bank0B:2246), Wily 4 rematch (bank0E:6934) |
+| $0C | Stage Select | Stage select screen (bank0D:130) |
+| $0D | Title / Ending reprise | Title screen + ending (bank0D:3383, 5492) |
+| $0E | Opening | Prologue text crawl (bank0D:3203) |
+| $0F | Game Over | Game over screen (bank0D:5020); also the $18-$20 dummy-slot target |
+| $10 | Password | Password screens (bank0D:3528, 5044) |
+| $11 | Dr. Wily Map | Map/castle cinematics (bank0D:2458, 2817) |
+| $12 | Boss Get scene | Robot Master walk-in/shimmer scene (bank0D:2239) |
+| $13 | Epilogue | Ending start (bank0D:5400) |
+| $14 | Credits | Ending walk scene (bank0D:5560) |
+| $15 | Stage Clear | Fortress defeat transition (bank0B:3981) |
+| $16 | Wily Defeated | Alien defeat scene (bank0B:3849) |
+| $17 | Weapon Get | "GET EQUIPPED WITH" screen (bank0D:5843) |
 
 ### SFX IDs
 
-SFX IDs ($18+) index past the pointer table into embedded sound data. Listed by confirmed code context:
+SFX IDs $21-$42 have headers in the same pointer table (priority + channel
+mask + stream data). Names are NSFe playback-verified; call sites from the
+audited source:
 
 | ID | Sound | Primary call sites |
 |---|---|---|
-| $21 | Metal Blade fire | bank0F:3678, bank0E:4887 |
-| $23 | Crash Bomber fire | bank0F:3629, bank0B:1491 |
-| $24 | Weapon fire (generic) | bank0F:3452 — Bubble, Leaf, Air, Quick |
-| $25 | Enemy shoot / Sniper fire | bank0E:5182, 6062, 6190, 6262 |
-| $26 | Mega Buster shot | bank0F:2821 |
-| $27 | Heavy impact | bank0E:3686 |
-| $28 | HP bar fill tick | bank0B:206, bank0D:1759 |
-| $29 | Landing / thud | bank0E:963 |
-| $2A | Block break (Picopico-kun) | bank0B:3686 |
-| $2B | Weapon hit (damage dealt) | bank0F:4964 — all 9 weapon handlers |
-| $2C | Dragon fire breath | bank0B:1907, 1922 |
-| $2D | Weapon immune / deflect | bank0F:4994 — all 9 weapon handlers |
-| $2E | Quick Boomerang hit | bank0F:4227 |
-| $2F | Cursor / menu move | bank0D:1693, 3576, 3631 |
-| $30 | Boss fight music start | bank0F:1215, bank0D:1877 |
-| $31 | Weapon get fanfare | bank0F:4042 |
-| $32 | Boss intro transition | bank0F:955 |
-| $38 | Large pickup / E-Tank | bank0F:3894, bank0B:316 |
-| $39 | Pipi egg hatch | bank0E:4789 |
-| $3A | Victory jingle | bank0D:173, bank0B:4003 |
-| $3B | Screen transition | bank0E:1519 |
-| $3C | Appear block sound | bank0E:6469 |
-| $3F | Atomic Fire charge | bank0F:3499, bank0B:466 |
-| $41 | Boss death explosion | bank0F:403, bank0B:3942 |
-| $42 | Extra life (1-UP) | bank0D:3647, bank0E:576 |
+| $21 | Time Stopper | `fire_weapon_time_stopper` (bank0F:3717), Flash Man (bank0B:1183), Press (bank0E:4886), Sniper Armor (bank0E:6205) |
+| $22 | (unused) | — |
+| $23 | Metal Blade fire | bank0F:3668, Metal Man (bank0B:1492) |
+| $24 | Weapon fire | Buster/Bubble/Quick/Crash fire (bank0F:3489, 3584, 3618, 3648) |
+| $25 | Enemy shot | Blocky (bank0E:5181), cannons (bank0E:6108), Sniper Joe (bank0E:6237, 6308) |
+| $26 | Damage recoil | `player_damage_knockback` (bank0F:2851) |
+| $27 | Quick Man laser | force beams (bank0E:3687) |
+| $28 | Refill tick | health/ammo refill (bank0E:518, 555), boss HP fill (bank0B:206, 4051), E-Tank menu (bank0D:1760), map route (bank0D:2555) |
+| $29 | Landing | ladder dismount/landing (bank0E:964) |
+| $2A | Wily alarm | Alien reveal (bank0B:3687) |
+| $2B | Damage hit | all weapon + boss hit handlers (bank0F, bank0B) |
+| $2C | Dragon fire | Mecha Dragon (bank0B:1908, 2001) |
+| $2D | Deflect | all weapon + boss deflect handlers (bank0F, bank0B) |
+| $2E | Crash Bomb stick | bank0F:4263, bank0E:6709 |
+| $2F | Menu cursor | menus (bank0D:147, 1694, 3414, 3558, 3613, 5058, 5961) |
+| $30 | Teleport in | boss entrance (bank0F:1236), unpause (bank0D:1878), Wily teleporter (bank0E:630) |
+| $31 | Leaf Shield orbit | `leaf_launch_check_state` (bank0F:4083) |
+| $32 | (silent) channel mute | boss-corridor scroll (bank0F:968) |
+| $33 | (unused) | — |
+| $34 | (silent) channel mute | screen transitions (bank0E:2178, 2258) — cancelled by cmd $FE |
+| $35-$37 | Skew 1-3 | no direct queue sites found (NSFe-audible) |
+| $38 | Atomic Fire charge | bank0F:3930, Heat Man (bank0B:317, 383) |
+| $39 | Enemy bounce | Fly Boy (bank0E:4789) |
+| $3A | Teleport out | stage select confirm (bank0D:174), title (bank0D:3444), fortress defeat (bank0B:4004) |
+| $3B | Water/lava splash | bank0E:1520 |
+| $3C | Appear block | bank0E:6469 |
+| $3D-$3E | Acid drip 1/2 | Flash stage hazard (`flash_hazard_ai`, bank0E) |
+| $3F | Air Shooter | bank0F:3538, Air Man (bank0B:467) |
+| $40 | (unused) | — |
+| $41 | Death explosion | player death (bank0F:414), fortress (bank0B:3943) |
+| $42 | Extra life | 1-UP/E-Tank pickup (bank0E:577, 587), password entry beep (bank0D:3648, 5210) |
 
-$2B (weapon hit) and $2D (weapon immune) are by far the most common — used in every weapon collision handler in both bank0F and bank0B.
+The two silent SFX ($32/$34) claim channels at maximum-priority silence to
+mute music channels during CPU-heavy scroll sequences; cmd $FE releases them.
 
 ### Stage-to-Music Mapping
 
@@ -958,22 +973,25 @@ Wily 5-6 override the bank table music with $17 ("Last Stage") via bank0D:5842.
 | Variable | Address | Description |
 |---|---|---|
 | `sound_pause_flag` | $41 | Bit 0 silences all channels |
-| `sound_busy_flag` | $E4 | Locks sound engine during CHR upload |
+| `sound_busy_flag` | $E4 | Locks sound engine while a sound is being loaded |
 | `sound_frame_counter` | — | Frame timing for sound updates |
 | `channel_active_flags` | — | 4-bit mask for active channels (1 per APU channel) |
-| `sound_data_ptr_lo` | $057C | Sound/instrument data pointer low |
-| `sound_data_ptr_hi` | $057D | Sound/instrument data pointer high |
+| `sound_priority` | $E0 | Current priorities: lo nybble = music, hi = SFX |
+| `sfx_channel_mask` | $E1 | Channels owned by SFX (bits 0-3) |
+| `music_fade_ctrl` | $E8 | Music fade: bit 7 = active, bits 0-6 = frame period |
+| `sound_data_ptr_lo` | $057C | Music instrument table pointer low |
+| `sound_data_ptr_hi` | $057D | Music instrument table pointer high |
 | `sound_queue` | $0580 | Command queue array (max 16 entries) |
-| `bank_queue_count` | $66 | Queue entry count |
+| `sound_queue_count` | $66 | Queue entry count |
 
 ### Special Commands
 
 | Value | Handler | Effect |
 |---|---|---|
-| $FC | `weapon_cmd_fc_handler` | Set frame repeat count |
-| $FD | `password_mode_init` | Enter password screen mode |
-| $FE | `weapon_secondary_init` | Reinit weapon display (no CHR upload) |
-| $FF | `weapon_clear_display` | Clear all weapon display slots, stop music |
+| $FC | `sound_cmd_speed` | Set playback speed (note ticks/frame = Y+1) |
+| $FD | `sound_cmd_fade` | Start music fade-out (Y = fade params) |
+| $FE | `sound_cmd_sfx_off` | Cancel SFX, return channels to music |
+| $FF | `sound_cmd_music_off` | Stop music (SFX unaffected) |
 
 ---
 

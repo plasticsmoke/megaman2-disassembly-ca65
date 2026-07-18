@@ -2509,7 +2509,7 @@ nmi_sound_bank:  lda     #$0C           ; switch to bank $0C (sound engine)
 nmi_process_queue:  ldx     sound_queue_count
         beq     nmi_queue_done
         lda     sound_queue - 1,x
-        cmp     #$FD                    ; command $FD takes a parameter in Y
+        cmp     #$FD                    ; $FD (music fade) takes fade params in Y
         bne     nmi_queue_call
         ldy     #$A0
 nmi_queue_call:  jsr     banked_entry_alt ; sound command dispatch ($8003)

@@ -84,9 +84,9 @@ boss_hit_count      = $05AA  ; weapon hit counter (inc per hit in boss_check_wea
 ; ─── RAM Buffers ────────────────────────────────────────────────────────────
 oam_buffer          = $0200  ; OAM sprite buffer, 256 bytes ($0200-$02FF)
 ppu_update_buf      = $0300  ; PPU nametable update buffer ($0300)
-chr_ram_shadow      = $0500  ; CHR-RAM tile data shadow buffer ($0500)
-sound_data_ptr_lo   = $057C  ; sound/instrument data pointer low ($057C)
-sound_data_ptr_hi   = $057D  ; sound/instrument data pointer high ($057D)
+sound_channel_ram   = $0500  ; sound engine: 4 × $1F-byte channel slots ($0500-$057B)
+sound_data_ptr_lo   = $057C  ; music instrument table pointer low ($057C)
+sound_data_ptr_hi   = $057D  ; music instrument table pointer high ($057D)
 sound_queue   = $0580  ; sound command queue — SFX/music IDs drained by bank $0C sound engine ($0580)
 palette_anim_target = $0354  ; palette animation target frame ($0354)
 palette_anim_counter = $0355 ; palette animation current frame ($0355)

@@ -8,15 +8,15 @@
 ; Bank $0C entry points used by this shim:
 ;   $8000 = JMP sound_update_main    — per-frame sound driver tick
 ;   $8003 = bank dispatch entry      — A = sound/weapon ID, falls through
-;                                      to weapon_select_handler for IDs $00-$EB
+;                                      to sound_play_cmd for IDs $00-$EB
 ;   $8015 = reset path 1             — sound_busy_flag=1, sound_slot_lo=0,
-;                                      JMP weapon_secondary_init
+;                                      JMP sound_cmd_sfx_off
 ;   $8024 = reset path 2             — sound_busy_flag=1, sound_slot_lo=0,
-;                                      JMP weapon_clear_display
+;                                      JMP sound_cmd_music_off
 ;
 ; Sound slot RAM ($0500-$057F) holds per-channel stream state.  The trigger
 ; routine writes initial channel pointers for sound IDs that need extra setup
-; beyond what the weapon_select_handler provides.
+; beyond what the sound_play_cmd provides.
 ; =============================================================================
 
 .segment "NSF_SHIM"
@@ -24,8 +24,8 @@
 ; ─── Engine entry points (bank $0C, $8000-$BFFF) ─────────────────────────────
 SOUND_UPDATE        = $8000     ; JMP sound_update_main
 SOUND_DISPATCH      = $8003     ; bank dispatch — A = sound/weapon ID
-ENGINE_RESET_1      = $8015     ; reset path 1 (weapon_secondary_init)
-ENGINE_RESET_2      = $8024     ; reset path 2 (weapon_clear_display)
+ENGINE_RESET_1      = $8015     ; reset path 1 (sound_cmd_sfx_off)
+ENGINE_RESET_2      = $8024     ; reset path 2 (sound_cmd_music_off)
 
 ; ─── RAM addresses used by shim ──────────────────────────────────────────────
 NSF_TRIGGER_FLAG    = $040F     ; first-frame trigger flag (0 = not yet triggered)
@@ -39,18 +39,18 @@ NSF_SOUND_ID        = $0580     ; current sound ID for trigger dispatch
 ; 1. Reset the sound engine (clear channels, stop all sound)
 ; 2. Map track number through nsf_track_table → engine sound ID
 ; 3. Store sound ID for first-frame trigger
-; 4. Dispatch through engine's weapon_select_handler to load music data
+; 4. Dispatch through engine's sound_play_cmd to load music data
 ; =============================================================================
 nsf_init:
         pha
-        jsr     ENGINE_RESET_2          ; weapon_clear_display — wipe display slots
-        jsr     ENGINE_RESET_1          ; weapon_secondary_init — reinit weapon state
+        jsr     ENGINE_RESET_2          ; sound_cmd_music_off — wipe display slots
+        jsr     ENGINE_RESET_1          ; sound_cmd_sfx_off — reinit weapon state
         pla
         pha
         tax
         lda     nsf_track_table,x       ; map track# → engine sound ID
         sta     NSF_SOUND_ID            ; save for trigger dispatch
-        jsr     SOUND_DISPATCH          ; weapon_select_handler loads music streams
+        jsr     SOUND_DISPATCH          ; sound_play_cmd loads music streams
         pla
         nop                             ; (padding — matches original shim layout)
         nop
@@ -124,7 +124,7 @@ nsf_trigger:
 ; =============================================================================
 ; Channel init blocks — write stream pointers to sound slot RAM
 ; =============================================================================
-; These set initial channel state that the weapon_select_handler doesn't
+; These set initial channel state that the sound_play_cmd doesn't
 ; fully configure.  Addresses are raw sound slot offsets ($0500-$057F).
 ; =============================================================================
 

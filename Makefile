@@ -25,7 +25,7 @@ BANK_SRCS = \
 	src/bank09_wily_3_5.asm \
 	src/bank0A_sound.asm \
 	src/bank0B_boss_ai.asm \
-	src/bank0C_weapons_ui.asm \
+	src/bank0C_sound_engine.asm \
 	src/bank0D_menus.asm \
 	src/bank0E_game_engine.asm
 
@@ -59,7 +59,7 @@ verify: $(ROM_OUT)
 
 nsfe: build/mm2.nsfe
 
-build/nsfe/bank0C.o: src/bank0C_weapons_ui.asm
+build/nsfe/bank0C.o: src/bank0C_sound_engine.asm
 	@mkdir -p $(dir $@)
 	$(CA65) -o $@ $<
 

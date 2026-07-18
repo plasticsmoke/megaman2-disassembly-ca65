@@ -17,7 +17,7 @@
 ; Bank $0F: Fixed bank (always mapped at $C000-$FFFF)
 
 BANK_GAME_ENGINE    = $0E       ; Bank switched to on cold boot
-BANK_CHR_UPLOAD     = $0C       ; Bank used for CHR-RAM upload callback
+BANK_SOUND          = $0C       ; Sound engine bank (NMI per-frame callback)
 
 ; ─── Controller button masks ─────────────────────────────────────────────────
 ; Button bit positions in controller byte ($23/$24)

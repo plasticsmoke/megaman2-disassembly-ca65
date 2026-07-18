@@ -14,7 +14,7 @@
 ;   music/instrument data.  It is fully self-contained — no other ROM banks
 ;   are needed for music playback.  The NSF shim ($C000+) provides init/play
 ;   entry points that bridge the NSFe player interface to bank $0C's internal
-;   dispatch (weapon_select_handler doubles as the music loader).
+;   dispatch (sound_play_cmd doubles as the music loader).
 ; =============================================================================
 
 .segment "NSFE"

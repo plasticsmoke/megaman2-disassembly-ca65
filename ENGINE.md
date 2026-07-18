@@ -144,7 +144,7 @@ NMI handler:
   4. Column update     — If col_update_count > 0: write vertical tile column to nametable
   5. Attribute update  — If attr_update_count > 0: write attribute table entries
   6. Scroll setup      — Compute final PPUSCROLL from scroll_x/y minus camera shake offsets
-  7. Bank callback     — Process queued cross-bank calls (CHR upload, sound)
+  7. Bank callback     — Sound engine tick + queued sound commands (bank $0C)
   8. RNG tick          — seed = (ent_x_sub[0] XOR seed + frame_counter) >> 1
 ```
 
@@ -608,7 +608,7 @@ When Start is pressed during gameplay:
 
 ## 14. Weapon System
 
-**Files:** `bank0C_weapons_ui.asm` (weapon data, CHR upload), `bank0F_fixed.asm` (firing dispatch)
+**Files:** `bank0F_fixed.asm` (firing dispatch, projectile AI, damage tables), `bank0D_menus.asm` (weapon menu)
 
 ### Weapon IDs
 
@@ -789,18 +789,25 @@ Some enemies use multi-entity spawn chains:
 
 ## 18. Sound Engine
 
-**File:** `bank0C_weapons_ui.asm` (also `bank0A_sound.asm` for music data)
+**File:** `bank0C_sound_engine.asm` — driver + all music/SFX data, fully self-contained
 
 The sound engine processes 4 channels (2 pulse, 1 triangle, 1 noise) each frame:
 
-1. For each active channel, read the sound stream pointer
-2. Decode commands: note on, note off, instrument change, tempo, loop, detune
-3. Write frequency and volume to APU registers ($4000-$400F)
-4. Advance stream pointer
+1. For each channel: run the SFX stream (if the channel is SFX-owned), then
+   tick the music note timer and fetch pattern bytes when the note ends
+2. Pattern commands: tempo, noise period, duty, envelope, pattern jump,
+   frequency table, dotted note, portamento, sweep, stop
+3. Apply volume/fade, sweep, envelope, vibrato; write APU registers ($4000-$400F)
+4. After all channels: process the music fade (cmd $FD)
 
-Music data lives in bank $0A. The engine switches to $0A during the sound update callback (queued through the NMI bank callback system), processes all channels, then restores the previous bank.
+All music and SFX data lives in bank $0C itself; the NMI switches to bank $0C
+each frame for the update ($8000) and drains `sound_queue` through the command
+dispatch ($8003).
 
-SFX can override music channels temporarily. Priority is handled by the `channel_active_flags` ($EF) bitmask.
+SFX claim channels via priority (hi nybble of `sound_priority` $E0) and a
+per-SFX channel mask (`sfx_channel_mask` $E1 → `channel_active_flags` $EF).
+Music state keeps advancing silently on claimed channels and resumes when the
+SFX releases them.
 
 ---
 

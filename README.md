@@ -47,7 +47,7 @@ Mapper 1 (MMC1), mode 3. 256 KB PRG (16 x 16 KB banks) + 8 KB CHR-RAM. Vertical 
 | $09 | `bank09_wily_3_5.asm` | Wily Stages 3-5 data + scroll code |
 | $0A | `bank0A_sound.asm` | Music and sound data |
 | $0B | `bank0B_boss_ai.asm` | Boss AI, enemy AI, collision |
-| $0C | `bank0C_weapons_ui.asm` | Weapon system, UI rendering, sound engine |
+| $0C | `bank0C_sound_engine.asm` | Sound engine + all music/SFX data |
 | $0D | `bank0D_menus.asm` | Menus, cutscenes & screens (title, password, stage select, weapon get, game over, ending) |
 | $0E | `bank0E_game_engine.asm` | Main game engine, entity AI dispatch |
 | $0F | `bank0F_fixed.asm` | **Fixed bank** ($C000-$FFFF): bank switch, NMI, PPU, controllers |
@@ -71,7 +71,7 @@ src/
   bank09_wily_3_5.asm         Wily Stages 3-5 data + scroll code
   bank0A_sound.asm            Music and sound data
   bank0B_boss_ai.asm          Boss AI, enemy AI, collision
-  bank0C_weapons_ui.asm       Weapon system, UI rendering, sound engine
+  bank0C_sound_engine.asm     Sound engine + all music/SFX data
   bank0D_menus.asm     Menus, cutscenes & screens (title, password, ending)
   bank0E_game_engine.asm      Main game engine, entity AI dispatch
   bank0F_fixed.asm            Fixed bank — NMI, PPU, bank switching, controllers

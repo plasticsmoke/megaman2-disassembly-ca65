@@ -2175,7 +2175,7 @@ transition_right_attr_loop:  ldx     current_stage
         and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_attr_step
         lda     #$34
-        jsr     sound_queue_push     ; sound cmd $34: sound-engine bank switch
+        jsr     sound_queue_push     ; SFX $34: silent — mutes ch 1+3 for transition
         lda     nametable_select
         sta     jump_ptr_hi
         lda     #$F0
@@ -2193,7 +2193,7 @@ transition_right_attr_step:  jsr     wait_for_vblank ; let NMI process queued PP
         dec     general_counter
         bpl     transition_right_attr_loop
         lda     #$FE
-        jsr     sound_queue_push     ; sound cmd $FE: restore sound-engine bank
+        jsr     sound_queue_push     ; cmd $FE: cancel SFX, restore music channels
 transition_right_scroll:  lda     current_screen
         sta     general_ptr_lo
         inc     general_ptr_lo                     ; $FE = destination screen index
@@ -2255,7 +2255,7 @@ transition_right_col_step:  lda     general_counter
         and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_wait_frame
         lda     #$34
-        jsr     sound_queue_push
+        jsr     sound_queue_push        ; SFX $34: silent — mutes ch 1+3 for transition
         lda     nametable_select
         sta     jump_ptr_hi
         lda     #$00
@@ -2276,7 +2276,7 @@ transition_right_wait_frame:  jsr     wait_for_vblank
         cmp     #$19                    ; 25 columns rendered?
         bne     transition_right_col_loop
         lda     #$FE
-        jsr     sound_queue_push     ; sound cmd $FE: restore sound-engine bank
+        jsr     sound_queue_push     ; cmd $FE: cancel SFX, restore music channels
 transition_right_done:  lda     #$40
         sta     scroll_dir_flags
         jsr     entity_spawn_scan       ; repopulate enemies for new room
