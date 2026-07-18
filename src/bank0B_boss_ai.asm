@@ -972,7 +972,7 @@ quickman_ai:  dex
         sta     boss_y_vel
         lda     temp_00,x
         sta     temp_0B
-        lda     quickman_sec_flag,x
+        lda     quickman_jump_dist_tbl,x
         sta     temp_0D
         lda     #$00
         sta     temp_0A
@@ -1060,9 +1060,10 @@ quickman_restore_y:  pla
         sta     ent_y_px
 quickman_frame_rts:  rts
 
-quickman_y_vel_table:  .byte   $07,$08,$04
-quickman_sec_flag:  .byte   $38,$40
-        .byte   $20,$20,$09,$A2,$A2,$00
+; ─── per-arc jump parameters, indexed by (rand mod 3) ───
+quickman_y_vel_table:  .byte   $07,$08,$04 ; Y velocity per jump arc
+quickman_jump_dist_tbl:  .byte   $38,$40,$20 ; X-velocity divisor hi per arc
+        .byte   $20,$09,$A2,$A2,$00        ; (unreferenced leftover bytes)
 ; ─── Quick Man phase change and sound ───
 quickman_phase_transition:  lda     #$00
         sta     boss_ai_state
