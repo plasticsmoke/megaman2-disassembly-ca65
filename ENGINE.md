@@ -177,14 +177,13 @@ Camera offsets are normally zero. During boss fights, they're set to small oscil
 
 The camera tracks the player within a dead zone. When the player's screen-relative X position exceeds the dead zone boundary, the camera advances by the player's movement delta.
 
-Each frame, the engine checks whether `scroll_x` has crossed a 16-pixel metatile boundary (4 pixels in scroll units → one column). When it does:
-1. `metatile_render_column` decodes the next column of metatile data into individual tiles
-2. The tile IDs are stored in a column buffer
-3. `col_update_count` is set to signal NMI
-4. NMI writes the vertical tile stripe to the off-screen nametable column
-5. Attribute bytes for the new column are also queued
+For every 4 pixels of scroll, one 32×32 metatile cell of the incoming column is rendered (the 8 cells of a full metatile column complete over 32 pixels of scroll):
+1. `column_data_copy` reads the next screen-layout byte (column-major metatile ID) and expands it to 16 tiles (4×4) plus its attribute byte
+2. The tiles are staged in the PPU update buffer with their nametable addresses
+3. `ppu_buffer_count` signals NMI to perform the writes
+4. The nametable bit comes from the layout pointer (`jump_ptr` bit 6), so cells land in the off-screen nametable automatically
 
-`column_index` ($1A) tracks the current column position, wrapping mod 64 across both nametables (32 columns each).
+`column_index` ($1A) tracks the cell position within the screen (column-major, mod 64); `column_ptr`/`metatile_ptr` walk the $8500+ screen layout stream linearly.
 
 ### Room Transitions
 

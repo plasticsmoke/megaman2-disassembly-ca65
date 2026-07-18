@@ -1945,9 +1945,10 @@ platform_not_found:  jmp     platform_scan_next
 ; Incremental scroll: called each frame while player moves right.
 ; Triggers when player X - scroll_x >= $80 (past screen midpoint).
 ; temp_00 = pixel delta to scroll this frame.
-; Pixel→column conversion: (old_scroll_x_low_2bits + delta) >> 2 = tile columns
-; crossed, since each metatile column is 4 pixels wide in scroll units.
-; For each column crossed, copies tile data and advances column_index mod 64.
+; Pixel→cell conversion: (old_scroll_x_low_2bits + delta) >> 2 = metatile
+; CELLS to render — one 32×32 cell per 4 px scrolled, so the 8 cells of an
+; incoming metatile column complete over 32 px of scroll. Each cell copy
+; advances column_index (column-major cell index, mod 64 per screen).
 ; =============================================================================
 scroll_right_handler:  sec
         lda     ent_x_px
@@ -1997,12 +1998,12 @@ scroll_right_clamp:  pla                ; A = old scroll_x
         adc     #$00
         sta     metatile_ptr_hi
 scroll_right_column_loop:  jsr     column_data_copy ; decode metatile column → PPU buffer
-        inc     column_index                     ; advance column_index
+        inc     column_index                     ; advance cell index
         lda     column_index
-        and     #$3F                    ; wrap mod 64 (2 nametables × 32 columns)
+        and     #$3F                    ; wrap mod 64 (cells per screen)
         sta     column_index
         clc
-        lda     jump_ptr                ; advance working pointer to next column
+        lda     jump_ptr                ; advance working pointer to next cell
         adc     #$01
         sta     jump_ptr
         lda     jump_ptr_hi

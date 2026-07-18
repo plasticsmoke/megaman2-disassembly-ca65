@@ -480,7 +480,7 @@ Entity spawn data is stored in stage banks ($00–$09) as 4 parallel arrays at f
 | $3800 | Y position (pixels) | $B800,y |
 | $3900 | Entity type ID | $B900,y |
 
-Entries are sorted by screen number. Secondary spawn tables at $3A00. BG palette data at $3E00.
+Entries are sorted by screen number and 1-indexed. Secondary spawn tables (persistent objects) are 4 × 64-byte arrays at $3A00-$3AFF; stage palettes live in the $3E00/$3F00 blocks. See section 6 for the full entity-bank layout.
 
 Banks $00–$04 share tables between the Robot Master stage and a Wily stage (using `AND #$07` to select entity data). Banks $05–$07 contain Robot Master data only.
 
@@ -679,23 +679,60 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Per-Bank Data Layout
 
-Each stage bank ($00–$09) has data at fixed offsets:
+Each stage bank plays TWO roles at different regions (see dual bank mapping
+above): the tile-bank role ($8000-$Bxxx, selected via `stage_bank_table`) and
+the entity-bank role ($B400-$BF61, selected via `current_stage AND #$07`).
 
-| Offset | Size | Contents |
-|---|---|---|
-| $0000 | $2000 | CHR tile data (8 KB, uploaded to CHR-RAM) |
-| $2000 | $1000 | Metatile definitions (4 bytes each) |
-| $3000 | $0600 | Screen/room layout data |
-| $3600 | varies | Entity spawn table — screen numbers |
-| $3700 | varies | Entity spawn table — X positions |
-| $3800 | varies | Entity spawn table — Y positions |
-| $3900 | varies | Entity spawn table — entity type IDs |
-| $3A00 | varies | Secondary spawn tables |
-| $3E00 | $0040 | BG palette data (4 palettes × 4 colors × 4 sets) |
+**Tile-bank role:**
+
+| Address | Contents |
+|---|---|
+| $8000-$83FF | Metatile definitions — 256 entries × 4 quadrant bytes (order TL, BL, TR, BR via `metatile_offset_table`) |
+| $8400-$84FF | Metatile attribute bytes — one palette byte per metatile (a 32×32 px metatile = exactly one NES attribute byte) |
+| $8500+ | Screen layouts — 64 bytes per screen, column-major (index = col×8 + row), 8×8 metatiles = 256×256 px |
+| varies | CHR tile pattern data — located per bank via the CHR upload lists ($BC00/$BD00), the fixed-bank group tables (`chr_bank_src_*`, bank0F:1101), and the per-screen overlay lists ($B460) |
+
+Each quadrant byte = `[collision:2][tile group:6]` — bits 7-6 are the
+collision class (see below), bits 5-0 select CHR tiles `G*4 .. G*4+3` as a
+16×16 px 2×2 tile block (consecutive CHR indices). Loaders: `column_data_copy`
+(bank0F:1473, rendering), `lookup_tile_from_map` (bank0F:1824, collision),
+`render_full_nametable` (bank0E:2306, `ptr = $8500 + screen×$40`).
+
+**Entity-bank role:**
+
+| Address | Contents |
+|---|---|
+| $B400+ | Per-screen connectivity flags (`get_screen_boundary`, bank0F:1202) — masked by `scroll_left/right_mask_table` per `transition_type` to permit exits |
+| $B42C+ | Per-screen index into the CHR overlay list and sprite palette sets |
+| $B460+ | Enemy CHR overlay list — (src_page, src_bank) pairs; 6 pages (1.5 KB) per set → pattern table $0A00-$0FFF (`scroll_column_render`, `checkpoint_respawn`) |
+| $B46C+ | Sprite palette sets — 6 bytes each (colors for sprite palettes 2-3), loaded per screen via `scroll_col_load_palette` (bank0F:1758) |
+| $B600/$B700/$B800/$B900 | Primary spawn arrays: screen / X / Y / entity type — 1-indexed, sorted by screen (`entity_spawn_scan` bank0F:3159) |
+| $BA00/$BA40/$BA80/$BAC0 | Secondary spawn arrays (max 64 entries): screen / X / Y / type for persistent objects — HP lives in RAM (`ent_child_hp`), so destroyed objects (e.g. Crash walls) stay destroyed across respawns |
+| $BB00-$BB41 | Checkpoint tables — 11 arrays × 6 entries (below) |
+| $BC00 / $BD00 | CHR upload list, RM / Wily stage: `[count, (src_page, page_count, src_bank) × count]` → CHR-RAM from $0000 (`chr_upload_init` bank0F:799) |
+| $BE00-$BE61 / $BF00-$BF61 | Palette block, RM / Wily stage: anim_target, anim_counter, 32-byte palette, 4 × 16-byte palette animation frames — copied verbatim to $0354-$03B5 |
+
+**Checkpoint tables** (index = `checkpoint_idx` $B0, 0-5; Wily stages use
+slots 3-5 of the paired RM bank):
+
+| Address | Restored to |
+|---|---|
+| $BB00 | Boss-entrance landing Y (`boss_entrance_scroll`) |
+| $BB06 | `nametable_select` / `ent_x_screen` (checkpoint screen; also scanned as death thresholds via $BB07) |
+| $BB0C | Primary spawn scan index (`spawn_scan_bwd/fwd`) |
+| $BB12 | Secondary spawn scan index |
+| $BB18 / $BB1E | `metatile_ptr_hi/lo` |
+| $BB24 / $BB2A | `column_ptr_hi/lo` |
+| $BB30 | `current_screen` |
+| $BB36 / $BB3C | `scroll_screen_lo/hi` |
 
 ### Metatile Format
 
-Each metatile is 4 bytes: 4 tile indices (TL, TR, BL, BR) packed into the tile definition area. The collision type is encoded in the top 2 bits of the attribute byte in the screen layout data.
+A metatile is 32×32 px = four 16×16 quadrants. The definition entry
+($8000 + ID×4) holds one byte per quadrant: bits 7-6 = collision class,
+bits 5-0 = tile group (× 4 = first of four consecutive CHR tile indices).
+The screen layout supplies metatile IDs; the attribute byte comes from the
+parallel $8400 table.
 
 | Collision bits | Base meaning |
 |---|---|

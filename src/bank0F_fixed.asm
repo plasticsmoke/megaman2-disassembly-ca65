@@ -1816,7 +1816,7 @@ cached_tile_scan_loop:  dey
 ;   2. Compute 6-bit metatile map index: col*8 + row (column-major)
 ;      col = X_pixel >> 5 (bits 7-5 → 0-7), row = Y_pixel >> 5 (bits 7-5 → 0-7)
 ;   3. Build pointer to screen's metatile map from screen number
-;   4. Load metatile ID, compute metatile data address ($2000 + ID*4)
+;   4. Load metatile ID, compute metatile data address ($8000 + ID*4)
 ;   5. Select quadrant (2×2 tile within metatile) from pixel bits 4
 ;   6. Extract 2-bit collision type from bits 7-6 of quadrant byte
 ;   7. Types 2-3: look up stage-specific collision via stage_collision_table
@@ -1866,12 +1866,12 @@ tile_lookup_calc_index:
         ldy     temp_00
         lda     (temp_0C),y             ; metatile ID from map
         sta     temp_0C
-        lda     #$20                    ; base = $2000 (metatile definition data)
+        lda     #$20                    ; base $20 << 2 = $80 → $8000 (metatile defs)
         asl     temp_0C                 ; metatile_ID * 4 (each metatile = 4 quadrant bytes)
         rol     a
         asl     temp_0C
         rol     a
-        sta     temp_0D                 ; (temp_0C:temp_0D) = $2000 + ID*4
+        sta     temp_0D                 ; (temp_0C:temp_0D) = $8000 + ID*4
 ; --- Step 5: select quadrant within 2×2 metatile ---
 ; Bit 4 of X pixel = left(0)/right(+2), bit 4 of Y pixel = top(0)/bottom(+1)
         ldy     #$00
