@@ -36,7 +36,7 @@
 ;    ├── ppu_attribute_update (attribute merge/fill)
 ;    ├── Scroll register setup (camera offset subtraction, nametable XOR)
 ;    ├── RNG update (ent_x_sub XOR seed + frame)
-;    └── Bank callback processing
+;    └── Sound engine tick (bank $0C $8000) + queued sound command dispatch ($8003)
 ;
 ; --- Entity Collision Pipeline ---
 ;   apply_entity_physics_alt (called by AI handlers)
@@ -93,9 +93,9 @@
 ;   $54         Attribute update sub-mode
 ;   $55         Active entity count
 ;   $56+        Active entity slot list
-;   $66         Bank switch queue count
-;   $67         Bank switch callback pending flag
-;   $68         Bank switch in progress flag
+;   $66         Sound command queue count (queue at $0580)
+;   $67         Sound engine update deferred (NMI hit mid-bank-switch)
+;   $68         Bank switch in progress flag (guards MMC1 serial write)
 ;   $69         Bank switch backup (original bank)
 ;   $9A-$9B     Boss beaten bitmask
 ;   $9C-$9F     Weapon ammo (various)
@@ -104,7 +104,7 @@
 ;   $AA         Special game mode flags
 ;   $AB-$AD     Weapon-specific counters
 ;   $AE         8×16 sprite size flag
-;   $B0         Score/rank index
+;   $B0         Respawn checkpoint index (indexes $BB06+ tables in stage bank)
 ;   $B1         Boss HP / intro state
 ;   $B3         Boss stage ID
 ;   $B6         Camera Y offset (screen shake)
@@ -175,7 +175,7 @@
 ; Sprite Data Tables ($F900-$FAFF):
 ;   $F900       Sprite def pointer low (entity type → animation data)
 ;   $F980       Sprite def pointer low (secondary/weapon sprites)
-;   $FA00       Sprite def pointer high (entity type → bank)
+;   $FA00       Sprite def pointer high (entity type → animation data)
 ;   $FA80       Sprite def pointer high (secondary/weapon sprites)
 ;   $FB00+      OAM sequence data (sprite tile IDs, attributes, offsets)
 ;
@@ -203,6 +203,18 @@ banked_0D_wily_intro := $8009       ; Bank $0D: Wily intro sequence
 banked_0E_boss_continue := $80AB    ; Bank $0E: boss intro continue
 banked_0E_entity_update := $84EE    ; Bank $0E: per-frame entity update
 banked_09_scroll_code := $8600      ; Bank $09: scroll column update code
+banked_09_entry_3  := $8603         ; Bank $09: ending cutscene entry (scroll)
+banked_09_entry_6  := $8606         ; Bank $09: ending cutscene entry (walk init)
+banked_09_entry_9  := $8609         ; Bank $09: ending cutscene entry (walk step)
+; Bank $0A sprite data tables (read while bank $0A is switched in; these
+; alias the generic $8000+ code entry addresses of other banks)
+spr_frame_ptr_lo   := $8000         ; Bank $0A: entity frame data pointer (lo)
+wpn_frame_ptr_lo   := $8100         ; Bank $0A: weapon frame data pointer (lo)
+spr_frame_ptr_hi   := $8200         ; Bank $0A: entity frame data pointer (hi)
+wpn_frame_ptr_hi   := $8300         ; Bank $0A: weapon frame data pointer (hi)
+spr_offset_ptr_lo  := $8400         ; Bank $0A: per-frame OAM offset data pointer (lo)
+spr_offset_ptr_hi  := $8500         ; Bank $0A: per-frame OAM offset data pointer (hi)
+spr_flip_x_tbl     := $8600         ; Bank $0A: X-offset mirror table for hflipped sprites
 banked_0E_wily_check := $9115       ; Bank $0E: Wily stage check
 banked_sound_process := $925B       ; Banked: sound engine process
 find_entity_count_check := $96CF    ; Bank $0E: scan for entity type, check population limit
@@ -228,11 +240,13 @@ bank_switch:                            ; PRG bank switch — A = bank number ($
         sta     mmc1_scratch            ; bit 4 (5th write commits)
         lda     #$00
         sta     bank_switch_active                     ; Clear "in progress" flag
-        lda     bank_callback_pending                     ; Check if callback pending
-        bne     bank_switch_with_callback
+        lda     sound_pending                     ; sound engine update deferred by NMI?
+        bne     bank_switch_run_sound
         rts
 
-bank_switch_with_callback:  lda     #$0C; Switch to bank $0C (CHR upload?), call banked_entry
+; NMI skipped the sound engine because this bank switch was in progress —
+; run the deferred sound update now: bank $0C, tick driver, drain queue.
+bank_switch_run_sound:  lda     #$0C            ; switch to bank $0C (sound engine)
         sta     mmc1_scratch
         lsr     a
         sta     mmc1_scratch
@@ -242,25 +256,27 @@ bank_switch_with_callback:  lda     #$0C; Switch to bank $0C (CHR upload?), call
         sta     mmc1_scratch
         lsr     a
         sta     mmc1_scratch
-        jsr     banked_entry
-bank_switch_process_queue:  ldx     $66 ; Process queued bank switch requests
-        beq     bank_switch_queue_done
-        lda     bank_switch_queue - 1,x
-        jsr     banked_entry_alt
-        dec     bank_queue_count
-        bne     bank_switch_process_queue
-bank_switch_queue_done:  lda     #$00   ; Queue empty — restore original bank
-        sta     bank_callback_pending
+        jsr     banked_entry            ; sound engine per-frame tick ($8000)
+bank_switch_sound_loop:  ldx     sound_queue_count ; dispatch queued sound command IDs
+        beq     bank_switch_sound_done
+        lda     sound_queue - 1,x
+        jsr     banked_entry_alt        ; sound command dispatch ($8003)
+        dec     sound_queue_count
+        bne     bank_switch_sound_loop
+bank_switch_sound_done:  lda     #$00   ; Queue empty — restore original bank
+        sta     sound_pending
         lda     bank_switch_backup
         jmp     bank_switch
 
-; ─── Enqueue a bank switch request ───
-bank_switch_enqueue:  ldy     $66       ; Enqueue a bank switch request (A = bank number)
-        cpy     #$10
-        bcs     bank_switch_enqueue_rts
-        sta     bank_switch_queue,y
-        inc     bank_queue_count
-bank_switch_enqueue_rts:  rts
+; ─── Queue a sound command ───
+; A = SFX/music/command ID. Queue is drained each frame by the bank $0C
+; sound engine (from NMI, or from bank_switch if NMI deferred it).
+sound_queue_push:  ldy     sound_queue_count
+        cpy     #$10                    ; queue full (16 entries)?
+        bcs     sound_queue_push_rts
+        sta     sound_queue,y
+        inc     sound_queue_count
+sound_queue_push_rts:  rts
 
         sta     $9FFF
         lsr     a
@@ -380,22 +396,28 @@ wait_multiple_frames:  pha
         rts
 
 ; =============================================================================
-; boss_death_sequence — Boss defeat sequence — explosions, score, screen fade ($C10B)
+; player_death_sequence — Player death: explosion ring, checkpoint, lives ($C10B)
 ; =============================================================================
-boss_death_sequence:  lda     #$41
-        jsr     bank_switch_enqueue     ; queue sound effect
+; Entered when player HP reaches 0 (contact damage in bank0F/bank0B) or on an
+; instant-death transition (game_substate ≠ 0 skips the explosion animation).
+; Plays the death explosion ring at the player's position, waits, computes the
+; respawn checkpoint from the player's screen position, then decrements lives:
+; lives left → respawn via bank $0E; none → game over / continue screen.
+; -----------------------------------------------------------------------------
+player_death_sequence:  lda     #$41
+        jsr     sound_queue_push     ; sound: player death
         lda     #$FF
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push     ; sound: stop music
         lda     game_substate
-        bne     boss_death_delay_start
+        bne     player_death_delay_start
         sta     general_timer
-boss_death_check_type:  and     #$01
-        bne     boss_death_run_frame
+player_death_anim_loop:  and     #$01
+        bne     player_death_run_frame
         lda     general_timer
         and     #$07
         tax
         ldy     #$01
-boss_death_setup_slot:  lda     #$25
+player_death_spawn_explosion:  lda     #$25
         sta     ent_type + $0E,y
         lda     #$80
         sta     ent_flags + $0E,y
@@ -419,23 +441,23 @@ boss_death_setup_slot:  lda     #$25
         sta     ent_anim_frame + $0E,y
         inx
         dey
-        bpl     boss_death_setup_slot
-boss_death_run_frame:  jsr     run_one_game_frame
+        bpl     player_death_spawn_explosion
+player_death_run_frame:  jsr     run_one_game_frame
         inc     general_timer
         lda     general_timer
         cmp     #$10                    ; 16 frames of explosions
-        bcc     boss_death_check_type
+        bcc     player_death_anim_loop
         lsr     ent_flags + $0E
         lsr     ent_flags + $0F
         jsr     setup_explosion_array   ; spawn final explosion ring
         lda     #$A0
-        bne     boss_death_delay_loop
-boss_death_delay_start:  lda     #$E0
-boss_death_delay_loop:  sta     $36
-boss_death_delay_step:  lsr     ent_flags
+        bne     player_death_delay_set
+player_death_delay_start:  lda     #$E0
+player_death_delay_set:  sta     general_timer
+player_death_delay_loop:  lsr     ent_flags
         jsr     run_one_game_frame      ; run game frame during delay
         dec     general_timer
-        bne     boss_death_delay_step
+        bne     player_death_delay_loop
         lda     #$10
         sta     PPUCTRL
         lda     #$06
@@ -444,19 +466,19 @@ boss_death_delay_step:  lsr     ent_flags
         and     #$07
         jsr     bank_switch
         ldx     #$00
-        lda     ent_x_screen
-boss_death_calc_score:  cmp     $BB07,x
-        bcc     boss_death_finish
+        lda     ent_x_screen            ; player screen number vs per-stage
+player_death_checkpoint_scan:  cmp     $BB07,x ; checkpoint screen thresholds
+        bcc     player_death_checkpoint_set
         inx
         cpx     #$05
-        bne     boss_death_calc_score
-boss_death_finish:  stx     $B0
+        bne     player_death_checkpoint_scan
+player_death_checkpoint_set:  stx     checkpoint_idx
         ldx     #$FF
         txs
         lda     #$0E                    ; switch to game engine bank
         jsr     bank_switch             ; switch to game engine bank
         dec     current_lives
-        bne     boss_death_to_0E_2
+        bne     player_death_respawn
         lda     #$00
         sta     current_etanks
         lda     #$0D
@@ -465,38 +487,43 @@ boss_death_finish:  stx     $B0
         lda     #$0E
         jsr     bank_switch
         lda     general_counter
-        bne     boss_death_to_0E_1
+        bne     player_death_gameover
         jmp     banked_0E_boss_timeout
 
-boss_death_to_0E_1:  jmp     banked_0E_boss_defeated
+player_death_gameover:  jmp     banked_0E_boss_defeated
 
-boss_death_to_0E_2:  jmp     banked_0E_boss_continue
+player_death_respawn:  jmp     banked_0E_boss_continue
 
 explosion_offset_y_tbl:  .byte   $F8,$08,$FB,$05,$00,$00,$05,$FB ; Y offsets for boss explosion pattern
 explosion_offset_x_lo_tbl:  .byte   $00,$00,$FB,$05,$FB,$08,$FB,$05 ; X offsets (low) for explosion pattern
 explosion_offset_x_hi_tbl:  .byte   $00,$00,$FF,$00,$FF,$00,$FF,$00 ; X offsets (high) for explosion pattern
 
 ; =============================================================================
-; boss_intro_sequence — Boss intro — health bar fill and Wily fortress check ($C1F0)
+; boss_defeated_sequence — Boss defeated: death cutscene, record victory ($C1F0)
 ; =============================================================================
-boss_intro_sequence:  jsr     reset_sound_state ; silence music for intro
+; Entered from process_sound_and_bosses when the boss's HP is depleted.
+; Runs input-locked frames until the boss death animation finishes
+; (boss_phase = $FF), then records the beaten-boss bit, calls the bank $0D
+; post-boss handler (weapon get), and advances to the next stage.
+; -----------------------------------------------------------------------------
+boss_defeated_sequence:  jsr     reset_sound_state ; silence music/boss state
         inc     boss_state_flag
-boss_intro_loop:  jsr     boss_fight_frame
+boss_defeated_wait:  jsr     boss_fight_frame
         lda     current_stage
         cmp     #WILY_STAGE_START
-        bne     boss_intro_done
+        bne     boss_defeated_finish
         lda     transition_type
         cmp     #$03
-        bne     boss_intro_done
+        bne     boss_defeated_finish
         lda     #$00
         sta     boss_state_flag
         lda     #$01
         sta     game_substate
-        jmp     boss_death_sequence
+        jmp     player_death_sequence
 
-boss_intro_done:  lda     boss_phase
+boss_defeated_finish:  lda     boss_phase
         cmp     #$FF
-        bne     boss_intro_loop
+        bne     boss_defeated_wait
         lda     #$00
         sta     boss_state_flag
         lda     #$10
@@ -506,7 +533,7 @@ boss_intro_done:  lda     boss_phase
         sta     ppumask_shadow
         sta     PPUMASK
         lda     #$00
-        sta     score_rank_idx
+        sta     checkpoint_idx
         ldx     #$FF
         txs
         lda     #$0E
@@ -556,10 +583,13 @@ reset_sound_state:  lda     #$00
         sta     boss_work_var2
         sta     boss_hit_timer
         sta     game_mode
-        lda     #$FE                    ; set boss HP to pre-intro value
+        lda     #$FE                    ; boss_phase = $FE (death animation running)
         sta     boss_phase
         rts
 
+; ─── ($C295 — no known callers) Screen init + CHR column upload ───
+; Runs 187 idle frames of palette animation, then streams $2E column-sized
+; chunks from bank $09 $8600+ into pattern table 1 via the column updater.
         lda     #$00
         sta     general_counter
         lda     #$02
@@ -670,8 +700,11 @@ clear_entities_loop:  sta     ent_anim_frame,x
         jmp     run_sound_and_scroll
 
 ; =============================================================================
-; setup_explosion_array — Set up 12 explosion entities around boss position ($C393)
+; setup_explosion_array — 12-piece death explosion ring at player position ($C393)
 ; =============================================================================
+; Fills slots $02-$0D with explosion entities ($25) radiating from the player
+; (slot 0). Used by player_death_sequence for the classic death ring.
+; -----------------------------------------------------------------------------
 setup_explosion_array:  lda     ent_x_screen
         sta     jump_ptr_hi
         lda     ent_x_px
@@ -816,11 +849,15 @@ chr_upload_palette_copy:  lda     (temp_0A),y
         jsr     bank_switch
         rts
 
-chr_upload_run:
+; ─── Respawn at checkpoint: restore scroll state + reload CHR overlay ───
+; Reads the per-stage checkpoint tables at $BB06+ (indexed by checkpoint_idx)
+; to restore camera/scroll/spawn-scan state, then re-uploads the 6-page
+; enemy CHR overlay ($B460 table) for that screen to pattern table $0A00+.
+checkpoint_respawn:
         lda     current_stage
         and     #$07
         jsr     bank_switch
-        ldy     score_rank_idx
+        ldy     checkpoint_idx
         lda     $BB06,y
         sta     nametable_select
         sta     ent_x_screen
@@ -851,11 +888,11 @@ chr_upload_run:
         adc     #$0B
         tay
         ldx     #$0C
-chr_upload_sound_bank:  lda     $B460,y
+checkpoint_chr_list_loop:  lda     $B460,y ; push (bank, addr-hi) pairs for CHR overlay
         pha
         dey
         dex
-        bne     chr_upload_sound_bank
+        bne     checkpoint_chr_list_loop
         lda     #$0A
         sta     PPUADDR
         lda     #$00
@@ -876,11 +913,11 @@ chr_sound_byte_loop:  lda     (jump_ptr),y
         bne     chr_sound_page_loop
         lda     #$0E
         jsr     bank_switch
-        lda     score_rank_idx
+        lda     checkpoint_idx
         cmp     #$02
-        bne     chr_upload_wily_check
+        bne     checkpoint_respawn_done
         jsr     banked_0E_wily_check
-chr_upload_wily_check:  rts
+checkpoint_respawn_done:  rts
 
 nametable_init:
         lda     #$0D
@@ -900,8 +937,13 @@ palette_anim_run:
         ldx     #$0F
 
 ; =============================================================================
-; find_active_entity_slot — Scan entity slots for an unused one ($C575)
+; find_active_entity_slot — Wait for slots 2..X to clear, then flush column ($C575)
 ; =============================================================================
+; Returns immediately if ANY entity in slots 2..X is still active. Once all
+; are gone: flushes a pending column update, queues sound command $32
+; (sound-engine bank switch), and calls the bank $0D $8003 entry.
+; Entry palette_anim_run starts the scan at slot $0F.
+; -----------------------------------------------------------------------------
 find_active_entity_slot:  lda     ent_flags,x ; check entity flags (bit 7=active)
         bmi     find_entity_done
         dex
@@ -914,8 +956,8 @@ scroll_column_setup:  lda     col_update_addr_hi
         pha
         lda     col_update_addr_lo
         pha
-        lda     #$32
-        jsr     bank_switch_enqueue
+        lda     #$32                    ; sound command $32: sound-engine bank switch
+        jsr     sound_queue_push
         lda     #$0D
         jsr     bank_switch
         jsr     banked_entry_alt
@@ -930,14 +972,14 @@ find_entity_done:  rts
 ; =============================================================================
 ; process_sound_and_bosses — Process sound engine and check boss encounter ($C5A9)
 ; =============================================================================
-process_sound_and_bosses:  lda     boss_phase  ; check boss HP / intro state
+process_sound_and_bosses:  lda     boss_phase  ; boss fight active?
         beq     process_sound_done
-        lda     #$0B                    ; switch to game logic bank
+        lda     #$0B                    ; switch to boss AI bank
         jsr     bank_switch
-        jsr     banked_entry_alt        ; call entity AI update
+        jsr     banked_entry_alt        ; run boss AI update
         lda     #$0E                    ; switch back to game engine
         jsr     bank_switch
-        lda     boss_hit_count          ; check boss hit count
+        lda     boss_hit_count          ; boss defeated flag (set at 0 HP)
         beq     process_sound_done
         lda     current_stage                     ; check current stage index
         cmp     #$0C
@@ -960,7 +1002,7 @@ clear_boss_entities:  lsr     ent_spawn_flags,x
         lda     #$AB
         sta     ent_y_spawn_px + $0F
         bne     process_sound_done
-process_sound_jump_intro:  jmp     boss_intro_sequence ; start boss intro
+process_sound_jump_intro:  jmp     boss_defeated_sequence ; boss beaten — victory sequence
 
 process_sound_done:  rts
 
@@ -1006,20 +1048,23 @@ chr_copy_ppu_loop:  lda     (jump_ptr),y
         jsr     bank_switch
         rts
 
+; ─── Load a CHR tile group into CHR-RAM ───
+; A = group index 0-6. Each group is a run of entries in the three 39-entry
+; tables below (source bank, source page, page count); group runs are defined
+; by chr_group_count_tbl (length) and chr_group_start_tbl (first entry).
 chr_ram_bank_load:
         sta     temp_00
         tax
-        lda     $C689,x
-        sta     temp_01
-        lda     $C690,x
-        sta     temp_02
+        lda     chr_group_count_tbl,x
+        sta     temp_01                 ; entries remaining in group
+        lda     chr_group_start_tbl,x
+        sta     temp_02                 ; current entry index
         lda     #$00
         sta     jump_ptr
         sta     PPUADDR
         sta     PPUADDR
-chr_bank_load_ptr_lo:  .byte   $A6
-chr_bank_load_ptr_hi:  .byte   $02
-        lda     chr_bank_src_addr_lo_tbl,x
+chr_bank_group_loop:  ldx     temp_02
+        lda     chr_bank_src_page_tbl,x ; source address high byte ($xx00)
         sta     jump_ptr_hi
         lda     chr_bank_page_count_tbl,x
         sta     temp_03
@@ -1035,36 +1080,28 @@ chr_copy_loop:  lda     (jump_ptr),y
         bne     chr_copy_loop
         inc     temp_02
         dec     temp_01
-        bne     chr_bank_load_ptr_lo
+        bne     chr_bank_group_loop
         lda     #$0D
         jsr     bank_switch
         rts
 
-        .byte   $02,$02,$03,$06,$0E,$04,$08,$00
-        .byte   $02,$04,$07,$0D,$1B,$1F
-chr_bank_src_bank_tbl:  .byte   $05,$08,$06,$09,$06,$00,$09,$00
+chr_group_count_tbl:  .byte   $02,$02,$03,$06,$0E,$04,$08 ; entries per CHR group
+chr_group_start_tbl:  .byte   $00,$02,$04,$07,$0D,$1B,$1F ; first entry per CHR group
+chr_bank_src_bank_tbl:  .byte   $05,$08,$06,$09,$06,$00,$09,$00 ; source PRG bank per entry
         .byte   $09,$08,$09,$08,$09,$03,$03,$04
         .byte   $04,$06,$04,$05,$05,$05,$07,$07
         .byte   $02,$08,$07,$05,$08,$09,$08,$00
         .byte   $06,$07,$07,$07,$02,$02,$09
-chr_bank_src_addr_lo_tbl:  .byte   $90,$88,$90,$90
-        bcc     chr_bank_load_ptr_hi
-        ldy     #$98
-        ldy     $AC80
-        sty     weapon_ammo + 3
-        sta     $9D9C,y
+chr_bank_src_page_tbl:  .byte   $90,$88,$90,$90,$90,$98,$A0,$98 ; source page (addr high) per entry
+        .byte   $AC,$80,$AC,$84,$9F,$99,$9C,$9D
         .byte   $9B,$B2,$97,$93,$96,$9C,$9D,$9F
         .byte   $95,$A4,$B2,$90,$88,$9F,$8C,$98
         .byte   $B2,$9D,$9F,$AE,$96,$94,$AC
-chr_bank_page_count_tbl:  .byte   $10,$10,$10,$10,$08,$08,$10,$0E
+chr_bank_page_count_tbl:  .byte   $10,$10,$10,$10,$08,$08,$10,$0E ; 256-byte pages per entry
         .byte   $02,$04,$02,$04,$06,$02,$01,$01
-        .byte   $01,$02,$01,$01,$02,$01
-        ora     (temp_01,x)
+        .byte   $01,$02,$01,$01,$02,$01,$01,$01
         .byte   $02,$0C,$02,$10,$03,$01,$0C,$08
-        ora     (temp_01,x)
-        ora     (temp_01,x)
-        ora     (temp_01,x)
-        .byte   $02
+        .byte   $01,$01,$01,$01,$01,$01,$02
 ; ─── Copy column data to PPU update buffer ───
 scroll_column_prep:
 column_copy_to_buffer:  jsr     bank_switch
@@ -1178,7 +1215,7 @@ boss_entrance_scroll:  lda     current_stage
         lda     ent_y_px
         adc     #$10
         sta     ent_y_px
-        ldx     score_rank_idx
+        ldx     checkpoint_idx
         cmp     $BB00,x
         beq     boss_entrance_done
         jsr     render_all_sprites
@@ -1186,7 +1223,7 @@ boss_entrance_scroll:  lda     current_stage
         jmp     boss_entrance_scroll
 
 boss_entrance_done:  lda     #$30
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$00
         sta     game_substate
         sta     max_speed_sub
@@ -1286,7 +1323,7 @@ divide_16bit:
 div16_setup:
         ldy     #$10                    ; 16 iterations (one per bit)
 div16_loop:
-        asl     $10                     ; shift quotient left (make room for new bit)
+        asl     temp_10                 ; shift quotient left (make room for new bit)
         rol     temp_0A                 ; shift dividend left into remainder
         rol     temp_0B
         rol     temp_11
@@ -1347,7 +1384,9 @@ attr_table_write:
         sta     ppu_update_buf + $0C,x
         rts
 
-        ldx     attr_update_count
+; ─── metatile_render ($C8EF) — cross-bank entry (see fixed_bank.inc) ───
+; Stages a scroll-column attribute write into the column update buffer.
+metatile_render:  ldx     attr_update_count
         ldy     #$08
         lda     jump_ptr_hi
         and     #$01
@@ -1403,7 +1442,7 @@ attr_set_nametable:  tya
         and     #$10
         beq     attr_check_row
         iny
-attr_check_row:  lda     $0A
+attr_check_row:  lda     temp_0A
         and     #$10
         beq     attr_calc_mask
         iny
@@ -1468,7 +1507,7 @@ metatile_render_loop:  clc
         and     #$40
         beq     metatile_set_base_nt
         ldy     #$24
-metatile_set_base_nt:  sty     $0D
+metatile_set_base_nt:  sty     temp_0D
         lda     column_index
         sta     temp_0C
         lsr     a
@@ -1506,7 +1545,10 @@ metatile_set_base_nt:  sty     $0D
         rts
 
 metatile_offset_table:  .byte   $00,$08,$02,$0A
-        lda     current_bank
+
+; ─── metatile_column_render ($CA0B) — cross-bank entry (see fixed_bank.inc) ───
+; column_data_copy wrapper that preserves the caller's PRG bank.
+metatile_column_render:  lda     current_bank
         pha
         jsr     column_data_copy
         pla
@@ -1646,7 +1688,10 @@ metatile_attr_done:  lda     #$80
         jsr     bank_switch
         rts
 
-        lda     general_counter
+; ─── scroll_column_render ($CB0C) — cross-bank entry (see fixed_bank.inc) ───
+; Streams the per-screen enemy CHR overlay: uploads two 16-byte tile columns
+; per call to pattern table $0A00+ from the stage bank's $B460 CHR list.
+scroll_column_render:  lda     general_counter
         cmp     #$60
         bcc     @skip
         rts
@@ -1730,7 +1775,7 @@ active_entity_next:  dex
 ; =============================================================================
 ; lookup_cached_tile — Look up tile collision from cached active entity list ($CBA2)
 ; =============================================================================
-lookup_cached_tile:  ldy     $55
+lookup_cached_tile:  ldy     active_entity_count
 cached_tile_scan_loop:  dey
         bmi     lookup_tile_from_map
         ldx     active_entity_list,y
@@ -1934,7 +1979,7 @@ render_priority_fix:  lda     current_stage
         cmp     #$01
         bne     render_sprites_done
         ldx     temp_0D
-render_priority_loop:  cpx     $0C
+render_priority_loop:  cpx     temp_0C
         beq     render_sprites_done
         lda     oam_buffer + $02,x
         ora     #$20
@@ -2114,7 +2159,7 @@ render_begin_oam_write:  tay
         beq     render_check_flash
 render_flash_jump:  jmp     render_ok_return
 
-render_check_flash:  lda     $F9
+render_check_flash:  lda     boss_fight_flag
         bne     render_flash_jump
         beq     render_load_sprite_data
 render_skip_flash:  bne     render_load_sprite_data
@@ -2125,9 +2170,9 @@ render_skip_flash:  bne     render_load_sprite_data
         bne     render_dec_extra_timer
         ldy     #$18
 render_dec_extra_timer:  dec     boss_hit_timer
-render_load_sprite_data:  lda     banked_entry,y
+render_load_sprite_data:  lda     spr_frame_ptr_lo,y ; frame data ptr (bank $0A)
         sta     jump_ptr
-        lda     $8200,y
+        lda     spr_frame_ptr_hi,y
         sta     jump_ptr_hi
         lda     #$00
         sta     temp_03
@@ -2137,9 +2182,9 @@ render_sprite_loop:  ldy     #$00
         iny
         lda     (jump_ptr),y
         tay
-        lda     $8400,y
+        lda     spr_offset_ptr_lo,y     ; OAM offset data ptr (bank $0A)
         sta     temp_0A
-        lda     $8500,y
+        lda     spr_offset_ptr_hi,y
         sta     temp_0B
         sec
         lda     ent_x_px,x
@@ -2176,7 +2221,7 @@ render_sprite_apply_flip:  eor     temp_02
         beq     render_sprite_no_flip_x
         lda     (temp_0A),y
         tay
-        lda     banked_09_scroll_code,y
+        lda     spr_flip_x_tbl,y        ; mirrored X offset (bank $0A)
         jmp     render_sprite_write_x
 
 render_sprite_no_flip_x:  lda     (temp_0A),y
@@ -2249,9 +2294,9 @@ render_weapon_begin_write:  tay
         lda     ent_flags,x
         and     #$20
         bne     render_weapon_skip
-        lda     $8100,y
+        lda     wpn_frame_ptr_lo,y      ; weapon frame data ptr (bank $0A)
         sta     jump_ptr
-        lda     $8300,y
+        lda     wpn_frame_ptr_hi,y
         sta     jump_ptr_hi
         lda     ent_hit_count,x
         sta     temp_03
@@ -2274,7 +2319,7 @@ render_hp_bars:  lda     ent_hp          ; player HP (entity slot 0)
         bcs     render_hp_done
         ldy     current_weapon
         beq     render_weapon_hp
-        lda     beaten_bosses_hi,y
+        lda     weapon_ammo - 1,y       ; ammo for current weapon (1-indexed)
         sta     temp_00
         lda     #$00
         sta     temp_02
@@ -2432,14 +2477,15 @@ nmi_set_scroll_y:
         sta     PPUCTRL                 ; Write final PPUCTRL
         sta     vblank_done             ; Set "VBLANK done" flag (nonzero = processed)
         inc     frame_counter
-; --- NMI exit: bank callback processing ---
-; If NMI interrupted a bank switch in progress ($68≠0), defer
-; processing; otherwise restore bank $0C and execute queued calls.
-nmi_tail:  lda     $68
-        beq     nmi_restore_bank
-        inc     bank_callback_pending
+; --- NMI exit: sound engine update ---
+; If NMI interrupted a bank switch in progress ($68≠0), defer the sound
+; update (bank_switch runs it after finishing); otherwise switch to bank
+; $0C, tick the sound driver, and dispatch queued sound commands.
+nmi_tail:  lda     bank_switch_active
+        beq     nmi_sound_bank
+        inc     sound_pending           ; defer: bank_switch will run sound
         bne     nmi_rng_and_exit
-nmi_restore_bank:  lda     #$0C         ; Restore fixed bank via MMC1 serial write
+nmi_sound_bank:  lda     #$0C           ; switch to bank $0C (sound engine)
         sta     mmc1_scratch
         lsr     a
         sta     mmc1_scratch
@@ -2449,15 +2495,15 @@ nmi_restore_bank:  lda     #$0C         ; Restore fixed bank via MMC1 serial wri
         sta     mmc1_scratch
         lsr     a
         sta     mmc1_scratch
-        jsr     banked_entry
-nmi_process_queue:  ldx     $66
+        jsr     banked_entry            ; sound engine per-frame tick ($8000)
+nmi_process_queue:  ldx     sound_queue_count
         beq     nmi_queue_done
-        lda     bank_switch_queue - 1,x
-        cmp     #$FD
+        lda     sound_queue - 1,x
+        cmp     #$FD                    ; command $FD takes a parameter in Y
         bne     nmi_queue_call
         ldy     #$A0
-nmi_queue_call:  jsr     banked_entry_alt
-        dec     bank_queue_count
+nmi_queue_call:  jsr     banked_entry_alt ; sound command dispatch ($8003)
+        dec     sound_queue_count
         bne     nmi_process_queue
 nmi_queue_done:  lda     current_bank
         jsr     bank_switch
@@ -2552,7 +2598,7 @@ ppu_buffer_write_entry:  lda     ppu_update_buf + $08,y
         sta     PPUADDR
         lda     ppu_update_buf + $50,y
         sta     PPUDATA
-ppu_buffer_write_row:  lda     $0B
+ppu_buffer_write_row:  lda     temp_0B
         sta     PPUADDR
         clc
         lda     temp_0A
@@ -2792,7 +2838,7 @@ weapon_palette_data:  .byte   $0F,$0F,$2C,$11,$0F,$0F,$28,$15 ; palette entries 
 ; =============================================================================
 player_damage_knockback:
         lda     #$26                    ; sound: damage recoil
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$00
         sta     weapon_fire_dir
         sta     general_timer
@@ -3072,18 +3118,24 @@ switch_to_bank_0D:  lda     #$0D
         jsr     bank_switch
         rts
 
+; ─── Ending cutscene trampolines: switch to bank $09, call entry, return via $0D ───
 ending_scroll_update:
-        .byte   $A9,$09,$20,$00,$C0,$20,$03,$86
-        .byte   $4C,$31,$D6
+        lda     #$09
+        jsr     bank_switch
+        jsr     banked_09_entry_3       ; bank $09 ending entry ($8603)
+        jmp     switch_to_bank_0D
+
 ending_init_walk:
-        .byte   $A9,$09,$20,$00,$C0
-        .byte   $20
-        .byte   $06,$86
-        .byte   $4C,$31,$D6
+        lda     #$09
+        jsr     bank_switch
+        jsr     banked_09_entry_6       ; bank $09 ending entry ($8606)
+        jmp     switch_to_bank_0D
 
 ending_walk_step:
-        .byte   $A9,$09,$20,$00,$C0,$20,$09,$86
-        .byte   $4C,$31,$D6
+        lda     #$09
+        jsr     bank_switch
+        jsr     banked_09_entry_9       ; bank $09 ending entry ($8609)
+        jmp     switch_to_bank_0D
 
 ; =============================================================================
 ; entity_spawn_scan — Scan stage data and spawn/despawn entities based on scroll ($D658)
@@ -3103,7 +3155,7 @@ entity_spawn_scan:  lda     current_stage
         lda     scroll_dir_flags
         and     #$40
         bne     spawn_scan_right_scroll
-spawn_scan_backward:  ldy     $48
+spawn_scan_backward:  ldy     spawn_scan_bwd
         beq     spawn_scan_forward
         lda     $B5FF,y
         cmp     temp_0B
@@ -3116,7 +3168,7 @@ spawn_backward_despawn:  dey
         jsr     activate_primary_entity
         dec     spawn_scan_bwd
         bne     spawn_scan_backward
-spawn_scan_forward:  ldy     $49
+spawn_scan_forward:  ldy     spawn_scan_fwd
         beq     spawn_forward_done
 spawn_forward_check:  lda     $B5FF,y
         cmp     jump_ptr_hi
@@ -3127,8 +3179,8 @@ spawn_forward_check:  lda     $B5FF,y
         bcc     spawn_forward_done
 spawn_forward_skip:  dey
         bne     spawn_forward_check
-spawn_forward_done:  sty     $49
-spawn_secondary_backward:  ldy     $4C
+spawn_forward_done:  sty     spawn_scan_fwd
+spawn_secondary_backward:  ldy     spawn_scan_sec_bwd
         beq     spawn_secondary_forward
         lda     $B9FF,y
         cmp     temp_0B
@@ -3141,9 +3193,9 @@ spawn_sec_check_active:  lda     ent_parent_ref + $0F,y
         beq     spawn_sec_backward_next
         dey
         jsr     activate_secondary_entity
-spawn_sec_backward_next:  dec     $4C
+spawn_sec_backward_next:  dec     spawn_scan_sec_bwd
         bne     spawn_secondary_backward
-spawn_secondary_forward:  ldy     $4D
+spawn_secondary_forward:  ldy     spawn_scan_sec_fwd
         beq     spawn_sec_forward_done
 spawn_sec_forward_check:  lda     $B9FF,y
         cmp     jump_ptr_hi
@@ -3154,10 +3206,10 @@ spawn_sec_forward_check:  lda     $B9FF,y
         bcc     spawn_sec_forward_done
 spawn_sec_forward_skip:  dey
         bne     spawn_sec_forward_check
-spawn_sec_forward_done:  sty     $4D
+spawn_sec_forward_done:  sty     spawn_scan_sec_fwd
         jmp     spawn_scan_done
 
-spawn_scan_right_scroll:  ldy     $49
+spawn_scan_right_scroll:  ldy     spawn_scan_fwd
         lda     jump_ptr_hi
         cmp     $B600,y
         bcc     spawn_right_backward
@@ -3168,8 +3220,8 @@ spawn_scan_right_scroll:  ldy     $49
 spawn_right_activate:  jsr     activate_primary_entity
         inc     spawn_scan_fwd
         bne     spawn_scan_right_scroll
-spawn_right_backward:  ldy     $48
-spawn_right_back_check:  lda     $0B
+spawn_right_backward:  ldy     spawn_scan_bwd
+spawn_right_back_check:  lda     temp_0B
         cmp     $B600,y
         bcc     spawn_right_back_done
         bne     spawn_right_back_skip
@@ -3178,8 +3230,8 @@ spawn_right_back_check:  lda     $0B
         bcc     spawn_right_back_done
 spawn_right_back_skip:  iny
         bne     spawn_right_back_check
-spawn_right_back_done:  sty     $48
-spawn_right_sec_forward:  ldy     $4D
+spawn_right_back_done:  sty     spawn_scan_bwd
+spawn_right_sec_forward:  ldy     spawn_scan_sec_fwd
         lda     jump_ptr_hi
         cmp     $BA00,y
         bcc     spawn_right_sec_backward
@@ -3190,10 +3242,10 @@ spawn_right_sec_forward:  ldy     $4D
 spawn_right_sec_check:  lda     ent_child_hp,y
         beq     spawn_right_sec_next
         jsr     activate_secondary_entity
-spawn_right_sec_next:  inc     $4D
+spawn_right_sec_next:  inc     spawn_scan_sec_fwd
         bne     spawn_right_sec_forward
-spawn_right_sec_backward:  ldy     $4C
-spawn_right_sec_back_chk:  lda     $0B
+spawn_right_sec_backward:  ldy     spawn_scan_sec_bwd
+spawn_right_sec_back_chk:  lda     temp_0B
         cmp     $BA00,y
         bcc     spawn_right_sec_back_done
         bne     spawn_right_sec_back_skip
@@ -3202,7 +3254,7 @@ spawn_right_sec_back_chk:  lda     $0B
         bcc     spawn_right_sec_back_done
 spawn_right_sec_back_skip:  iny
         bne     spawn_right_sec_back_chk
-spawn_right_sec_back_done:  sty     $4C
+spawn_right_sec_back_done:  sty     spawn_scan_sec_bwd
 spawn_scan_done:  lda     #$0E          ; switch back to game engine
         jsr     bank_switch
         rts
@@ -3393,23 +3445,24 @@ find_slot_found:  clc
 
 fire_weapon_dispatch:
         lda     boss_fight_flag
-        bne     @in_range
+        bne     @no_fire
         ldx     current_weapon
-        beq     @skip
-        lda     beaten_bosses_hi,x
-        beq     @in_range
-@skip:
+        beq     @dispatch               ; buster: no ammo check
+        lda     weapon_ammo - 1,x       ; ammo for current weapon (1-indexed)
+        beq     @no_fire                ; empty → can't fire
+@dispatch:
         lda     weapon_dispatch_lo_tbl,x
         sta     jump_ptr
         lda     weapon_dispatch_hi_tbl,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-@in_range:
+@no_fire:
         sec
         rts
 
-        lda     p1_new_presses
+; ─── Mega Buster fire handler (weapon 0) ───
+fire_weapon_buster:  lda     p1_new_presses
         and     #$02
         beq     fire_weapon_no_slot
         ldx     #$04
@@ -3420,13 +3473,13 @@ fire_weapon_scan_slot:  lda     ent_flags,x
         bne     fire_weapon_scan_slot
         beq     fire_weapon_no_slot
 fire_weapon_found_slot:  lda     #$24
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldy     #$00
         jsr     weapon_spawn_projectile
 fire_weapon_set_timer:  lda     #$0F
         sta     general_timer
         lda     #$01
-fire_weapon_set_dir:  sta     $3D
+fire_weapon_set_dir:  sta     weapon_fire_dir
         ldx     game_substate
         clc
         adc     weapon_base_type_tbl,x
@@ -3437,19 +3490,21 @@ fire_weapon_set_dir:  sta     $3D
 fire_weapon_no_slot:  sec
         rts
 
-        lda     p1_new_presses
+; ─── Atomic Fire fire handler (weapon 1) — spawn charge entity in slot 2 ───
+fire_weapon_atomic:  lda     p1_new_presses
         and     #$02
-        beq     @in_range
+        beq     @no_fire
         ldx     #$02
         ldy     #$01
         jsr     weapon_spawn_projectile
         lda     #$82
         sta     ent_flags,x
-@in_range:
+@no_fire:
         sec
         rts
 
-        lda     p1_new_presses
+; ─── Air Shooter fire handler (weapon 2) — 3 tornadoes, slots 2-4 ───
+fire_weapon_air:  lda     p1_new_presses
         and     #$02
         beq     fire_weapon_multi_fail
         ldx     #$04
@@ -3467,7 +3522,7 @@ fire_weapon_multi_loop:  stx     temp_01
         cpx     #$01
         bne     fire_weapon_multi_loop
         lda     #$3F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         sec
         lda     weapon_ammo + 1
         sbc     #$02
@@ -3477,15 +3532,16 @@ fire_weapon_multi_loop:  stx     temp_01
 fire_weapon_multi_fail:  sec
         rts
 
-        lda     p1_new_presses
+; ─── Leaf Shield fire handler (weapon 3) — 4 leaves, slots 2-5, cost 3 ───
+fire_weapon_leaf:  lda     p1_new_presses
         and     #$02
-        beq     fire_weapon_spread_loop_in_range
+        beq     fire_weapon_spread_done
         lda     ent_flags + $02
-        bmi     fire_weapon_spread_loop_in_range
+        bmi     fire_weapon_spread_done
         sec
         lda     weapon_ammo + 2
         sbc     #$03
-        bcc     fire_weapon_spread_loop_in_range
+        bcc     fire_weapon_spread_done
         ldx     #$05
 fire_weapon_spread_loop:  stx     temp_02
         ldy     #$03
@@ -3494,11 +3550,12 @@ fire_weapon_spread_loop:  stx     temp_02
         dex
         cpx     #$01
         bne     fire_weapon_spread_loop
-fire_weapon_spread_loop_in_range:
+fire_weapon_spread_done:
         sec
         rts
 
-        lda     p1_new_presses
+; ─── Bubble Lead fire handler (weapon 4) — 2 max, half-unit cost ───
+fire_weapon_bubble:  lda     p1_new_presses
         and     #$02
         beq     fire_weapon_bubble_fail
         ldx     #$03
@@ -3511,7 +3568,7 @@ fire_weapon_bubble_scan:  lda     ent_flags,x
 fire_weapon_bubble_fire:  ldy     #$04
         jsr     weapon_spawn_projectile
         lda     #$24
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         inc     weapon_counter_2
         lda     weapon_counter_2
         cmp     #$02
@@ -3524,7 +3581,8 @@ fire_weapon_bubble_done:  jmp     fire_weapon_set_timer
 fire_weapon_bubble_fail:  sec
         rts
 
-        lda     p1_new_presses
+; ─── Quick Boomerang fire handler (weapon 5) — 8 shots per unit ───
+fire_weapon_quick:  lda     p1_new_presses
         and     #$02
         bne     @skip
         lda     weapon_counter_1
@@ -3544,7 +3602,7 @@ fire_weapon_quick_scan:  lda     ent_flags,x
 fire_weapon_quick_fire:  ldy     #$05
         jsr     weapon_spawn_projectile
         lda     #$24
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         inc     weapon_counter_2
         lda     weapon_counter_2
         cmp     #$08
@@ -3559,27 +3617,29 @@ fire_weapon_quick_reset:  lda     #$00
 fire_weapon_quick_fail:  sec
         rts
 
-        lda     p1_new_presses
+; ─── Crash Bomber fire handler (weapon 8) — 1 bomb, cost 4 ───
+fire_weapon_crash:  lda     p1_new_presses
         and     #$02
-        beq     @in_range
+        beq     @no_fire
         lda     ent_flags + $02
-        bmi     @in_range
+        bmi     @no_fire
         sec
-        lda     weapon_energy + 3
+        lda     weapon_energy + 3       ; Crash Bomber energy
         sbc     #$04
-        bcc     @in_range
+        bcc     @no_fire
         sta     weapon_energy + 3
         ldx     #$02
         ldy     #$06
         jsr     weapon_spawn_projectile
         lda     #$24
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jmp     fire_weapon_set_timer
-@in_range:
+@no_fire:
         sec
         rts
 
-        lda     p1_new_presses
+; ─── Metal Blade fire handler (weapon 7) — 8-way aim, 4 shots per unit ───
+fire_weapon_metal:  lda     p1_new_presses
         and     #$02
         beq     fire_weapon_metal_fail
         ldx     #$04
@@ -3592,7 +3652,7 @@ fire_weapon_metal_scan:  lda     ent_flags,x
 fire_weapon_metal_fire:  ldy     #$07
         jsr     weapon_spawn_projectile
         lda     #$23
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         inc     weapon_counter_2
         lda     weapon_counter_2
         cmp     #$04
@@ -3628,30 +3688,33 @@ metal_blade_xvel_sub_tbl:  .byte   $00,$00,$00,$00,$00,$D4,$D4,$00
         .byte   $00,$D4,$D4,$00,$00,$00,$00,$00
 metal_blade_xvel_tbl:  .byte   $04,$00,$00,$00,$04,$02,$02,$00
         .byte   $04,$02,$02,$00,$00,$00,$00,$00
-        lda     p1_new_presses
+
+; ─── Time Stopper fire handler (weapon 6) — activate freeze ───
+fire_weapon_time_stopper:  lda     p1_new_presses
         and     #$02
-        beq     fire_weapon_finish_in_range
+        beq     fire_weapon_time_done
         ldx     #$02
         lda     ent_flags + $02
-        bmi     fire_weapon_finish_in_range
+        bmi     fire_weapon_time_done
         ldy     #$08
         jsr     weapon_spawn_projectile
         lda     #$01
         sta     boss_spawn_timer
         lda     #$21
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 fire_weapon_finish:  lda     #$0F
         sta     general_timer
         lda     #$03
         jmp     fire_weapon_set_dir
 
-fire_weapon_finish_in_range:
+fire_weapon_time_done:
         sec
         rts
 
-        lda     p1_new_presses
+; ─── Item 1 fire handler (weapon 9) — rising platform, cost 2 ───
+fire_weapon_item1:  lda     p1_new_presses
         and     #$02
-        beq     *-6
+        beq     fire_weapon_time_done
         ldx     #$04
 fire_weapon_item1_scan:  lda     ent_flags,x
         bpl     fire_weapon_item1_fire
@@ -3670,7 +3733,8 @@ fire_weapon_item1_fire:  ldy     #$09
 fire_weapon_item1_fail:  sec
         rts
 
-        lda     p1_new_presses
+; ─── Item 2 fire handler (weapon 10) — jet sled ───
+fire_weapon_item2:  lda     p1_new_presses
         and     #$02
         beq     @done
         lda     ent_flags + $02
@@ -3685,7 +3749,9 @@ fire_weapon_item1_fail:  sec
         jmp     fire_weapon_finish
 @done:
         rts
-        lda     p1_new_presses
+
+; ─── Item 3 fire handler (weapon 11) — wall climber ───
+fire_weapon_item3:  lda     p1_new_presses
         and     #$02
         beq     @done_2
         lda     ent_flags + $02
@@ -3698,10 +3764,17 @@ fire_weapon_item1_fail:  sec
         jmp     fire_weapon_finish
 @done_2:
         rts
-weapon_dispatch_lo_tbl:  .byte   $6C,$9F,$B3,$E6,$0A,$3B,$31,$9F
-        .byte   $7A,$58,$7D,$9D
-weapon_dispatch_hi_tbl:  .byte   $DA,$DA,$DA,$DA,$DB,$DB,$DC,$DB
-        .byte   $DB,$DC,$DC,$DC
+; Fire handler per weapon ID (P,H,A,W,B,Q,F,M,C,Item1,Item2,Item3)
+weapon_dispatch_lo_tbl:
+        .byte   <fire_weapon_buster,<fire_weapon_atomic,<fire_weapon_air
+        .byte   <fire_weapon_leaf,<fire_weapon_bubble,<fire_weapon_quick
+        .byte   <fire_weapon_time_stopper,<fire_weapon_metal,<fire_weapon_crash
+        .byte   <fire_weapon_item1,<fire_weapon_item2,<fire_weapon_item3
+weapon_dispatch_hi_tbl:
+        .byte   >fire_weapon_buster,>fire_weapon_atomic,>fire_weapon_air
+        .byte   >fire_weapon_leaf,>fire_weapon_bubble,>fire_weapon_quick
+        .byte   >fire_weapon_time_stopper,>fire_weapon_metal,>fire_weapon_crash
+        .byte   >fire_weapon_item1,>fire_weapon_item2,>fire_weapon_item3
 
 ; =============================================================================
 ; update_entity_positions — Update screen-relative positions for all active entities ($DCD0)
@@ -3723,8 +3796,8 @@ update_entity_next:  ldx     current_entity_slot
         bne     update_entity_loop
         rts
 
-update_entity_special:  lda     #$DC
-        pha
+update_entity_special:  lda     #$DC    ; push $DCE8: handler's RTS returns to
+        pha                             ;   update_entity_next ($DCE9)
         lda     #$E8
         pha
         sec
@@ -3741,11 +3814,24 @@ update_entity_special:  lda     #$DC
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-entity_special_dispatch_lo:  .byte   $34,$34,$48,$74,$6F,$CE,$16,$58
-        .byte   $58,$90,$10,$DD,$71,$E4,$E4,$E8
-entity_special_dispatch_hi:  .byte   $DD,$DD,$DE,$DE,$DF,$DF,$E0,$E1
-        .byte   $E1,$E1,$E2,$E2,$E4,$E4,$E4,$E4
-        lda     ent_state,x
+; Handlers for weapon-slot entity types $2F-$3E (index = type - $2F).
+; $36 (Metal Blade) also points at time_stopper_ai but is never dispatched
+; (its flags bit 1 is clear — plain physics). $3B-$3D entries are unused.
+entity_special_dispatch_lo:
+        .byte   <atomic_fire_ai,<atomic_fire_ai,<air_shooter_ai,<leaf_shield_orbit_ai
+        .byte   <bubble_lead_ai,<quick_boomerang_ai,<crash_bomber_ai,<time_stopper_ai
+        .byte   <time_stopper_ai,<item1_platform_ai,<item2_jet_ai,<item3_climber_ai
+        .byte   <type3B_bounce_ai,<offscreen_check_ai,<offscreen_check_ai,<special_ai_rts
+entity_special_dispatch_hi:
+        .byte   >atomic_fire_ai,>atomic_fire_ai,>air_shooter_ai,>leaf_shield_orbit_ai
+        .byte   >bubble_lead_ai,>quick_boomerang_ai,>crash_bomber_ai,>time_stopper_ai
+        .byte   >time_stopper_ai,>item1_platform_ai,>item2_jet_ai,>item3_climber_ai
+        .byte   >type3B_bounce_ai,>offscreen_check_ai,>offscreen_check_ai,>special_ai_rts
+
+; ─── Atomic Fire special AI (types $2F/$30) ───
+; State 0: charge-up held at the player (palette flash, charge counter);
+; state 1+: fired projectile animation + physics.
+atomic_fire_ai:  lda     ent_state,x
         beq     @skip
         jmp     atomic_fire_state_check
 @skip:
@@ -3808,7 +3894,7 @@ atomic_fire_find_slot:  lda     ent_flags,x
         bne     atomic_fire_find_slot
 atomic_fire_done:  rts
 
-atomic_fire_spawn_projectile:  lda     $F9
+atomic_fire_spawn_projectile:  lda     boss_fight_flag
         bne     atomic_fire_deduct_ammo
         ldy     #$01
         jsr     weapon_spawn_projectile
@@ -3828,7 +3914,7 @@ atomic_fire_deduct_ammo:  sec
         sbc     atomic_fire_cost_tbl,y
         sta     weapon_ammo
         lda     #$38
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$04
         sta     ent_x_vel,x
         lda     game_substate
@@ -3867,126 +3953,171 @@ atomic_fire_update_palette:  lda     atomic_fire_palette_lo_tbl,y
         lsr     a
         tay
         lda     atomic_fire_sound_bank_tbl,y
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 atomic_fire_palette_done:  rts
 
 atomic_fire_sound_bank_tbl:  .byte   $35,$35,$36,$37
 atomic_fire_palette_lo_tbl:  .byte   $0F
 atomic_fire_palette_hi_tbl:  .byte   $15,$31,$15,$35,$2C,$30,$30
 atomic_fire_anim_frame_tbl:  .byte   $00,$01,$04
-atomic_fire_cost_tbl:  .byte   $07,$01,$06,$0A,$8A,$38,$E9,$02
-        .byte   $A8,$B9,$6E,$DE,$9D,$20,$06,$B9
-        .byte   $71,$DE,$9D,$00,$06,$18,$BD,$60
-        .byte   $06,$69,$10,$9D,$60,$06,$BD,$40
-        .byte   $06,$69,$00,$9D,$40,$06,$20,$EF
-        .byte   $EE,$60,$19,$99,$33,$01,$01,$02
-        .byte   $BD,$E0,$04,$D0,$74,$A9,$00,$9D
-        .byte   $80,$06,$BD,$C0,$06,$85,$01,$8A
-        .byte   $38,$E9,$02,$85,$00,$29,$01,$D0
-        .byte   $11,$38,$AD,$60,$04,$E5,$01,$9D
-        .byte   $60,$04,$AD,$40,$04,$E9,$00,$4C
-        .byte   $AC,$DE
+atomic_fire_cost_tbl:  .byte   $07,$01,$06,$0A ; ammo cost per charge level
+
+; ─── Air Shooter special AI (type $31) ───
+; Slot index (2-4) selects one of three spread speeds; tornadoes drift
+; upward with increasing speed (+$10 sub-velocity per frame).
+air_shooter_ai:  txa
+        sec
+        sbc     #$02
+        tay                             ; Y = slot - 2 (tornado index 0-2)
+        lda     air_shooter_xvel_sub_tbl,y
+        sta     ent_x_vel_sub,x
+        lda     air_shooter_xvel_tbl,y
+        sta     ent_x_vel,x
         clc
+        lda     ent_y_vel_sub,x
+        adc     #$10                    ; accelerate upward drift
+        sta     ent_y_vel_sub,x
+        lda     ent_y_vel,x
+        adc     #$00
+        sta     ent_y_vel,x
+        jsr     entity_physics_core
+        rts
+
+air_shooter_xvel_sub_tbl:  .byte   $19,$99,$33 ; tornado X velocity (sub-pixel)
+air_shooter_xvel_tbl:  .byte   $01,$01,$02 ; tornado X velocity (whole)
+
+; ─── Leaf Shield special AI (type $32) ───
+; State 0: the four leaves (slots 2-5) orbit the player at radius ent_hp,
+; growing by 2 per frame; at radius $0C the shield forms around the player.
+; State 1+: formed shield — leaf_shield_launch_ai.
+leaf_shield_orbit_ai:  lda     ent_state,x
+        bne     leaf_shield_launch_ai
+        lda     #$00
+        sta     ent_anim_frame,x
+        lda     ent_hp,x                ; orbit radius
+        sta     temp_01
+        txa
+        sec
+        sbc     #$02
+        sta     temp_00                 ; leaf index 0-3
+        and     #$01
+        bne     leaf_orbit_right
+        sec                             ; even leaf: left of player
+        lda     ent_x_px
+        sbc     temp_01
+        sta     ent_x_px,x
+        lda     ent_x_screen
+        sbc     #$00
+        jmp     leaf_orbit_store_xscr
+
+leaf_orbit_right:  clc                  ; odd leaf: right of player
         lda     ent_x_px
         adc     temp_01
         sta     ent_x_px,x
         lda     ent_x_screen
         adc     #$00
-        sta     ent_x_screen,x
+leaf_orbit_store_xscr:  sta     ent_x_screen,x
         lda     temp_00
         and     #$02
-        bne     crash_bomb_add_y
-        sec
+        bne     leaf_orbit_below
+        sec                             ; leaves 0-1: above player
         lda     ent_y_px
         sbc     temp_01
-        jmp     crash_bomb_store_y
+        jmp     leaf_orbit_store_y
 
-crash_bomb_add_y:  clc
+leaf_orbit_below:  clc                  ; leaves 2-3: below player
         lda     ent_y_px
         adc     temp_01
-crash_bomb_store_y:  sta     ent_y_px,x
+leaf_orbit_store_y:  sta     ent_y_px,x
         lda     temp_01
-        cmp     #$0C
-        beq     crash_bomb_explode
+        cmp     #$0C                    ; full radius reached?
+        beq     leaf_shield_form
         clc
-        adc     #$02
+        adc     #$02                    ; grow orbit radius
         sta     ent_hp,x
         rts
 
-crash_bomb_explode:  lsr     ent_flags + $03
+leaf_shield_form:  lsr     ent_flags + $03 ; despawn leaves in slots 3-5
         lsr     ent_flags + $04
         lsr     ent_flags + $05
-        lda     #$83
+        lda     #$83                    ; slot 2 becomes the formed shield
         sta     ent_flags + $02
         lda     #$01
-        sta     ent_state + $02
+        sta     ent_state + $02         ; state 1 = shield formed
         lda     #$01
         sta     ent_anim_id + $02
         rts
 
-        lda     boss_fight_flag
-        beq     bubble_check_anim
+; ─── Leaf Shield formed-shield AI (type $32, state 1+) ───
+; Shield tracks the player each frame; pressing a direction throws it
+; (costs 3 more Leaf Shield ammo). Sound $31 loops while orbiting.
+leaf_shield_launch_ai:  lda     boss_fight_flag
+        beq     leaf_launch_check_anim
         lda     #$06
-        bne     bubble_set_anim
-bubble_check_anim:  lda     ent_anim_id,x
+        bne     leaf_launch_set_anim
+leaf_launch_check_anim:  lda     ent_anim_id,x
         cmp     #$05
-        bcc     bubble_check_state
+        bcc     leaf_launch_check_state
         lda     #$01
-bubble_set_anim:  sta     ent_anim_id,x
-bubble_check_state:  lda     ent_state,x
+leaf_launch_set_anim:  sta     ent_anim_id,x
+leaf_launch_check_state:  lda     ent_state,x
         cmp     #$01
-        bne     bubble_apply_physics
+        bne     leaf_launch_physics     ; state 2 = thrown, plain physics
         lda     frame_counter
         and     #$07
-        bne     bubble_track_player
-        lda     #$31
-        jsr     bank_switch_enqueue
-bubble_track_player:  lda     ent_x_px
+        bne     leaf_launch_track_player
+        lda     #$31                    ; sound: shield orbit loop
+        jsr     sound_queue_push
+leaf_launch_track_player:  lda     ent_x_px ; shield follows the player
         sta     ent_x_px,x
         lda     ent_x_screen
         sta     ent_x_screen,x
         lda     ent_y_px
         sta     ent_y_px,x
         lda     boss_fight_flag
-        beq     bubble_check_input
+        beq     leaf_launch_check_input
         lda     #$00
         sta     ent_y_px,x
-bubble_check_input:  lda     controller_1
-        and     #$F0
-        beq     bubble_done
+leaf_launch_check_input:  lda     controller_1
+        and     #$F0                    ; any direction pressed?
+        beq     leaf_launch_done
         ldy     boss_fight_flag
-        beq     bubble_check_direction
+        beq     leaf_launch_dir
         lsr     ent_flags,x
         rts
 
-bubble_check_direction:  and     #$C0
-        beq     bubble_check_up_down
+leaf_launch_dir:  and     #$C0          ; left/right pressed?
+        beq     leaf_launch_up_down
         lsr     a
-        and     #$40
+        and     #$40                    ; direction bit from d-pad
         ora     #$83
         sta     ent_flags,x
         lda     #$04
         sta     ent_x_vel,x
-        bne     bubble_deduct_ammo
-bubble_check_up_down:  ldy     #$00
+        bne     leaf_launch_deduct_ammo
+leaf_launch_up_down:  ldy     #$00
         lda     controller_1
-        and     #$10
-        bne     bubble_set_yvel
+        and     #$10                    ; up pressed?
+        bne     leaf_launch_set_yvel
         iny
-bubble_set_yvel:  lda     bubble_yvel_tbl,y
+leaf_launch_set_yvel:  lda     leaf_launch_yvel_tbl,y
         sta     ent_y_vel,x
-bubble_deduct_ammo:  sec
-        lda     weapon_ammo + 2
+leaf_launch_deduct_ammo:  sec
+        lda     weapon_ammo + 2         ; Leaf Shield ammo: throw costs 3
         sbc     #$03
         sta     weapon_ammo + 2
-        inc     ent_state,x
-bubble_done:  rts
+        inc     ent_state,x             ; state 2 = thrown
+leaf_launch_done:  rts
 
-bubble_apply_physics:  jsr     entity_physics_core
+leaf_launch_physics:  jsr     entity_physics_core
         rts
 
-bubble_yvel_tbl:  .byte   $04,$FC
-        lda     #$07
+leaf_launch_yvel_tbl:  .byte   $04,$FC ; thrown Y velocity: up/down
+
+; ─── Bubble Lead special AI (type $33) ───
+; Rolls along the floor (7x7 tile probe): launches over ledges, hugs
+; walls, despawns when it hits a wall while grounded.
+bubble_lead_ai:  lda     #$07
         sta     temp_01
         lda     #$07
         sta     temp_02
@@ -4030,36 +4161,46 @@ bubble_lead_check_stop:  lda     temp_00
 bubble_lead_physics:  jsr     entity_physics_core
         rts
 
-        .byte   $BD,$E0,$04,$C9,$12,$B0,$14,$38
-        .byte   $BD,$60,$06,$E9,$4B,$9D,$60,$06
-        .byte   $BD
-        .byte   $40
+; ─── Quick Boomerang special AI (type $34) ───
+; Flies out decelerating ($4B sub-velocity per frame); at state $12 it
+; flips direction and accelerates back; despawns at state $23.
+quick_boomerang_ai:  lda     ent_state,x
+        cmp     #$12                    ; outbound phase?
+        bcs     quick_boomerang_return
+        sec                             ; decelerate outbound
+        lda     ent_y_vel_sub,x
+        sbc     #$4B
+        sta     ent_y_vel_sub,x
+        lda     ent_y_vel,x
+        sbc     #$00
+        sta     ent_y_vel,x
+        jmp     quick_boomerang_step
 
-        .byte   $06,$E9
-        .byte   $00
-        .byte   $9D,$40,$06,$4C,$0F,$E0
-        bne     bubble_lead_check_despawn
-        lda     ent_flags,x
+quick_boomerang_return:  bne     quick_boomerang_check_despawn
+        lda     ent_flags,x             ; state == $12: flip direction
         eor     #$40
         sta     ent_flags,x
-bubble_lead_check_despawn:  lda     ent_state,x
+quick_boomerang_check_despawn:  lda     ent_state,x
         cmp     #$23
-        bne     bubble_lead_accelerate
-        lsr     ent_flags,x
+        bne     quick_boomerang_accel
+        lsr     ent_flags,x             ; boomerang expires
         rts
 
-bubble_lead_accelerate:  clc
+quick_boomerang_accel:  clc             ; accelerate return flight
         lda     ent_y_vel_sub,x
         adc     #$4B
         sta     ent_y_vel_sub,x
         lda     ent_y_vel,x
         adc     #$00
         sta     ent_y_vel,x
-        inc     ent_state,x
+quick_boomerang_step:  inc     ent_state,x
         jsr     entity_physics_core
         rts
 
-        lda     ent_state,x
+; ─── Crash Bomber special AI (type $35) ───
+; Probes the tile ahead; on wall contact attaches (state 1, fuse $7E),
+; then detonates into 4 scatter explosions (state 2).
+crash_bomber_ai:  lda     ent_state,x
         bne     crash_bomber_hit_skip
         lda     #$00
         sta     ent_anim_id,x
@@ -4106,7 +4247,7 @@ bubble_lead_accelerate:  clc
         rts
 
 crash_bomber_hit:  lda     #$2E
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     ent_flags,x
         and     #$FE
         sta     ent_flags,x
@@ -4141,7 +4282,7 @@ crash_bomber_phase2:  lda     #$00
         and     #$07
         bne     crash_bomber_dec_hp
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     ent_hp,x
         lsr     a
         and     #$0C
@@ -4200,7 +4341,11 @@ scatter_offset_x_hi_tbl:  .byte   $FF,$00,$00,$00,$FF,$00,$FF,$00
         .byte   $FF,$00
 tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         .byte   $01
-        dec     ent_x_vel_sub,x
+
+; ─── Time Stopper special AI (types $36/$37) ───
+; Freezes the world: game_mode=1 + scroll locks while draining Time
+; Stopper energy (1 unit per 15 frames, ent_x_vel_sub as divider).
+time_stopper_ai:  dec     ent_x_vel_sub,x
         bne     @skip
         lda     #$0F
         sta     ent_x_vel_sub,x
@@ -4228,7 +4373,10 @@ tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         sta     ent_x_screen,x
         rts
 
-        lda     ent_state,x
+; ─── Item 1 special AI (type $38) ───
+; Rising platform: ascends for $BB frames (state 0), hovers as a rideable
+; platform (state 1, $059E/$05A1 = platform width/top), then expires.
+item1_platform_ai:  lda     ent_state,x
         bne     @skip_3
         inc     ent_hp,x
         lda     ent_hp,x
@@ -4240,24 +4388,24 @@ tile_solid_flag_tbl:  .byte   $00,$01,$00,$00,$00,$01,$01,$01
         lda     #$00
         sta     ent_anim_id,x
 @done:
-        jmp     air_shooter_collision
+        jmp     item1_platform_update
 
 @skip_2:
         lda     #$3E
         sta     ent_hp,x
         inc     ent_state,x
-        bne     air_shooter_collision
+        bne     item1_platform_update
 @skip_3:
         cmp     #$01
-        bne     air_shooter_physics
+        bne     item1_physics
         lda     ent_anim_id,x
         cmp     #$07
-        bne     air_shooter_dec_timer
+        bne     item1_dec_timer
         lda     #$03
         sta     ent_anim_id,x
-air_shooter_dec_timer:  dec     ent_hp,x
-        beq     air_shooter_end_phase
-air_shooter_collision:  sec
+item1_dec_timer:  dec     ent_hp,x
+        beq     item1_end_phase
+item1_platform_update:  sec
         lda     ent_y_px,x
         sbc     #$04
         sta     ent_hitbox_width + $03,x
@@ -4271,34 +4419,37 @@ air_shooter_collision:  sec
         sta     temp_03
         jsr     check_wall_collision
         lda     temp_00
-        beq     air_shooter_physics
+        beq     item1_physics
         lda     #$00
         sta     ent_y_vel_sub,x
-air_shooter_end_phase:  lda     #$02
+item1_end_phase:  lda     #$02
         sta     ent_state,x
         lda     #$08
         sta     ent_anim_id,x
         lda     #$00
         sta     ent_anim_frame,x
         sta     ent_hitbox_width,x
-air_shooter_physics:  jsr     entity_physics_core
-        bcc     air_shooter_done
+item1_physics:  jsr     entity_physics_core
+        bcc     item1_done
         lda     #$00
         sta     ent_hitbox_width,x
-air_shooter_done:  rts
+item1_done:  rts
 
-        lda     ent_state,x
+; ─── Item 2 special AI (type $39) ───
+; Jet sled: accelerates to X velocity 2, drains Item 2 energy (1 unit per
+; $13 frames), rideable platform ($059E/$05A1), stops at walls/ledges.
+item2_jet_ai:  lda     ent_state,x
         beq     @skip
         dec     ent_state,x
-        bne     leaf_shield_wall_check
+        bne     item2_wall_check
 @skip:
         dec     ent_hp,x
-        bne     leaf_shield_accel
+        bne     item2_accel
         lda     #$13
         sta     ent_hp,x
-        dec     weapon_energy + 5
-        bne     leaf_shield_accel
-leaf_shield_deactivate:  lda     #$05
+        dec     weapon_energy + 5       ; Item 2 energy
+        bne     item2_accel
+item2_deactivate:  lda     #$05
         sta     ent_anim_id,x
         lda     #$00
         sta     ent_hitbox_width + $02
@@ -4307,12 +4458,12 @@ leaf_shield_deactivate:  lda     #$05
         sta     ent_anim_frame,x
         lda     #$80
         sta     ent_flags,x
-        beq     leaf_shield_accel
-        jmp     leaf_shield_physics
+        beq     item2_accel
+        jmp     item2_physics
 
-leaf_shield_accel:  lda     ent_x_vel,x
+item2_accel:  lda     ent_x_vel,x
         cmp     #$02
-        beq     leaf_shield_wall_check
+        beq     item2_wall_check
         clc
         lda     ent_x_vel_sub,x
         adc     #$08
@@ -4321,16 +4472,16 @@ leaf_shield_accel:  lda     ent_x_vel,x
         adc     #$00
         sta     ent_x_vel,x
         cmp     #$02
-        bne     leaf_shield_wall_check
+        bne     item2_wall_check
         lda     #$00
         sta     ent_x_vel_sub,x
-leaf_shield_wall_check:  lda     #$0F
+item2_wall_check:  lda     #$0F
         sta     temp_01
         lda     #$08
         sta     temp_02
         jsr     check_horiz_tile_collision
         lda     temp_03
-        bne     leaf_shield_deactivate
+        bne     item2_deactivate
         sec
         lda     ent_y_px,x
         sbc     #$20
@@ -4348,7 +4499,7 @@ leaf_shield_wall_check:  lda     #$0F
         ldx     current_entity_slot
         ldy     temp_00
         lda     tile_solid_flag_tbl,y
-        bne     leaf_shield_fail
+        bne     item2_deactivate_jmp
         clc
         lda     jump_ptr
         adc     #$20
@@ -4360,10 +4511,10 @@ leaf_shield_wall_check:  lda     #$0F
         ldx     current_entity_slot
         ldy     temp_00
         lda     tile_solid_flag_tbl,y
-        beq     leaf_shield_hitbox
-leaf_shield_fail:  jmp     leaf_shield_deactivate
+        beq     item2_platform_update
+item2_deactivate_jmp:  jmp     item2_deactivate
 
-leaf_shield_hitbox:  sec
+item2_platform_update:  sec
         lda     ent_y_px,x
         sbc     #$04
         sta     ent_hitbox_width + $03,x
@@ -4371,28 +4522,29 @@ leaf_shield_hitbox:  sec
         sta     ent_hitbox_width,x
         lda     ent_anim_id,x
         cmp     #$04
-        bne     leaf_shield_physics
+        bne     item2_physics
         lda     #$00
         sta     ent_anim_id,x
-leaf_shield_physics:  jsr     entity_physics_core
-        bcc     leaf_shield_done
+item2_physics:  jsr     entity_physics_core
+        bcc     item2_done
         lda     #$00
         sta     ent_hitbox_width,x
-leaf_shield_done:  rts
+item2_done:  rts
 
-        .byte   $BD,$E0,$04,$D0
-        adc     boss_state_flag
-        rti
-
-        asl     $85
-        .byte   $04
+; ─── Item 3 special AI (type $3A) ───
+; Wall climber: hops along the floor, climbs walls it touches, drains
+; Item 3 energy while deployed.
+item3_climber_ai:  lda     ent_state,x
+        bne     item3_active
+        lda     ent_y_vel,x
+        sta     temp_04
         lda     #$0A
         sta     temp_01
         lda     #$08
         sta     temp_02
         jsr     check_horiz_tile_collision
         lda     temp_03
-        beq     time_stopper_check_down
+        beq     item3_check_down
         lda     #$62
         sta     ent_y_vel_sub,x
         lda     #$00
@@ -4403,34 +4555,34 @@ leaf_shield_done:  rts
         and     #$FB
         sta     ent_flags,x
         inc     ent_state,x
-        bne     time_stopper_clear_dmg
-time_stopper_check_down:  lda     temp_04
-        bpl     time_stopper_clear_dmg
+        bne     item3_step
+item3_check_down:  lda     temp_04
+        bpl     item3_step
         lda     temp_00
-        beq     time_stopper_clear_dmg
+        beq     item3_step
         lda     #$03
         sta     ent_y_vel,x
         lda     #$76
         sta     ent_y_vel_sub,x
-time_stopper_clear_dmg:  lda     #$00
+item3_step:  lda     #$00
         sta     ent_weapon_type,x
         lda     ent_anim_id,x
         cmp     #$04
-        bne     time_stopper_dec_timer
+        bne     item3_dec_timer
         lda     #$00
         sta     ent_anim_id,x
-time_stopper_dec_timer:  dec     ent_hp,x
-        bne     time_stopper_physics_jmp
+item3_dec_timer:  dec     ent_hp,x
+        bne     item3_physics_jmp
         lda     #$1F
         sta     ent_hp,x
-        dec     weapon_energy + 6
-        beq     time_stopper_finish
-time_stopper_physics_jmp:  jmp     time_stopper_physics
+        dec     weapon_energy + 6       ; Item 3 energy
+        beq     item3_finish
+item3_physics_jmp:  jmp     item3_physics
 
-        sec
+item3_active:  sec
         lda     ent_y_px,x
         sbc     #$08
-        sta     ent_hitbox_width + $03,x
+        sta     ent_hitbox_width + $03,x ; platform top ($05A1)
         lda     #$14
         sta     ent_hitbox_width,x
         lda     #$0C
@@ -4443,28 +4595,28 @@ time_stopper_physics_jmp:  jmp     time_stopper_physics
         lda     ent_state,x
         and     #$0F
         cmp     #$02
-        bcs     time_stopper_alt_state
+        bcs     item3_alt_state
         lda     ent_state,x
-        bpl     time_stopper_check_done
+        bpl     item3_check_done
         inc     ent_state,x
-        bne     time_stopper_check_done
-time_stopper_check_done:  lda     temp_00
-        bne     time_stopper_finish
+        bne     item3_check_done
+item3_check_done:  lda     temp_00
+        bne     item3_finish
         lda     temp_03
-        bne     time_stopper_clear_dmg
+        bne     item3_step
         lda     #$00
         sta     ent_y_vel,x
         sta     ent_y_vel_sub,x
         lda     ent_anim_id,x
         cmp     #$09
-        bne     time_stopper_inc_dmg
+        bne     item3_inc_climb
         lda     #$05
         sta     ent_anim_id,x
-time_stopper_inc_dmg:  inc     ent_weapon_type,x
+item3_inc_climb:  inc     ent_weapon_type,x
         lda     ent_weapon_type,x
         cmp     #$3E
-        bcc     time_stopper_dec_timer
-time_stopper_finish:  lda     #$0A
+        bcc     item3_dec_timer
+item3_finish:  lda     #$0A
         sta     ent_anim_id,x
         lda     #$00
         sta     ent_y_vel,x
@@ -4475,30 +4627,30 @@ time_stopper_finish:  lda     #$0A
         sta     ent_flags,x
         rts
 
-time_stopper_alt_state:  lda     ent_state,x
-        bpl     time_stopper_check_fall
+item3_alt_state:  lda     ent_state,x
+        bpl     item3_check_fall
         and     #$0F
         sta     ent_state,x
         lda     #$62
         sta     ent_y_vel_sub,x
         lda     #$00
         sta     ent_y_vel,x
-        beq     time_stopper_check_done
-time_stopper_check_fall:  lda     ent_y_vel,x
-        bpl     time_stopper_set_vel
+        beq     item3_check_done
+item3_check_fall:  lda     ent_y_vel,x
+        bpl     item3_set_vel
         lda     temp_00
-        bne     time_stopper_finish
-time_stopper_set_vel:  lda     #$9E
+        bne     item3_finish
+item3_set_vel:  lda     #$9E
         sta     ent_y_vel_sub,x
         lda     #$FF
         sta     ent_y_vel,x
-        jmp     time_stopper_check_done
+        jmp     item3_check_done
 
-time_stopper_physics:  jsr     entity_physics_core
-        bcc     time_stopper_done
+item3_physics:  jsr     entity_physics_core
+        bcc     item3_done
         lda     #$00
         sta     ent_hitbox_width,x
-time_stopper_done:  rts
+item3_done:  rts
 
 ; ─── Check wall collision in facing direction ───
 check_wall_collision:  lda     ent_flags,x
@@ -4547,7 +4699,7 @@ wall_coll_check_below:  sec
         sta     temp_0A
         lda     #$00
         sbc     #$00
-wall_coll_store_y:  sta     $0B
+wall_coll_store_y:  sta     temp_0B
         lda     ent_x_px,x
         sta     jump_ptr
         lda     ent_x_screen,x
@@ -4563,7 +4715,10 @@ wall_coll_store_y:  sta     $0B
 
 wall_solid_flag_tbl:  .byte   $00,$01,$00,$01,$00,$01,$01,$01 ; wall collision solid flags
         .byte   $01
-        lda     #$00
+
+; ─── Special AI for type $3B (unused — type never spawned as weapon entity) ───
+; Ping-pong bouncer: reverses direction each cycle, hops with velocity $FE/$01.
+type3B_bounce_ai:  lda     #$00
         sta     ent_anim_frame,x
         lda     ent_state,x
         bne     crash_entity_accelerate
@@ -4609,10 +4764,11 @@ crash_entity_dec_timer:  dec     ent_hp,x
         jsr     entity_physics_core
         rts
 
-        jsr     check_entity_on_screen
+; ─── Special AI for types $3C/$3D: despawn when scrolled off-screen ───
+offscreen_check_ai:  jsr     check_entity_on_screen
         rts
 
-        rts
+special_ai_rts:  rts                    ; type $3E: no special AI
 ; ─── Deactivate entity if off-screen ───
 check_entity_on_screen:  sec
         lda     ent_x_px,x
@@ -4717,7 +4873,7 @@ player_coll_kill:
         lda     #$00
         sta     game_substate
         sta     ent_hp
-        jmp     boss_death_sequence
+        jmp     player_death_sequence
 ; --- Knockback: set player facing away from enemy ---
 player_coll_knockback:
         lda     ent_flags               ; clear player direction bit
@@ -4734,7 +4890,7 @@ player_collision_done:  rts
 
 ; --- Item pickup: despawn item and clear parent's child HP ---
 player_collision_item:
-        lda     $AD
+        lda     weapon_counter_3
         bne     player_collision_return
         lsr     ent_flags,x             ; deactivate item entity
         sty     weapon_counter_3        ; store item type for pickup handler
@@ -4816,19 +4972,23 @@ weapon_collision_dispatch:
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-        ldy     current_entity_slot
+; ─── Buster hit handler (weapon 0) ───
+; Each handler: enemy shield flag (ent_flags bit 3) → deflect; else look up
+; per-type damage, apply difficulty doubling, subtract from enemy HP.
+; Returns carry set = enemy killed (caller runs item drop + death explode).
+weapon_hit_buster:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     @skip_2
         lda     ent_type,y
         tay
-        lda     weapon_damage_table,y
+        lda     weapon_dmg_buster_tbl,y
         sta     temp_00
         beq     @skip_2
         jsr     apply_difficulty_modifier
         lsr     ent_flags,x
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldx     current_entity_slot
         lda     ent_hit_count,x
         bne     @no_match
@@ -4854,13 +5014,16 @@ weapon_collision_dispatch:
         sta     ent_y_vel,x
         sta     ent_x_vel,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldx     current_entity_slot
 @no_match:
         clc
         rts
 
-        ldy     current_entity_slot
+; ─── Atomic Fire hit handler (weapon 1) ───
+; Damage scales with charge level (ent_state): 0-1 = buster table,
+; 2 = 3x buster table, 3+ = full-charge table.
+weapon_hit_atomic:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     weapon_damage_zero
@@ -4870,24 +5033,24 @@ weapon_collision_dispatch:
         cmp     #$02
         bcc     @skip_3
         beq     @no_match_2
-        lda     $EA14,y
+        lda     weapon_dmg_atomic_tbl,y ; full charge
         jmp     weapon_damage_apply
 @no_match_2:
         clc
-        lda     weapon_damage_table,y
+        lda     weapon_dmg_buster_tbl,y ; mid charge: 3x buster damage
         asl     a
-        adc     weapon_damage_table,y
+        adc     weapon_dmg_buster_tbl,y
         jmp     weapon_damage_apply
 
 @skip_3:
-        lda     weapon_damage_table,y
+        lda     weapon_dmg_buster_tbl,y ; uncharged: buster damage
 weapon_damage_apply:  sta     temp_00
         beq     weapon_damage_zero
         jsr     apply_difficulty_modifier
         txa
         pha
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         pla
         tay
         ldx     current_entity_slot
@@ -4906,7 +5069,7 @@ weapon_damage_killed:  lda     #$00
         rts
 
 weapon_damage_zero:  lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lsr     ent_flags,x
         jmp     weapon_damage_done
 
@@ -4916,21 +5079,21 @@ weapon_damage_done:  ldx     current_entity_slot
         clc
         rts
 
-        ldy     current_entity_slot
+; ─── Air Shooter hit handler (weapon 2) ───
+weapon_hit_air:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     weapon_damage_killed_alt_skip
         lda     ent_type,y
         tay
-        lda     $EA8C,y
+        lda     weapon_dmg_air_tbl,y
         sta     temp_00
-        .byte   $F0
-        rol     a
+        beq     weapon_damage_killed_alt_skip
         jsr     apply_difficulty_modifier
         txa
         pha
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         pla
         tay
         ldx     current_entity_slot
@@ -4950,7 +5113,7 @@ weapon_damage_killed_alt:  lda     #$00
 
 weapon_damage_killed_alt_skip:
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     ent_flags,x
         and     #$FE
         sta     ent_flags,x
@@ -4963,20 +5126,21 @@ weapon_damage_killed_alt_skip:
 weapon_damage_return:  clc
         rts
 
-        ldy     current_entity_slot
+; ─── Leaf Shield hit handler (weapon 3) ───
+weapon_hit_leaf:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     @skip_2
         lda     ent_type,y
         tay
-        lda     $EB04,y
+        lda     weapon_dmg_leaf_tbl,y
         sta     temp_00
         beq     @skip_2
         jsr     apply_difficulty_modifier
         txa
         pha
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         pla
         tay
         ldx     current_entity_slot
@@ -4997,7 +5161,7 @@ weapon_damage_return:  clc
 
 @skip_2:
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     ent_flags,x
         and     #$F2
         sta     ent_flags,x
@@ -5016,20 +5180,22 @@ weapon_coll_handler_done_no_match:
 weapon_coll_deactivate:  lda     #$00
         sta     ent_flags,y
         beq     weapon_coll_handler_done
-        ldy     current_entity_slot
+
+; ─── Bubble Lead hit handler (weapon 4) ───
+weapon_hit_bubble:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     weapon_coll_rebound
         lda     ent_type,y
         tay
-        lda     weapon_damage_table_2,y
+        lda     weapon_dmg_bubble_tbl,y
         sta     temp_00
         beq     weapon_coll_rebound
         jsr     apply_difficulty_modifier
         txa
         pha
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         pla
         tay
         ldx     current_entity_slot
@@ -5056,25 +5222,26 @@ weapon_coll_rebound:  lda     #$00
         lda     #$80
         sta     ent_flags,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldx     current_entity_slot
 weapon_coll_rebound_done:  clc
         rts
 
-        ldy     current_entity_slot
+; ─── Quick Boomerang hit handler (weapon 5) ───
+weapon_hit_quick:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     @skip_2
         lda     ent_type,y
         tay
-        lda     $EBF4,y
+        lda     weapon_dmg_quick_tbl,y
         sta     temp_00
         beq     @skip_2
         jsr     apply_difficulty_modifier
         txa
         pha
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         pla
         tay
         ldx     current_entity_slot
@@ -5111,7 +5278,7 @@ weapon_coll_rebound_done:  clc
         lda     #$04
         sta     ent_y_vel,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 weapon_coll_handler_2_done:  ldx     current_entity_slot
 weapon_coll_handler_2_done_no_match:
         clc
@@ -5120,20 +5287,23 @@ weapon_coll_handler_2_done_no_match:
 weapon_coll_deactivate_2:  lda     #$00
         sta     ent_flags,y
         beq     weapon_coll_handler_2_done
-        ldy     current_entity_slot
+
+; ─── Crash Bomber hit handler (weapon 8) ───
+; Shielded enemy → bomb attaches (anim 5, fuse $38) instead of deflecting.
+weapon_hit_crash:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     weapon_coll_stun
         lda     ent_type,y
         tay
-        lda     weapon_damage_table_3,y
+        lda     weapon_dmg_crash_tbl,y
         sta     temp_00
         beq     weapon_coll_stun
         jsr     apply_difficulty_modifier
         txa
         pha
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         pla
         tay
         ldx     current_entity_slot
@@ -5165,25 +5335,26 @@ weapon_coll_stun:  lda     ent_type,x
         sta     ent_hp,x
         inc     ent_state,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 weapon_coll_stun_done:  ldx     current_entity_slot
         clc
         rts
 
-        ldy     current_entity_slot
+; ─── Metal Blade hit handler (weapon 7) ───
+weapon_hit_metal:  ldy     current_entity_slot
         lda     ent_flags,y
         and     #$08
         bne     @skip_2
         lda     ent_type,y
         tay
-        lda     $ECE4,y
+        lda     weapon_dmg_metal_tbl,y
         sta     temp_00
         beq     @skip_2
         jsr     apply_difficulty_modifier
         txa
         pha
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         pla
         tay
         ldx     current_entity_slot
@@ -5215,7 +5386,7 @@ weapon_coll_stun_done:  ldx     current_entity_slot
         and     #$F0
         sta     ent_flags,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 weapon_coll_handler_3_done:  ldx     current_entity_slot
 weapon_coll_handler_3_done_no_match:
         clc
@@ -5226,16 +5397,28 @@ weapon_coll_handler_3_done_skip:
         sta     ent_flags,y
         beq     weapon_coll_handler_3_done
 ; ─── Double damage on Normal difficulty ───
-apply_difficulty_modifier:  lda     $CB   ; difficulty flag: 0=Normal, 1=Difficult
+; Also doubles as the Time Stopper "hit handler" (weapon 6) in
+; weapon_handler_ptr — a harmless no-op since Time Stopper deals no
+; collision damage.
+apply_difficulty_modifier:  lda     difficulty ; 0=Normal, 1=Difficult
         bne     difficulty_done       ; Difficult: use base damage as-is
         asl     temp_00              ; Normal: double enemy collision damage to player
 difficulty_done:  rts
 
-weapon_handler_ptr_lo:  .byte   $52,$AA,$16,$72,$DB,$37,$7F,$15 ; collision handler ptr low bytes
-        .byte   $AE
-weapon_handler_ptr_hi:  .byte   $E6,$E6,$E7,$E7,$E7,$E8,$E9,$E9 ; collision handler ptr high bytes
-        .byte   $E8
-weapon_damage_table:  .byte   $07,$07,$14,$14,$14,$14,$14,$14 ; weapon damage values (normal)
+; Weapon→enemy hit handler per weapon ID (P,H,A,W,B,Q,F,M,C)
+weapon_handler_ptr_lo:
+        .byte   <weapon_hit_buster,<weapon_hit_atomic,<weapon_hit_air
+        .byte   <weapon_hit_leaf,<weapon_hit_bubble,<weapon_hit_quick
+        .byte   <apply_difficulty_modifier,<weapon_hit_metal,<weapon_hit_crash
+weapon_handler_ptr_hi:
+        .byte   >weapon_hit_buster,>weapon_hit_atomic,>weapon_hit_air
+        .byte   >weapon_hit_leaf,>weapon_hit_bubble,>weapon_hit_quick
+        .byte   >apply_difficulty_modifier,>weapon_hit_metal,>weapon_hit_crash
+; =============================================================================
+; Weapon damage tables — damage per enemy type ($00-$7B), one per weapon.
+; Tables overlap-truncate at 120/124 entries (high types are never checked).
+; =============================================================================
+weapon_dmg_buster_tbl:  .byte   $07,$07,$14,$14,$14,$14,$14,$14
         .byte   $14,$14,$0A,$0A,$02,$14,$14,$02
         .byte   $00,$00,$00,$00,$00,$00,$0A,$02
         .byte   $00,$01,$00,$00,$00,$07,$00,$02
@@ -5250,53 +5433,53 @@ weapon_damage_table:  .byte   $07,$07,$14,$14,$14,$14,$14,$14 ; weapon damage va
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$07,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$14,$14,$00,$00
-        .byte   $14,$00,$14,$00,$14,$00,$14,$14
-        .byte   $14,$14,$00,$14,$00,$00,$00,$00
-        .byte   $00,$00,$14,$14,$00,$14,$00,$00
-        .byte   $00,$14,$00,$14,$00,$00,$14,$00
-        .byte   $00,$00,$00,$00,$00,$14,$14,$00
-        .byte   $14,$00,$00,$00,$00,$14,$00,$00
-        .byte   $14,$14,$00,$00,$14,$00,$14,$14
-        .byte   $14,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$14,$14,$00,$14,$14,$00,$14
-        .byte   $14,$00,$14,$14,$14,$14,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$14,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $14,$00,$14,$00,$14,$00,$00,$14
-        .byte   $00,$14,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$14,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$14,$14
-        .byte   $00,$00,$00,$00,$00,$00,$14,$00
-        .byte   $14,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$14,$00,$07,$00
-        .byte   $14,$14,$00,$00,$00,$00,$00,$00
-        .byte   $00,$14,$00,$00,$07,$07,$00,$07
-        .byte   $07,$00,$07,$04,$14,$14,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$14,$14,$00,$00
-        .byte   $14,$00,$14,$00,$14,$00,$14,$14
-        .byte   $00,$14,$00,$07,$00,$00,$00,$00
-        .byte   $00,$00,$14,$14,$00,$14,$00,$00
-        .byte   $00,$14,$00,$14,$00,$00,$14,$07
-        .byte   $00,$00,$00,$00,$00,$07,$14,$00
-        .byte   $07,$00,$00,$00,$00,$00,$00,$00
-        .byte   $14,$00,$07,$00,$14,$00,$14,$00
-        .byte   $14,$14,$00,$00,$00,$00,$00,$00
-        .byte   $00,$14,$14,$00,$14,$14,$00,$14
-        .byte   $14,$00,$07,$07,$14,$14,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00
-weapon_damage_table_2:  .byte   $14,$14,$00,$00,$00,$00,$14,$00
+weapon_dmg_atomic_tbl:  .byte   $14,$14,$00,$00,$14,$00,$14,$00
+        .byte   $14,$00,$14,$14,$14,$14,$00,$14
+        .byte   $00,$00,$00,$00,$00,$00,$14,$14
+        .byte   $00,$14,$00,$00,$00,$14,$00,$14
+        .byte   $00,$00,$14,$00,$00,$00,$00,$00
+        .byte   $00,$14,$14,$00,$14,$00,$00,$00
+        .byte   $00,$14,$00,$00,$14,$14,$00,$00
+        .byte   $14,$00,$14,$14,$14,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$14,$14,$00
+        .byte   $14,$14,$00,$14,$14,$00,$14,$14
+        .byte   $14,$14,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$14,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+weapon_dmg_air_tbl:  .byte   $00,$00,$00,$00,$14,$00,$14,$00
+        .byte   $14,$00,$00,$14,$00,$14,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$14,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$14,$14,$00,$00,$00,$00
+        .byte   $00,$00,$14,$00,$14,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $14,$00,$07,$00,$14,$14,$00,$00
+        .byte   $00,$00,$00,$00,$00,$14,$00,$00
+        .byte   $07,$07,$00,$07,$07,$00,$07,$04
+        .byte   $14,$14,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+weapon_dmg_leaf_tbl:  .byte   $14,$14,$00,$00,$14,$00,$14,$00
+        .byte   $14,$00,$14,$14,$00,$14,$00,$07
+        .byte   $00,$00,$00,$00,$00,$00,$14,$14
+        .byte   $00,$14,$00,$00,$00,$14,$00,$14
+        .byte   $00,$00,$14,$07,$00,$00,$00,$00
+        .byte   $00,$07,$14,$00,$07,$00,$00,$00
+        .byte   $00,$00,$00,$00,$14,$00,$07,$00
+        .byte   $14,$00,$14,$00,$14,$14,$00,$00
+        .byte   $00,$00,$00,$00,$00,$14,$14,$00
+        .byte   $14,$14,$00,$14,$14,$00,$07,$07
+        .byte   $14,$14,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00
+weapon_dmg_bubble_tbl:  .byte   $14,$14,$00,$00,$00,$00,$14,$00
         .byte   $14,$00,$00,$14,$04,$14,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$07
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -5311,7 +5494,7 @@ weapon_damage_table_2:  .byte   $14,$14,$00,$00,$00,$00,$14,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$14,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $07,$07,$00,$00,$14,$00,$14,$00
+weapon_dmg_quick_tbl:  .byte   $07,$07,$00,$00,$14,$00,$14,$00
         .byte   $07,$00,$04,$14,$04,$14,$00,$02
         .byte   $00,$00,$00,$00,$00,$00,$0A,$04
         .byte   $00,$02,$00,$00,$00,$07,$00,$02
@@ -5326,7 +5509,7 @@ weapon_damage_table_2:  .byte   $14,$14,$00,$00,$00,$00,$14,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$07,$00,$00,$00,$00,$00
         .byte   $00,$14,$00,$00,$00,$00,$00,$00
-weapon_damage_table_3:  .byte   $14,$14,$00,$00,$14,$00,$14,$00
+weapon_dmg_crash_tbl:  .byte   $14,$14,$00,$00,$14,$00,$14,$00
         .byte   $14,$00,$14,$14,$00,$14,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$14,$14
         .byte   $00,$00,$00,$00,$00,$14,$00,$14
@@ -5341,7 +5524,7 @@ weapon_damage_table_3:  .byte   $14,$14,$00,$00,$14,$00,$14,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$14,$00,$00
         .byte   $00,$14,$00,$00,$00,$00,$00,$00
-        .byte   $14,$14,$00,$00,$14,$00,$14,$00
+weapon_dmg_metal_tbl:  .byte   $14,$14,$00,$00,$14,$00,$14,$00
         .byte   $14,$00,$04,$14,$02,$14,$00,$04
         .byte   $00,$00,$00,$00,$00,$00,$14,$04
         .byte   $00,$02,$00,$00,$00,$07,$00,$00
@@ -5356,7 +5539,7 @@ weapon_damage_table_3:  .byte   $14,$14,$00,$00,$14,$00,$14,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$07,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
-contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage to player per entity type
+contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04
         .byte   $04,$04,$04,$04,$04,$01,$00,$0C
         .byte   $0C,$00,$00,$00,$00,$1C,$04,$04
         .byte   $02,$08,$08,$04,$00,$04,$00,$04
@@ -5371,20 +5554,24 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         .byte   $00,$08,$04,$04,$00,$1C,$1C,$04
         .byte   $06,$04,$08,$06,$00,$04,$04,$06
         .byte   $00,$0A,$0A,$0A,$0A,$00,$00,$00
-        .byte   $00,$00,$00,$00,$A9,$14,$9D
-        bvc     *+3
+        .byte   $00,$00,$00,$00
+
+; ─── Platform special AI #1: rideable platform, height $14 ───
+platform_ai_h14:  lda     #$14
+        sta     ent_plat_height,x
         jsr     apply_entity_physics_alt
-        bcc     @in_range
+        bcc     @active
         lda     #$00
         sta     ent_plat_height,x
-@in_range:
+@active:
         sec
         lda     ent_y_px,x
         sbc     #$04
         sta     ent_plat_y,x
         rts
 
-        lda     #$18
+; ─── Platform special AI #2: rideable platform, height $18 ───
+platform_ai_h18_a:  lda     #$18
         sta     ent_plat_height,x
         jsr     apply_entity_physics_alt
         bcc     @in_range_2
@@ -5397,7 +5584,8 @@ contact_damage_to_player_tbl:  .byte   $02,$02,$02,$02,$02,$02,$04,$04 ; damage 
         sta     ent_plat_y,x
         rts
 
-        lda     #$18
+; ─── Platform special AI #3: rideable platform, height $18 ───
+platform_ai_h18_b:  lda     #$18
         sta     ent_plat_height,x
         jsr     apply_entity_physics_alt
         bcc     @in_range_3
@@ -5661,7 +5849,7 @@ physics_alt_check_contact:
         sta     ent_anim_id,x
         jmp     physics_despawn_check
 
-physics_alt_check_offscreen:  lda     $2F
+physics_alt_check_offscreen:  lda     offscreen_flag
         bne     physics_out_of_bounds
         clc
         rts
@@ -5721,7 +5909,7 @@ check_vert_tile_collision:  lda     #$00
 vert_coll_falling:  sec
         lda     ent_y_px,x
         sbc     temp_02
-vert_coll_store_pos:  sta     $0A
+vert_coll_store_pos:  sta     temp_0A
         clc
         lda     ent_x_px,x
         adc     temp_01
@@ -6030,10 +6218,10 @@ item_drop_calc:  lda     rng_seed            ; read RNG seed
         jsr     divide_8bit             ; remainder (0-99) in temp_04
         lda     difficulty                     ; difficulty flag: 0=Normal, 1=Difficult
         beq     item_drop_normal_mode
-        ; Difficult mode thresholds (52% total drop rate):
+        ; Difficult mode thresholds (50% total drop rate):
         ;   0-47: nothing (48%), 48-72: large weapon (25%), 73-87: large health (15%)
-        ;   88-92: small health (5%), 93-96: small weapon (4%), 97: extra life (1%)
-        ;   98-99: nothing (2%)
+        ;   88-92: small health (5%), 93-96: small weapon (4%), 97: nothing (1%)
+        ;   98: extra life (1%), 99: nothing (1%)
         lda     temp_04
         cmp     #$30
         bcc     item_drop_nothing
@@ -6059,7 +6247,7 @@ item_drop_small_weapon:  lda     #$76
         bne     item_drop_spawn
 item_drop_extra_life:  lda     #$7B
         bne     item_drop_spawn
-        lda     #$7A
+        lda     #$7A                    ; (unreachable: E-Tank drop, never rolled)
         bne     item_drop_spawn
 item_drop_spawn:  jsr     spawn_entity_from_parent
         bcs     item_drop_failed
@@ -6071,10 +6259,10 @@ item_drop_spawn:  jsr     spawn_entity_from_parent
         sta     ent_drop_flag,y
 item_drop_failed:  rts
 
-        ; Normal mode thresholds (72% total drop rate):
+        ; Normal mode thresholds (71% total drop rate):
         ;   0-27: nothing (28%), 28-37: large weapon (10%), 38-47: large health (10%)
-        ;   48-77: small health (30%), 78-97: small weapon (20%), 98: extra life (1%)
-        ;   99: nothing (1%)
+        ;   48-77: small health (30%), 78-97: small weapon (20%), 98: nothing (1%)
+        ;   99: extra life (1%)
 item_drop_normal_mode:  lda     temp_04
         cmp     #$1C
         bcc     item_drop_nothing
@@ -6576,7 +6764,7 @@ sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
 ; =============================================================================
 reset_handler:                          ; Reset vector entry point
         sei                             ; Disable interrupts
-reset_mmc1_shift:  inc     reset_mmc1_shift                   ; Self-modifying: resets MMC1 shift register
+reset_mmc1_shift:  inc     reset_mmc1_shift                   ; Dummy ROM write with bit 7 set resets MMC1 shift register
         jmp     cold_boot_init          ; Jump to initialization
 
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF

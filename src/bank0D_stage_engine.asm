@@ -145,7 +145,7 @@ stage_init_oam_next:  ldx     temp_01
         bne     stage_init_oam_loop
         jsr     enable_nmi_and_rendering
         lda     #$0C
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$00
         sta     current_stage
         sta     general_counter
@@ -162,7 +162,7 @@ stage_main_loop:  lda     p1_new_presses           ; Main stage loop (called eac
         and     #$F0                    ; Check D-pad for stage transition
         beq     stage_loop_render
         lda     #$2F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     check_stage_transition
 stage_loop_render:  jsr     player_render_collision ; Render player & update collision
         jsr     wait_for_vblank_0D      ; Wait for next frame
@@ -189,7 +189,7 @@ stage_select_handler:  ldy     stage_select_index_table,x
         bne     stage_loop_render
         sty     current_stage
         lda     #$3A
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     current_stage
         asl     a
         sta     temp_00
@@ -286,7 +286,7 @@ intro_copy_stage_palette:  lda     stage_palette_per_boss,x
         lda     #$18
         sta     general_counter
         lda     #$0A
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 
 ; =============================================================================
 ; Intro Blank Frames — wait before player drop animation
@@ -1709,7 +1709,7 @@ wselect_dpad_pressed:
         dex
 wselect_sound_and_move:
         lda     #$2F                    ; cursor move sound
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     controller_1
         and     #$30
         and     #$10                    ; bit 4 = up (move left in menu)
@@ -1775,7 +1775,7 @@ wselect_etank_fill_loop:  lda     ent_hp
         bne     wselect_etank_frame
         inc     ent_hp
         lda     #$28
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 wselect_etank_frame:  jsr     wselect_render_oam
         jsr     wait_for_vblank_0D
         jmp     wselect_etank_fill_loop
@@ -1893,7 +1893,7 @@ wselect_restore_pal_loop:  lda     palette_save_buf,x
         lda     #$03
         sta     game_mode
         lda     #$30
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
 wselect_wily10_pal_data:  .byte   $27,$11,$16
@@ -2254,7 +2254,7 @@ boss_get_load_palette:  lda     boss_get_palette_data,x
 ; Boss Get — Normal Init (walk-in, idle, jump, shimmer, land)
 ; =============================================================================
 boss_get_normal_init:  lda     #$12
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     enable_nmi_and_rendering
         lda     #$FF
         sta     ent_x_screen
@@ -2394,7 +2394,7 @@ boss_get_land_loop:  clc
         dec     general_counter
         bne     boss_get_land_loop
         lda     #$FD
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #ENTITY_DEATH_EXPLODE
         sta     ent_type
         lda     #$01
@@ -2473,7 +2473,7 @@ boss_get_bounce_reverse:  lda     #$00
         cmp     #$03
         bne     boss_get_bounce_render
         lda     #$11
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 boss_get_bounce_render:  jsr     clear_oam_buffer
         ldx     #$00
         stx     temp_00
@@ -2570,7 +2570,7 @@ boss_get_title_scroll_loop:  lda     frame_counter
         and     #$03                    ; Scroll every 4 frames
         bne     boss_get_title_frame
         lda     #$28
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         clc
         lda     general_counter
         adc     #$04                    ; Advance 4 pixels per step
@@ -2832,7 +2832,7 @@ wily_intro_vblank:  jsr     wait_for_vblank_0D
         jmp     wily_intro_fade_loop
 
 wily_intro_sound:  lda     #$11
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     general_ptr_lo
 wily_intro_wait_outer:  lda     #$A0
@@ -3071,9 +3071,9 @@ credits_load_tiles_inner:  lda     credits_tile_layout_data,x
         jsr     clear_oam_buffer
         jsr     enable_nmi_and_rendering
         lda     #$FE
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$FF
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$1F
         sta     general_ptr_lo
 credits_fade_outer:  lda     #$0A
@@ -3218,7 +3218,7 @@ ending_fade_frame:  jsr     ending_render_all_sprites
 ; Ending — Column Data Loading and Text Fade
 ; =============================================================================
 ending_column_init:  lda     #$0E
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$00
         sta     general_counter
         sta     indirect_page
@@ -3398,7 +3398,7 @@ ending_load_ground_pal:  lda     ending_ground_palette,x
 ; Ending — Main Loop (timer, cursor, boss walk away)
 ; =============================================================================
 ending_main_loop_init:  lda     #$0D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$0B
         sta     ending_timer_hi
         lda     #$00
@@ -3429,7 +3429,7 @@ ending_cursor_y:  sty     oam_buffer + $80
         eor     #$01                    ; flip between Normal (0) and Difficult (1)
         sta     difficulty
         lda     #$2F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$0B
         sta     ending_timer_hi
         lda     #$00
@@ -3445,7 +3445,7 @@ ending_timer_tick:  jsr     wait_for_vblank_0D
         bcs     ending_main_loop
         inc     ending_state
 ending_skip_pressed:  lda     #$FF
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$19
         sta     general_counter
 
@@ -3459,7 +3459,7 @@ ending_teleport_loop:  lda     frame_counter
         cmp     #$04
         bne     ending_teleport_dec
         lda     #$3A
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 ending_teleport_dec:  dec     $FD
         bmi     ending_fly_away
 ending_teleport_frame:  ldx     $FD
@@ -3544,7 +3544,7 @@ password_tile_inner:  lda     password_ppu_layout_data,x
         cpx     #$19
         bne     password_load_tiles
         lda     #$10
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         jsr     init_scroll_and_palette
 
@@ -3574,7 +3574,7 @@ password_check_input:  lda     p1_new_presses
         and     #$08                    ; Start button?
         bne     password_start_pressed
         lda     #$2F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     general_counter
         eor     #$01
         sta     general_counter
@@ -3629,7 +3629,7 @@ password_entry_loop:  lda     p1_new_presses
         lda     #$08
         sta     general_ptr_lo
 password_dpad_pressed:  lda     #$2F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldx     ent_anim_id
         lda     controller_1
         and     #$C0
@@ -3666,7 +3666,7 @@ password_dot_data:  asl     current_bank
         lda     ent_flags,x
         bne     password_render_grid
         lda     #$42
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         inc     ent_flags,x
         dec     ent_anim_frame
         beq     password_all_dots_placed
@@ -5038,7 +5038,7 @@ credits_game_over_text:  lda     game_over_text_data,x
         cpx     #$09
         bne     credits_game_over_text
         lda     #$0F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     reset_scroll_state
         lda     #$00
         jsr     init_scroll_and_palette
@@ -5067,7 +5067,7 @@ credits_init_scroll:  cpy     #$C6
         sta     general_ptr_lo
         jsr     metatile_full_screen_render
         lda     #$10
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 
 ; =============================================================================
 ; Credits Select Loop — continue/password/stage select menu
@@ -5081,7 +5081,7 @@ credits_select_input:  lda     p1_new_presses
         and     #$08
         bne     credits_start_pressed
         lda     #$2F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     p1_new_presses
         and     #$24
         bne     credits_select_next
@@ -5233,7 +5233,7 @@ password_blink_store:  stx     oam_buffer + $28
         and     #$01
 password_blink_check:  beq     password_blink_loop
         lda     #$42
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     palette_fade_out
         jsr     clear_oam_buffer
         jsr     scroll_left_until_zero
@@ -5414,7 +5414,7 @@ ending_clear_pal_loop:  sta     palette_ram,x
         dex
         bpl     ending_clear_pal_loop
         lda     #$FF
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     clear_oam_buffer
         jsr     enable_nmi_and_rendering
         lda     #$BB
@@ -5423,7 +5423,7 @@ ending_wait_loop:  jsr     wait_for_vblank_0D
         dec     general_counter
         bne     ending_wait_loop
         lda     #$13
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$04
         sta     general_counter
         lda     #$3F
@@ -5515,7 +5515,7 @@ ending_nt_clear_inner:  sta     PPUDATA
         lda     #$30
         sta     palette_sprite + $03
         lda     #$0D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     enable_nmi_and_rendering
         jsr     clear_projectile_positions
         lda     #$25
@@ -5583,7 +5583,7 @@ ending_walk_frame_loop:  jsr     ending_scroll_update
         cmp     #$0E
         bcc     ending_walk_frame_loop
         lda     #$14
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jmp     ending_walk_frame_loop
 
 ending_walk_next_column:  lda     #$25
@@ -5866,7 +5866,7 @@ ending_walk_init:
         pla
         sta     current_stage
         lda     #$17
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     reset_scroll_state
         lda     #$01
         jsr     init_scroll_and_palette
@@ -5984,7 +5984,7 @@ stage_intro_check_input:  lda     p1_new_presses
         and     #$08
         bne     stage_intro_start
         lda     #$2F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     general_counter
         eor     #$01
         sta     general_counter

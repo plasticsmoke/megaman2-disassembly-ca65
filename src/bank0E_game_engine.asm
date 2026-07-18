@@ -66,7 +66,7 @@ boss_beaten_mask_lo         := $C279
 wait_for_vblank           := $C07F
 wait_one_rendering_frame           := $C0D7
 chr_upload_init           := $C45D
-chr_upload_run           := $C4CD
+checkpoint_respawn       := $C4CD
 nametable_init           := $C557
 nametable_stage_setup           := $C565
 palette_anim_run           := $C573
@@ -208,7 +208,7 @@ game_init_fill_timers:  sta     ent_child_hp,x
         sta     game_mode
         sta     current_weapon
         jsr     weapon_palette_copy
-        jsr     chr_upload_run
+        jsr     checkpoint_respawn
         lda     #$00
         sta     scroll_x
         sta     scroll_subpixel
@@ -247,7 +247,7 @@ game_init_fill_timers:  sta     ent_child_hp,x
         sta     gravity_sub_hi
         ldx     current_stage
         lda     stage_bank_table,x
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldx     #$13
 game_init_copy_stage_sprites:  lda     stage_intro_oam_data,x
         sta     oam_buffer,x
@@ -464,7 +464,7 @@ check_vertical_transition:  lda     transition_type
         bne     clear_scroll_request
         lda     #$01
         sta     game_substate
-        jmp     boss_death_sequence
+        jmp     player_death_sequence
 
 clear_scroll_request:  lda     #$00
         sta     transition_type                     ; clear transition request
@@ -513,7 +513,7 @@ health_refill_loop:  ldx     current_weapon
         bmi     health_refill_done_jmp
         inc     ent_hp
         lda     #$28
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 health_refill_render:  jsr     render_all_sprites
         jsr     wait_for_vblank
         jmp     health_refill_loop
@@ -550,7 +550,7 @@ weapon_refill_loop:  ldx     current_weapon
         bmi     refill_complete
         inc     beaten_bosses_hi,x
         lda     #$28
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 weapon_refill_render:  jsr     render_all_sprites
         jsr     wait_for_vblank
         jmp     weapon_refill_loop
@@ -572,7 +572,7 @@ etank_pickup:
         inc     current_etanks               ; add E-tank
 etank_pickup_done:
         lda     #$42
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
 ; ─── Collect extra life pickup ───
@@ -582,7 +582,7 @@ extra_life_pickup:
         bcs     extra_life_done
         inc     current_lives
         lda     #$42
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 extra_life_done:
         rts
 
@@ -614,7 +614,7 @@ wily_door_transition:  jsr     set_palette_colors
         sta     ent_y_px
         jsr     reset_player_state
         lda     #$0B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     wily_stage_index
         sta     boss_id
         dec     boss_id
@@ -624,7 +624,7 @@ wily_door_bank_table:  rts
         .byte   $06,$04,$0D,$07,$11,$09,$04,$10
 ; ─── Play Wily teleport animation ───
 wily_teleport_sequence:  lda     #$30
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$0B
         sta     game_substate
         jsr     weapon_set_base_type
@@ -700,7 +700,7 @@ wily_set_palette:
         sta     ent_x_px
         jsr     reset_player_state
         lda     #$09
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     wily_spawn_gate_entities
         rts
 
@@ -740,7 +740,7 @@ palette_color_data:                      ; NES palette indices (PPU $3F00 values
         sta     ent_x_px
         jsr     reset_player_state
         lda     #$0B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     boss_trigger_entrance
         rts
 
@@ -943,7 +943,7 @@ player_state_climbing:  jsr     player_vertical_physics
         lda     temp_00
         beq     player_state_climb_set_weapon
         lda     #$29
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldx     #$05
         lda     p1_prev_buttons
         and     #$C0
@@ -1436,7 +1436,7 @@ tile_check_spike:  cmp     #$03
         bne     tile_combine_result
         lda     #$00
         sta     game_substate
-        jmp     boss_death_sequence
+        jmp     player_death_sequence
 
 tile_combine_result:  ora     temp_00
         sta     temp_00
@@ -1490,7 +1490,7 @@ ground_check_lava:  lda     $33
         lda     ent_y_vel
         bpl     ground_spawn_item
         lda     #$3B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     ent_flags + $0E
         bmi     ground_spawn_item
         ldy     #$0E
@@ -1758,7 +1758,7 @@ floor_check_spike:  cmp     #$03
         bne     floor_check_done
         lda     #$00
         sta     game_substate
-        jmp     boss_death_sequence
+        jmp     player_death_sequence
 
 floor_check_done:  dex
         bpl     floor_tile_eval
@@ -2148,7 +2148,7 @@ transition_right_attr_loop:  ldx     current_stage
         and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_attr_step
         lda     #$34
-        jsr     bank_switch_enqueue     ; switch to metatile data bank
+        jsr     sound_queue_push     ; switch to metatile data bank
         lda     nametable_select
         sta     jump_ptr_hi
         lda     #$F0
@@ -2166,7 +2166,7 @@ transition_right_attr_step:  jsr     wait_for_vblank ; let NMI process queued PP
         dec     general_counter
         bpl     transition_right_attr_loop
         lda     #$FE
-        jsr     bank_switch_enqueue     ; restore bank
+        jsr     sound_queue_push     ; restore bank
 transition_right_scroll:  lda     current_screen
         sta     general_ptr_lo
         inc     general_ptr_lo                     ; $FE = destination screen index
@@ -2218,7 +2218,7 @@ transition_right_col_loop:  ldx     current_stage
         cmp     stage_max_screen_table,x
         bne     transition_right_col_step
         lda     #$0B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     current_stage
         cmp     #$0B
         beq     transition_right_col_step
@@ -2228,7 +2228,7 @@ transition_right_col_step:  lda     $FD
         and     #$07                    ; every 8th column: render metatile attributes
         bne     transition_right_wait_frame
         lda     #$34
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     nametable_select
         sta     jump_ptr_hi
         lda     #$00
@@ -2249,7 +2249,7 @@ transition_right_wait_frame:  jsr     wait_for_vblank
         cmp     #$19                    ; 25 columns rendered?
         bne     transition_right_col_loop
         lda     #$FE
-        jsr     bank_switch_enqueue     ; restore bank
+        jsr     sound_queue_push     ; restore bank
 transition_right_done:  lda     #$40
         sta     scroll_dir_flags
         jsr     entity_spawn_scan       ; repopulate enemies for new room
@@ -3368,7 +3368,7 @@ boss_debris_check_screen:  ldx     current_entity_slot
         bpl     boss_debris_loop
 boss_debris_done:  ldx     current_entity_slot
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
 boss_palette_data:                       ; boss intro palette (2 x 3-byte entries)
@@ -3655,7 +3655,7 @@ woodman_timer_just_zero:
         and     #$DF
         sta     ent_flags,x
         lda     #$27
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 woodman_timer_expired:
         lda     ent_flags,x
         and     #$20
@@ -3725,7 +3725,7 @@ woodman_facing_left:  lda     ent_x_px,x
         bcc     woodman_rts
 woodman_trigger_shield:  lda     #$00
         sta     game_substate
-        jmp     boss_death_sequence
+        jmp     player_death_sequence
 
 woodman_rts:  rts
 
@@ -3982,7 +3982,7 @@ heatman_flame_pattern:  lda     ent_state,x
         adc     temp_00
         sta     temp_01
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$05
         sta     temp_02
 heatman_flame_loop:  lda     #ENTITY_DEATH_EXPLODE
@@ -4754,7 +4754,7 @@ fly_boy_phase_check:
         lda     temp_00
         beq     fly_boy_physics
         lda     #$39
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$00
         sta     ent_y_vel,x
         sta     ent_y_vel_sub,x
@@ -4851,7 +4851,7 @@ press_tile_check:
         lda     temp_00
         beq     press_physics
         lda     #$21
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$2B
         sta     ent_state,x
         inc     ent_parent_slot,x
@@ -5142,7 +5142,7 @@ blocky_phase2_state_1:  cmp     #$02
         cmp     #$02
         bne     blocky_phase2_dec_timer
         lda     #$25
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_01
 blocky_phase2_spawn_shot:  lda     #ENTITY_GENERIC_PROJ
@@ -6058,7 +6058,7 @@ boss_proj_mgr_fire:  ldx     temp_01
         jsr     divide_16bit
         ldx     current_entity_slot
         lda     #$25
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #ENTITY_SHOTMAN
         jsr     spawn_entity_from_parent
         bcs     boss_fire_done
@@ -6155,7 +6155,7 @@ multi_boss_state_check:
         lda     temp_00
         beq     multi_boss_fallthrough
         lda     #$21
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$03
         sta     ent_anim_id,x
         lda     #$00
@@ -6187,7 +6187,7 @@ multi_boss_state_2:  lda     ent_anim_id,x
 multi_boss_check_timer:  lda     ent_state,x
         bne     multi_boss_dec_timer
         lda     #$25
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         jsr     entity_face_player
         lda     #ENTITY_GENERIC_PROJ
         jsr     spawn_entity_from_parent
@@ -6258,7 +6258,7 @@ sniper_joe_check_shoot:
         lda     ent_state,x
         bne     sniper_joe_dec_timer
         lda     #$25
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #ENTITY_GENERIC_PROJ
         jsr     spawn_entity_from_parent
         bcs     sniper_joe_advance
@@ -6419,7 +6419,7 @@ despawn_timer_phase_1:  cmp     #$01
         lda     #$90
         sta     ent_flags,x
         lda     #$3C
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$7D
         sta     ent_plat_y,x
         inc     ent_parent_slot,x
@@ -6659,7 +6659,7 @@ crash_bomb_stick:
         sta     ent_y_vel,x
         inc     ent_anim_id,x
         lda     #$2E
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$1F
         sta     ent_parent_slot,x
         inc     ent_state,x
@@ -6676,7 +6676,7 @@ crash_bomb_timer_check:  lda     ent_parent_slot,x
         and     #$07
         bne     crash_bomb_done
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     ent_parent_slot,x
         lsr     a
         and     #$0C
@@ -6884,7 +6884,7 @@ wily4_despawn_done:  ldx     current_entity_slot
         sta     ent_state,x
         inc     boss_phase
         lda     #$0B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
 wily4_timer_table:  .byte   $40,$01,$20,$28,$FF ; Wily stage 4 spawn timer table
@@ -7281,7 +7281,7 @@ pickup_ai_init:
         beq     red_liquid_apply_physics
         ldy     ent_state,x
         lda     flash_hazard_bank_table,y
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         inc     ent_anim_id,x
         rts
 

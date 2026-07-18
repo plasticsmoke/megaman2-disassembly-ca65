@@ -4,11 +4,11 @@
 ; Routines in the fixed bank ($C000-$FFFF) called from multiple switchable banks.
 ; Included by banks 0B, 0D, and 0E to avoid duplicated := declarations.
 
-; ─── Bank switching ─────────────────────────────────────────────────────────
-bank_switch_enqueue           = $C051
+; ─── Sound ──────────────────────────────────────────────────────────────────
+sound_queue_push           = $C051   ; A = SFX/music ID; drained by bank $0C sound engine
 
-; ─── Boss support ───────────────────────────────────────────────────────────
-boss_death_sequence           = $C10B
+; ─── Player death ───────────────────────────────────────────────────────────
+player_death_sequence           = $C10B
 
 ; ─── Math routines ──────────────────────────────────────────────────────────
 divide_8bit                   = $C84E

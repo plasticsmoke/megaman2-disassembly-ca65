@@ -115,8 +115,8 @@ active_entity_count   = $55    ; active entity count for collision scan ($55)
 active_entity_list    = $56    ; active entity slot list base ($56+)
 
 ; ─── Bank Switching ─────────────────────────────────────────────────────────
-bank_queue_count      = $66    ; bank switch queue count ($66)
-bank_callback_pending = $67    ; bank switch callback pending flag ($67)
+sound_queue_count      = $66    ; sound command queue count ($66)
+sound_pending          = $67    ; sound engine update deferred by mid-bank-switch NMI ($67)
 bank_switch_active    = $68    ; bank switch in-progress flag ($68)
 bank_switch_backup    = $69    ; bank switch backup (original bank number) ($69)
 
@@ -138,7 +138,7 @@ weapon_counter_2      = $AC    ; weapon-specific counter 2 ($AC)
 weapon_counter_3      = $AD    ; weapon-specific counter 3 ($AD)
 sprite_8x16_flag      = $AE    ; 8×16 sprite size flag ($AE)
 platform_facing       = $AF    ; platform/conveyor facing direction bit 6 ($AF)
-score_rank_idx        = $B0    ; score/rank index ($B0)
+checkpoint_idx        = $B0    ; respawn checkpoint index ($B0)
 boss_phase            = $B1    ; boss fight phase counter ($B1) — inc/dec to advance boss AI state
 boss_action_timer     = $B2    ; boss action timer ($B2) — countdown/up for boss attack timing
 boss_id               = $B3    ; boss index ($B3) — indexes into boss property tables

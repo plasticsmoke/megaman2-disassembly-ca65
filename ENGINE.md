@@ -296,7 +296,7 @@ Some enemies are too large to render as sprites (NES: max 8 sprites per scanline
 | Mole | $47 | $A0 | $48/$49 | $83 | Controller spawns copies + shot children |
 | Goblin | $40/$41 | $A0 | $44 (horn) | $83 | Indestructible body, horn deals contact damage |
 
-The Friender's controller ($1C) has `weapon_damage_table[$1C] = $00` (immune), while the hitbox child ($19) has `weapon_damage_table[$19] = $01`. With `apply_difficulty_modifier` doubling damage on Normal, this gives `ceil(20 / (1×2))` = 10 buster hits on Normal — matching the expected value.
+The Friender's controller ($1C) has `weapon_dmg_buster_tbl[$1C] = $00` (immune), while the hitbox child ($19) has `weapon_dmg_buster_tbl[$19] = $01`. With `apply_difficulty_modifier` doubling damage on Normal, this gives `ceil(20 / (1×2))` = 10 buster hits on Normal — matching the expected value.
 
 ### BG Metatile Enemies
 
@@ -428,7 +428,7 @@ ora (other bits)  ; merge back
 
 ### Collision Gating (ent_flags bits 0-1)
 
-Before running any collision checks, `apply_entity_physics_alt` tests the low 2 bits of `ent_flags` (bank0F:5457):
+Before running any collision checks, `apply_entity_physics_alt` tests the low 2 bits of `ent_flags` (bank0F:5645):
 
 ```asm
 lda  ent_flags,x
@@ -477,21 +477,21 @@ Frame alternation means at most 4 weapon slots are tested per entity per frame. 
 
 ### Weapon Damage Dispatch
 
-On a confirmed hit, `weapon_collision_dispatch` (bank0F:4779) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
+On a confirmed hit, `weapon_collision_dispatch` (bank0F:4935) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
 
 | Weapon ID | Weapon | Handler | Damage Sub-Table |
 |-----------|--------|---------|-----------------|
-| $00 | Mega Buster | bank0F:4787 | `weapon_damage_table` |
-| $01 | Atomic Fire | bank0F:4831 | Base table (uncharged) / $EA14 (full charge) |
-| $02 | Air Shooter | bank0F:4887 | $EA8C |
-| $03 | Leaf Shield | bank0F:4934 | $EB04 |
-| $04 | Bubble Lead | bank0F:4987 | `weapon_damage_table_2` |
-| $05 | Quick Boomerang | bank0F:5032 | $EBF4 |
+| $00 | Mega Buster | bank0F:4943 | `weapon_dmg_buster_tbl` |
+| $01 | Atomic Fire | bank0F:4991 | `weapon_dmg_buster_tbl` (uncharged) / `weapon_dmg_atomic_tbl` (full charge) |
+| $02 | Air Shooter | bank0F:5050 | $EA8C |
+| $03 | Leaf Shield | bank0F:5097 | $EB04 |
+| $04 | Bubble Lead | bank0F:5151 | `weapon_dmg_bubble_tbl` |
+| $05 | Quick Boomerang | bank0F:5198 | $EBF4 |
 | $06 | Time Stopper | — | Handled separately (continuous damage, no dispatch) |
-| $07 | Metal Blade | bank0F:5141 | $ECE4 |
-| $08 | Crash Bomber | bank0F:5091 | `weapon_damage_table_3` |
+| $07 | Metal Blade | bank0F:5311 | $ECE4 |
+| $08 | Crash Bomber | bank0F:5258 | `weapon_dmg_crash_tbl` |
 
-Each sub-table is 128 bytes — one entry per entity type. The handler reads `damage_table[entity_type]` into `temp_00`. A value of $00 means immune. The handler then calls `apply_difficulty_modifier`, which doubles `temp_00` on Normal difficulty (ASL). The resulting damage is subtracted from `ent_hp`.
+Each sub-table has one entry per entity type (124 entries for Buster/contact, 120 for the rest — high types are never checked). The handler reads `damage_table[entity_type]` into `temp_00`. A value of $00 means immune. The handler then calls `apply_difficulty_modifier`, which doubles `temp_00` on Normal difficulty (ASL). The resulting damage is subtracted from `ent_hp`.
 
 The buster handler has additional logic: it checks `ent_flags AND #$08` (bit 3) first. If set, the buster projectile is deflected (its flags are shifted right to deactivate it) without dealing any damage — this is how Neo Metall's shield works.
 

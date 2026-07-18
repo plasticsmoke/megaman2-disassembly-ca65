@@ -188,7 +188,7 @@ boss_palette_timer_tick:  lda     frame_counter
         bne     boss_palette_tick_rts
         inc     boss_hp                   ; increment health bar fill
         lda     #$28
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 boss_palette_tick_rts:  rts
 
         .byte   $09,$0C,$0F,$0A,$09,$09,$08,$08
@@ -299,7 +299,7 @@ heatman_proj_speed_table:  .byte   $3A,$2E,$1C
         adc     #$0A
         sta     boss_action_timer
         lda     #$38
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         inc     boss_ai_state
         bne     heatman_frame_update
 @skip_2:
@@ -365,7 +365,7 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         lda     #$52
         jsr     play_sound_and_reset_anim
         lda     #$38
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 @skip_2:
         jsr     boss_apply_movement_physics
         rts
@@ -444,7 +444,7 @@ airman_spawn_leaf_loop:  lda     #ENTITY_AIR_TORNADO
         dec     temp_02
         bne     airman_spawn_leaf_loop
         lda     #$3F
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         inc     boss_action_timer
         inc     boss_phase
         lda     #$00
@@ -1121,7 +1121,7 @@ quickman_update_rts:  rts
         sta     boss_anim_id
         jsr     flashman_update_with_sound
         lda     #$21
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
 @skip:
@@ -1413,7 +1413,7 @@ metalman_check_anim_2:  cmp     #$02
         lda     boss_anim_frame
         bne     metalman_frame_rts
         lda     #$23
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #ENTITY_METALMAN_BLADE
         ldx     #$01
         jsr     spawn_entity_from_boss
@@ -1826,7 +1826,7 @@ dragon_load_palette:  lda     dragon_palette_data,x
         lda     #$BF
         sta     ent_y_spawn_px,y
         lda     #$2C
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 dragon_palette_done:  rts
 
 dragon_palette_data:  .byte   $0F,$30,$29,$19,$0F,$27,$11,$19
@@ -1919,7 +1919,7 @@ dragon_health_check_rts:  rts
 
 ; ─── Dragon fire breath projectile spawn ───
 dragon_fire_breath:  lda     #$2C
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     boss_anim_id
         lda     #ENTITY_DRAGON_BREATH
@@ -2164,7 +2164,7 @@ dragon_move_facing_left:  sec
         bne     @skip
         inc     boss_action_timer
         lda     #$0B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 @skip:
         jsr     boss_health_bar_tick
         lda     boss_hp
@@ -2303,7 +2303,7 @@ picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
         sta     boss_action_timer
         inc     boss_hit_count
         lda     #$FF
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 @done:
         rts
         lda     boss_action_timer
@@ -2329,7 +2329,7 @@ picopico_palette_flash:  ldx     #$0F
         and     #$07
         bne     picopico_palette_store
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         ldx     #$30
 picopico_palette_store:  stx     palette_sprite
         rts
@@ -3494,7 +3494,7 @@ alien_facing_store_2:  stx     boss_flags
         inc     boss_ai_state
         inx
         lda     #$FF
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lsr     boss_flags
 alien_phase_dispatch:  dex
         lda     alien_phase_dispatch_hi,x
@@ -3508,7 +3508,7 @@ alien_palette_flash_tick:  lda     frame_counter
         and     #$0F
         bne     alien_palette_set_colors
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 alien_palette_set_colors:  ldx     #$10
         ldy     #$0F
         lda     frame_counter
@@ -3623,7 +3623,7 @@ alien_load_palette_loop:  lda     alien_stage_palette,x
         lda     #$78
         jsr     play_sound_and_reset_anim
         lda     #$2A
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
 alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
@@ -3711,7 +3711,7 @@ alien_vel_y_hi_data:  .byte   $03,$02
         and     #$07
         bne     @skip
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 @skip:
         ldx     #$0F
         lda     frame_counter
@@ -3785,7 +3785,7 @@ alien_facing_update:  sta     ent_flags
         lda     #$02
         sta     alien_repeat_count
         lda     #$16
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
         jsr     calc_player_boss_distance
@@ -3877,9 +3877,9 @@ fortress_inc_spawn_timer:  inc     fortress_explode_timer
         sta     temp_0B
         jsr     explosion_array_setup_inner
         lda     #$41
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$FF
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     current_stage
         cmp     #$0C
         bne     fortress_spawn_rts
@@ -3915,7 +3915,7 @@ fortress_defeat_phase_2:  bne     fortress_defeat_phase_3
         lda     #$FD
         sta     fortress_defeat_timer
         lda     #$15
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         rts
 
 fortress_defeat_phase_3:  cmp     #$FE
@@ -3938,7 +3938,7 @@ fortress_defeat_check_timer:  lda     fortress_defeat_timer
         lda     #$0B
         sta     game_substate
         lda     #$3A
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 fortress_defeat_spawn_entity:  lda     ent_anim_id
         cmp     #$03
         bne     fortress_defeat_done
@@ -3981,7 +3981,7 @@ boss_health_bar_tick:  lda     frame_counter      ; frame counter for timing
         beq     boss_health_bar_rts
         inc     boss_hp                   ; increment health bar fill
         lda     #$28
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
 boss_health_bar_rts:  rts
 
 ; ─── Flip boss facing and check wall ───
@@ -4525,7 +4525,7 @@ proximity_check_y_dist:  cmp     $D584,y
 proximity_boss_defeated:  lda     #$00
         sta     game_substate
         sta     ent_hp
-        jmp     boss_death_sequence
+        jmp     player_death_sequence
 
 proximity_flip_facing:  lda     ent_flags
         and     #$BF
@@ -4617,7 +4617,7 @@ weapon_boss_hit_dispatch:  lda     $B4  ; check already-hit flag
 ; =============================================================================
 buster_apply_damage:  jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4640,7 +4640,7 @@ buster_deflect:  lda     ent_flags,x
         sta     ent_y_vel,x
         sta     ent_x_vel,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_02
 buster_deflect_done:  clc
@@ -4683,7 +4683,7 @@ atomic_fire_store_damage:  sta     temp_00
 
 atomic_fire_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4699,7 +4699,7 @@ atomic_fire_killed:  lda     #$00
         rts
 
 atomic_fire_deflect:  lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_02
         lsr     ent_flags,x
@@ -4722,7 +4722,7 @@ atomic_fire_done:  clc
 @skip:
         jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4739,7 +4739,7 @@ air_shooter_killed:  lda     #$00
 
 air_shooter_killed_skip:
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_02
         lda     ent_flags,x
@@ -4765,7 +4765,7 @@ air_shooter_killed_skip:
 @skip:
         jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4782,7 +4782,7 @@ leaf_shield_killed:  lda     #$00
 
 leaf_shield_deflect:
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_02
         lda     ent_flags,x
@@ -4813,7 +4813,7 @@ leaf_shield_clear_hit:  lda     #$00
 
 bubble_lead_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4837,7 +4837,7 @@ bubble_lead_deflect:  lda     #$00
         lda     #$80
         sta     ent_flags,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_02
         clc
@@ -4855,7 +4855,7 @@ bubble_lead_deflect:  lda     #$00
 
 quick_boomerang_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4887,7 +4887,7 @@ quick_boomerang_deflect:  lda     #ENTITY_COPIPI
         lda     #$04
         sta     ent_y_vel,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_02
 quick_boomerang_restore_x:  ldx     current_entity_slot
@@ -4909,7 +4909,7 @@ quick_boomerang_clear_hit:  lda     #$00
 
 crash_bomber_apply:  jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4938,7 +4938,7 @@ crash_bomber_deflect:  lda     ent_type,x
         sta     ent_hp,x
         inc     ent_state,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
 crash_bomber_done:  clc
@@ -4956,7 +4956,7 @@ crash_bomber_done:  clc
 @skip:
         jsr     weapon_difficulty_scale
         lda     #$2B
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$01
         sta     temp_02
         inc     boss_hit_flag
@@ -4984,7 +4984,7 @@ metal_blade_deflect:
         and     #$F0
         sta     ent_flags,x
         lda     #$2D
-        jsr     bank_switch_enqueue
+        jsr     sound_queue_push
         lda     #$02
         sta     temp_02
 metal_blade_done:  clc

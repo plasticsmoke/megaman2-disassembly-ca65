@@ -32,22 +32,22 @@ A lookup-oriented companion to [ENGINE.md](ENGINE.md). Use this file to find the
 | Boss HP | All bosses use `MAX_HP` ($1C = 28) — `include/constants.inc` |
 | Weapon damage to bosses | `weapon_base_damage_table` + per-weapon tables — `bank0B:5023` |
 | Boss contact damage | `boss_contact_damage_table` — `bank0B:5050` |
-| Enemy contact damage | `contact_damage_to_player_tbl` — `bank0F:5327` |
+| Enemy contact damage | `contact_damage_to_player_tbl` — `bank0F:5510` |
 | Enemy spawns per stage | Spawn tables at bank offsets $3600-$39FF — `bank00`–`bank09` |
 | Player walk speed | `max_speed_sub` / `max_speed_hi` ($3E/$3F) — `include/zeropage.inc` |
 | Gravity | `gravity_hi_table` — `bank0E:1447` |
-| Item drop rates | `item_drop_calc` — `bank0F:5989` |
+| Item drop rates | `item_drop_calc` — `bank0F:6177` |
 | Difficulty flag | `difficulty` ($CB) — `include/zeropage.inc` |
 | Stage → bank mapping | `stage_bank_table` — `bank0E:333` |
-| Weapon palettes | `weapon_palette_data` — `bank0F:2758` |
+| Weapon palettes | `weapon_palette_data` — `bank0F:2804` |
 | Stage BG palettes | Bank offset $3E00 in stage banks $00–$09 |
-| Music triggers | `bank_switch_enqueue` with sound ID — `bank0F:258` |
+| Music triggers | `sound_queue_push` with sound ID — `bank0F:271` |
 | Password encoding | `password_all_dots_placed` — `bank0D:3685` |
-| Tile collision types | `stage_collision_table` — `bank0F:1834` |
+| Tile collision types | `stage_collision_table` — `bank0F:1879` |
 | Entity AI handlers | `entity_ai_ptr_lo/hi/bank` — `bank0E:2629` |
-| Entity flags/hitboxes | `entity_flags_table` — `bank0F:3272` |
-| Entity AI behavior | `entity_ai_behavior_tbl` — `bank0F:3322` |
-| Sprite definitions | `sprite_def_ptr_lo/hi` — `bank0F:6265` |
+| Entity flags/hitboxes | `entity_flags_table` — `bank0F:3324` |
+| Entity AI behavior | `entity_ai_behavior_tbl` — `bank0F:3374` |
+| Sprite definitions | `sprite_def_ptr_lo/hi` — `bank0F:6453` |
 | Text tile encoding | CHR tile indices: $C1=A ... $DA=Z — `bank0D:4805` |
 
 ---
@@ -105,15 +105,19 @@ Time Stopper has no per-hit damage table — its handler entry ($A91B) points di
 
 ### Weapon-to-Enemy Damage Summary (bank0F)
 
-Each weapon has a 128-byte damage table indexed by entity type ($00–$7F). On **Normal** mode, `apply_difficulty_modifier` (bank0F:5197) doubles all weapon-to-enemy values via `ASL temp_00`. The three explicitly labeled tables:
+Each weapon has a per-entity-type damage table ($00–$7B; 124 entries for Buster, 120 for the rest — higher types are never checked). On **Normal** mode, `apply_difficulty_modifier` doubles all weapon-to-enemy values via `ASL temp_00`. All nine tables are labeled in bank0F:
 
-| Table | Location | Weapon |
+| Table | Address | Weapon |
 |---|---|---|
-| `weapon_damage_table` | bank0F:5206 | Buster / Atomic Fire (uncharged) |
-| `weapon_damage_table_2` | bank0F:5267 | Bubble Lead |
-| `weapon_damage_table_3` | bank0F:5297 | Crash Bomber |
-
-Additional per-weapon tables exist at unlabeled ROM addresses — see the per-weapon breakdown above.
+| `weapon_dmg_buster_tbl` | $E998 | Buster / Atomic Fire (uncharged; ×3 mid-charge) |
+| `weapon_dmg_atomic_tbl` | $EA14 | Atomic Fire (full charge) |
+| `weapon_dmg_air_tbl` | $EA8C | Air Shooter |
+| `weapon_dmg_leaf_tbl` | $EB04 | Leaf Shield |
+| `weapon_dmg_bubble_tbl` | $EB7C | Bubble Lead |
+| `weapon_dmg_quick_tbl` | $EBF4 | Quick Boomerang |
+| `weapon_dmg_crash_tbl` | $EC6C | Crash Bomber |
+| `weapon_dmg_metal_tbl` | $ECE4 | Metal Blade |
+| `contact_damage_to_player_tbl` | $ED5C | Enemy contact damage to player |
 
 ---
 
@@ -201,17 +205,17 @@ Boss sub-entity AI for Wily bosses (dragon segments, turrets, etc.) is in bank0E
 
 ### HP System
 
-All enemies have **HP = 20** ($14). This value comes from entity array aliasing: `entity_init_from_type` (bank0F:3206) writes `#$14` to `ent_timer,x` for the entity slot. Due to the 16-byte array layout, `ent_timer` for enemy init slots ($00-$0F) maps to the same physical RAM as `ent_hp` for enemy AI slots ($10-$1F): `$06D0+slot`.
+All enemies have **HP = 20** ($14). This value comes from entity array aliasing: `entity_init_from_type` (bank0F:3258) writes `#$14` to `ent_timer,x` for the entity slot. Due to the 16-byte array layout, `ent_timer` for enemy init slots ($00-$0F) maps to the same physical RAM as `ent_hp` for enemy AI slots ($10-$1F): `$06D0+slot`.
 
-The number of buster hits to kill depends on the per-type damage value in `weapon_damage_table` (bank0F:5206, 128 entries indexed by entity type). On **Normal** difficulty, `apply_difficulty_modifier` (bank0F:5197) doubles weapon damage via `ASL temp_00`, so enemies die in roughly half the hits.
+The number of buster hits to kill depends on the per-type damage value in `weapon_dmg_buster_tbl` (bank0F:5377, 128 entries indexed by entity type). On **Normal** difficulty, `apply_difficulty_modifier` (bank0F:5368) doubles weapon damage via `ASL temp_00`, so enemies die in roughly half the hits.
 
 Formula: **buster hits = ceil(20 / (base_damage x difficulty_multiplier))**
 
-Where difficulty_multiplier = 2 (Normal) or 1 (Difficult). Enemies with base_damage = 0 are **immune to buster** but may be vulnerable to other weapons via separate collision handlers (9 weapon handlers at `weapon_handler_ptr_lo/hi`, bank0F:5202).
+Where difficulty_multiplier = 2 (Normal) or 1 (Difficult). Enemies with base_damage = 0 are **immune to buster** but may be vulnerable to other weapons via separate collision handlers (9 weapon handlers at `weapon_handler_ptr_lo/hi`, bank0F:5373).
 
 Special cases:
 - **Tanishi** ($0A): AI checks `ent_hp < $14` — any hit that reduces HP below 20 triggers shell-shed, spawning Tanishi Bare ($0B) as a new entity with fresh HP=20. On Normal, buster does 20 damage (instant kill, no shell-shed). On Difficult, buster does 10 (HP drops to 10, shell sheds, bare form needs 2 more hits).
-- **Collision gating**: `ent_flags` bits 0-1 control collision eligibility (bank0F:5457). Bit 0 = player contact, bit 1 = weapon collidable. Entities with both bits clear (e.g. flags $A0) skip all collision checks: Goblin ($40/$41), Laser Beam ($14), and controller-type entities ($1C/$47).
+- **Collision gating**: `ent_flags` bits 0-1 control collision eligibility (bank0F:5645). Bit 0 = player contact, bit 1 = weapon collidable. Entities with both bits clear (e.g. flags $A0) skip all collision checks: Goblin ($40/$41), Laser Beam ($14), and controller-type entities ($1C/$47).
 - **Multi-entity hitboxes**: Some large enemies render as background metatiles via a controller entity (flags $A0, immune) and spawn a child entity that serves as the hitbox. Examples: Friender ($1C controller → $19 hitbox, reuses ENTITY_AIR_TORNADO1 type), Mole ($47 controller → child hitbox). The child carries the actual HP and weapon damage values.
 - **Neo Metall** ($34/$56): Switches between hittable ($34, helmet up) and invulnerable ($56, helmet down) entity types.
 
@@ -219,20 +223,21 @@ Special cases:
 
 The weapon damage system uses multiple sub-tables in bank0F, all indexed by entity type ($00-$7F). Each weapon's collision handler references a specific table:
 
-| Weapon | Table / Address | Handler |
+| Weapon | Table ($addr) | Handler |
 |---|---|---|
-| Buster (uncharged) | `weapon_damage_table` ($E998) | bank0F:4787 |
-| Atomic Fire (uncharged) | `weapon_damage_table` ($E998) | bank0F:4831 |
-| Atomic Fire (mid-charge) | base × 3 | bank0F:4846 |
-| Atomic Fire (full) | $EA14 | bank0F:4841 |
-| Air Shooter | $EA8C | bank0F:4893 |
-| Leaf Shield | $EB04 | bank0F:4940 |
-| Bubble Lead | `weapon_damage_table_2` ($EB7C) | bank0F:4987 |
-| Quick Boomerang | $EBF4 | bank0F:5038 |
-| Metal Blade | $ECE4 | bank0F:5147 |
-| Crash Bomber | `weapon_damage_table_3` | bank0F:5091 |
+| Buster (uncharged) | `weapon_dmg_buster_tbl` ($E998) | `weapon_hit_buster` |
+| Atomic Fire (uncharged) | `weapon_dmg_buster_tbl` ($E998) | `weapon_hit_atomic` |
+| Atomic Fire (mid-charge) | `weapon_dmg_buster_tbl` × 3 | `weapon_hit_atomic` |
+| Atomic Fire (full) | `weapon_dmg_atomic_tbl` ($EA14) | `weapon_hit_atomic` |
+| Air Shooter | `weapon_dmg_air_tbl` ($EA8C) | `weapon_hit_air` |
+| Leaf Shield | `weapon_dmg_leaf_tbl` ($EB04) | `weapon_hit_leaf` |
+| Bubble Lead | `weapon_dmg_bubble_tbl` ($EB7C) | `weapon_hit_bubble` |
+| Quick Boomerang | `weapon_dmg_quick_tbl` ($EBF4) | `weapon_hit_quick` |
+| Metal Blade | `weapon_dmg_metal_tbl` ($ECE4) | `weapon_hit_metal` |
+| Crash Bomber | `weapon_dmg_crash_tbl` ($EC6C) | `weapon_hit_crash` |
+| Time Stopper | — (no collision damage) | `apply_difficulty_modifier` (no-op) |
 
-On Normal mode, `apply_difficulty_modifier` (bank0F:5197) doubles weapon damage via `ASL temp_00`.
+On Normal mode, `apply_difficulty_modifier` (bank0F:5368) doubles weapon damage via `ASL temp_00`.
 
 ### AI Dispatch
 
@@ -445,14 +450,14 @@ No regular stage enemies — **final boss encounter only**.
 
 Boss sub-entities: Alien shot ($6F), Alien body ($70), red liquid drip ($74). Only vulnerable to Bubble Lead.
 
-### Entity Property Tables (bank0F:3272)
+### Entity Property Tables (bank0F:3324)
 
 | Table | Location | Entries | Description |
 |---|---|---|---|
-| `entity_flags_table` | bank0F:3272 | 128 | Default spawn flags per entity type |
-| `entity_hitbox_width_idx_tbl` | bank0F:3288 | 128 | Hitbox width lookup index |
-| `entity_hitbox_height_idx_tbl` | bank0F:3304 | 128 | Hitbox height lookup index |
-| `entity_ai_behavior_tbl` | bank0F:3322 | 128 | AI behavior mode index |
+| `entity_flags_table` | bank0F:3324 | 128 | Default spawn flags per entity type |
+| `entity_hitbox_width_idx_tbl` | bank0F:3340 | 128 | Hitbox width lookup index |
+| `entity_hitbox_height_idx_tbl` | bank0F:3356 | 128 | Hitbox height lookup index |
+| `entity_ai_behavior_tbl` | bank0F:3374 | 128 | AI behavior mode index |
 
 Entity flag bitmasks (`ent_spawn_flags` / `ent_flags`):
 
@@ -481,7 +486,7 @@ Banks $00–$04 share tables between the Robot Master stage and a Wily stage (us
 
 ### Dynamic Spawn Chains
 
-Several enemy types use parent→child spawn relationships via `spawn_entity_from_parent` (bank0F:5831):
+Several enemy types use parent→child spawn relationships via `spawn_entity_from_parent` (bank0F:6019):
 
 | System | Chain | Despawner |
 |---|---|---|
@@ -493,7 +498,7 @@ Several enemy types use parent→child spawn relationships via `spawn_entity_fro
 
 ### Contact Damage to Player
 
-`contact_damage_to_player_tbl` (bank0F:5327) — 128 entries indexed by entity type ($00–$7F). Damage is subtracted directly from player HP in `check_player_collision` (bank0F:4643). **Not affected by difficulty** — values are the same on Normal and Difficult.
+`contact_damage_to_player_tbl` (bank0F:5510) — 128 entries indexed by entity type ($00–$7F). Damage is subtracted directly from player HP in `check_player_collision` (bank0F:4799). **Not affected by difficulty** — values are the same on Normal and Difficult.
 
 Boss contact damage uses a separate table: `boss_contact_damage_table` (bank0B:5050) — see Section 3.
 
@@ -583,10 +588,10 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 | Gravity (water) | $1E | `gravity_hi_table+1` bank0E:1447 |
 | Jump velocity | $04.DF (initial Y vel) | Set in player jump code |
 | Terminal velocity | $F4 (max Y fall speed) | Clamped in physics |
-| Knockback Y vel | $01.40 | `player_damage_knockback` bank0F:2781 |
-| Knockback X vel | $00.90 | `player_damage_knockback` bank0F:2785 |
-| I-frame duration | $6F (111 frames) | `player_damage_knockback` bank0F:2780 |
-| Default entity timer | $14 (20 frames) | `entity_init_from_type` bank0F:3214 |
+| Knockback Y vel | $01.40 | `player_damage_knockback` bank0F:2827 |
+| Knockback X vel | $00.90 | `player_damage_knockback` bank0F:2831 |
+| I-frame duration | $6F (111 frames) | `player_damage_knockback` bank0F:2826 |
+| Default entity timer | $14 (20 frames) | `entity_init_from_type` bank0F:3266 |
 
 ### Player State Variables
 
@@ -605,7 +610,7 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Weapon Projectile Base Types
 
-`weapon_base_type_tbl` (bank0F:2847) — maps weapon ID to base OAM/sprite type for player projectiles:
+`weapon_base_type_tbl` (bank0F:2893) — maps weapon ID to base OAM/sprite type for player projectiles:
 
 | Weapon ID | Weapon | Base Type |
 |---|---|---|
@@ -624,24 +629,24 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Weapon Fire Dispatch
 
-`weapon_dispatch_lo/hi_tbl` (bank0F:3669) — 12 entries indexed by `current_weapon`. Each handler checks B button and spawns a projectile entity via `weapon_spawn_projectile` (bank0F:2857).
+`weapon_dispatch_lo/hi_tbl` (bank0F:3732) — 12 entries indexed by `current_weapon`. Each handler checks B button and spawns a projectile entity via `weapon_spawn_projectile` (bank0F:2903).
 
 | Index | Weapon | Fire Handler | Spawn Y | Entity Type | Flags | Position Handler |
 |---|---|---|---|---|---|---|
-| 0 | Mega Buster | `fire_weapon_scan_slot` | Y=0 | $23 | $81 | normal physics |
-| 1 | Atomic Fire | *(unlabeled)* | Y=1 | $30 | $83 | `atomic_fire_*` (bank0F:3716) |
-| 2 | Air Shooter | `fire_weapon_multi_scan` | Y=2 | $31 | $83 | entity_special_dispatch |
-| 3 | Leaf Shield | `fire_weapon_spread_loop` | Y=3 | $32 | $82 | entity_special_dispatch |
-| 4 | Bubble Lead | `fire_weapon_bubble_scan` | Y=4 | $33 | $87 | `bubble_lead_*` (bank0F:3957) |
-| 5 | Quick Boomerang | `fire_weapon_quick_scan` | Y=5 | $34 | $83 | entity_special_dispatch |
-| 6 | Time Stopper | *(unlabeled)* | Y=8 | $37 | $82 | entity_special_dispatch |
-| 7 | Metal Blade | `fire_weapon_metal_scan` | Y=7 | $36 | $81 | normal physics |
-| 8 | Crash Bomber | *(unlabeled)* | Y=6 | $35 | $83 | `crash_bomber_*` (bank0F:4030) |
-| 9 | Item 1 | `fire_weapon_item1_scan` | Y=9 | $38 | $82 | entity_special_dispatch |
-| 10 | Item 2 | *(unlabeled)* | Y=A | $39 | $82 | entity_special_dispatch |
-| 11 | Item 3 | *(unlabeled)* | Y=B | $3A | $86 | entity_special_dispatch |
+| 0 | Mega Buster | `fire_weapon_buster` | Y=0 | $23 | $81 | normal physics |
+| 1 | Atomic Fire | `fire_weapon_atomic` | Y=1 | $30 | $83 | `atomic_fire_ai` |
+| 2 | Air Shooter | `fire_weapon_air` | Y=2 | $31 | $83 | `air_shooter_ai` |
+| 3 | Leaf Shield | `fire_weapon_leaf` | Y=3 | $32 | $82 | `leaf_shield_orbit_ai` |
+| 4 | Bubble Lead | `fire_weapon_bubble` | Y=4 | $33 | $87 | `bubble_lead_ai` |
+| 5 | Quick Boomerang | `fire_weapon_quick` | Y=5 | $34 | $83 | `quick_boomerang_ai` |
+| 6 | Time Stopper | `fire_weapon_time_stopper` | Y=8 | $37 | $82 | `time_stopper_ai` |
+| 7 | Metal Blade | `fire_weapon_metal` | Y=7 | $36 | $81 | normal physics |
+| 8 | Crash Bomber | `fire_weapon_crash` | Y=6 | $35 | $83 | `crash_bomber_ai` |
+| 9 | Item 1 | `fire_weapon_item1` | Y=9 | $38 | $82 | `item1_platform_ai` |
+| 10 | Item 2 | `fire_weapon_item2` | Y=A | $39 | $82 | `item2_jet_ai` |
+| 11 | Item 3 | `fire_weapon_item3` | Y=B | $3A | $86 | `item3_climber_ai` |
 
-**Dual-purpose entity types**: Projectile entity types ($23, $2F–$3E) are reused IDs that also serve as enemy types (Changkey, Boss Door, Press, Blocky, etc.). When spawned as weapon projectiles they occupy weapon renderer slots ($10–$1F) and use separate AI via `entity_special_dispatch` (bank0F:3712) instead of the main entity AI table.
+**Dual-purpose entity types**: Projectile entity types ($23, $2F–$3E) are reused IDs that also serve as enemy types (Changkey, Boss Door, Press, Blocky, etc.). When spawned as weapon projectiles they occupy weapon renderer slots ($10–$1F) and use separate AI via `entity_special_dispatch` (bank0F:3785) instead of the main entity AI table.
 
 **Projectile flags bit 1**: Determines position update path. Set = `entity_special_dispatch` (custom handler). Clear = normal `apply_entity_physics`. Buster ($23) and Metal Blade ($36) use normal physics; all others use custom handlers.
 
@@ -701,7 +706,7 @@ Each metatile is 4 bytes: 4 tile indices (TL, TR, BL, BR) packed into the tile d
 
 ### Stage Collision Type Table
 
-`stage_collision_table` (bank0F:1834) — maps collision bits 2 and 3 to specific types per stage:
+`stage_collision_table` (bank0F:1879) — maps collision bits 2 and 3 to specific types per stage:
 
 | Stage | Bit 2 → | Bit 3 → |
 |---|---|---|
@@ -736,7 +741,7 @@ Collision type values: $00=empty, $01=solid, $02=ladder, $03=spike (instant deat
 
 ### Weapon Palette Table
 
-`weapon_palette_data` (bank0F:2758) — 4 bytes per weapon. Bytes 1–3 are copied to `palette_sprite+1` ($0367–$0369). Byte 0 ($0F = black) is present in the table but skipped by the copy routine:
+`weapon_palette_data` (bank0F:2804) — 4 bytes per weapon. Bytes 1–3 are copied to `palette_sprite+1` ($0367–$0369). Byte 0 ($0F = black) is present in the table but skipped by the copy routine:
 
 | Weapon | Byte 0 | Color 1 | Color 2 | Color 3 |
 |---|---|---|---|---|
@@ -783,14 +788,14 @@ The CHR upload callback runs through `BANK_CHR_UPLOAD` (bank $0C). Stage CHR dat
 | What scales | Routine | Location | Effect |
 |---|---|---|---|
 | Weapon damage to bosses | `weapon_difficulty_scale` | bank0B:5009 | `ASL temp_00` on Normal → 2× damage |
-| Weapon damage to enemies | `apply_difficulty_modifier` | bank0F:5197 | `ASL temp_00` on Normal → 2× damage |
-| Item drop rates | `item_drop_calc` | bank0F:5989 | Different RNG thresholds |
+| Weapon damage to enemies | `apply_difficulty_modifier` | bank0F:5368 | `ASL temp_00` on Normal → 2× damage |
+| Item drop rates | `item_drop_calc` | bank0F:6177 | Different RNG thresholds |
 
 Note: On Normal mode, weapon damage (to both bosses and regular enemies) is **doubled** — enemies die faster. Contact damage from enemies/projectiles to the player is **not** affected by difficulty. Difficult mode uses base weapon damage values as-is.
 
 ### Item Drop Rate Comparison
 
-`item_drop_calc` (bank0F:5989) uses `rng_seed MOD 100` against threshold tables:
+`item_drop_calc` (bank0F:6177) uses `rng_seed MOD 100` against threshold tables:
 
 | Item | Normal (72% total) | Difficult (52% total) |
 |---|---|---|
@@ -833,11 +838,11 @@ Each channel uses a 31-byte slot (`SND_*` fields defined at bank0C:19-49):
 
 ### Sound Trigger Mechanism
 
-All music and SFX are triggered via `bank_switch_enqueue` (bank0F:258). Values are queued in `bank_switch_queue` ($0580) and processed during NMI through `banked_entry_alt` ($8003) in bank $0C.
+All music and SFX are triggered via `sound_queue_push` (bank0F:271). Values are queued in `sound_queue` ($0580) and processed during NMI through `banked_entry_alt` ($8003) in bank $0C.
 
 ```
 lda     #$XX        ; sound/music ID
-jsr     bank_switch_enqueue
+jsr     sound_queue_push
 ```
 
 The dispatch at $8003 (bank0C:52-79) routes by value:
@@ -884,30 +889,30 @@ SFX IDs ($18+) index past the pointer table into embedded sound data. Listed by 
 
 | ID | Sound | Primary call sites |
 |---|---|---|
-| $21 | Metal Blade fire | bank0F:3609, bank0E:4855 |
-| $23 | Crash Bomber fire | bank0F:3562, bank0B:1415 |
-| $24 | Weapon fire (generic) | bank0F:3391 — Bubble, Leaf, Air, Quick |
+| $21 | Metal Blade fire | bank0F:3669, bank0E:4855 |
+| $23 | Crash Bomber fire | bank0F:3620, bank0B:1415 |
+| $24 | Weapon fire (generic) | bank0F:3443 — Bubble, Leaf, Air, Quick |
 | $25 | Enemy shoot / Sniper fire | bank0E:5146, 6062, 6190, 6262 |
-| $26 | Mega Buster shot | bank0F:2769 |
+| $26 | Mega Buster shot | bank0F:2815 |
 | $27 | Heavy impact | bank0E:3657 |
 | $28 | HP bar fill tick | bank0B:191, bank0D:1777 |
 | $29 | Landing / thud | bank0E:945 |
 | $2A | Block break (Picopico-kun) | bank0B:3625 |
-| $2B | Weapon hit (damage dealt) | bank0F:4799 — all 9 weapon handlers |
+| $2B | Weapon hit (damage dealt) | bank0F:4955 — all 9 weapon handlers |
 | $2C | Dragon fire breath | bank0B:1828, 1922 |
-| $2D | Weapon immune / deflect | bank0F:4825 — all 9 weapon handlers |
-| $2E | Quick Boomerang hit | bank0F:4077 |
+| $2D | Weapon immune / deflect | bank0F:4985 — all 9 weapon handlers |
+| $2E | Quick Boomerang hit | bank0F:4218 |
 | $2F | Cursor / menu move | bank0D:1711, 3576, 3631 |
-| $30 | Boss fight music start | bank0F:1172, bank0D:1895 |
-| $31 | Weapon get fanfare | bank0F:3910 |
-| $32 | Boss intro transition | bank0F:909 |
-| $38 | Large pickup / E-Tank | bank0F:3799, bank0B:301 |
+| $30 | Boss fight music start | bank0F:1209, bank0D:1895 |
+| $31 | Weapon get fanfare | bank0F:4033 |
+| $32 | Boss intro transition | bank0F:951 |
+| $38 | Large pickup / E-Tank | bank0F:3885, bank0B:301 |
 | $39 | Pipi egg hatch | bank0E:4757 |
 | $3A | Victory jingle | bank0D:191, bank0B:3940 |
 | $3B | Screen transition | bank0E:1492 |
 | $3C | Appear block sound | bank0E:6422 |
-| $3F | Atomic Fire charge | bank0F:3437, bank0B:446 |
-| $41 | Boss death explosion | bank0F:383, bank0B:3879 |
+| $3F | Atomic Fire charge | bank0F:3490, bank0B:446 |
+| $41 | Boss death explosion | bank0F:399, bank0B:3879 |
 | $42 | Extra life (1-UP) | bank0D:3668, bank0E:574 |
 
 $2B (weapon hit) and $2D (weapon immune) are by far the most common — used in every weapon collision handler in both bank0F and bank0B.
@@ -955,7 +960,7 @@ Wily 5-6 override the bank table music with $17 ("Last Stage") via bank0D:5868.
 | `channel_active_flags` | — | 4-bit mask for active channels (1 per APU channel) |
 | `sound_data_ptr_lo` | $057C | Sound/instrument data pointer low |
 | `sound_data_ptr_hi` | $057D | Sound/instrument data pointer high |
-| `bank_switch_queue` | $0580 | Command queue array (max 16 entries) |
+| `sound_queue` | $0580 | Command queue array (max 16 entries) |
 | `bank_queue_count` | $66 | Queue entry count |
 
 ### Special Commands
@@ -1088,10 +1093,10 @@ Four 128-byte pointer tables in fixed bank $0F map entity types ($00–$7F) to s
 
 | Table | Location | Purpose |
 |---|---|---|
-| `sprite_def_ptr_lo` | bank0F:6265 | Sprite def pointer low byte (entity rendering) |
-| `sprite_def_ptr_hi` | bank0F:6313 | Sprite def pointer high byte (entity rendering) |
-| `sprite_def_ptr_lo_wpn` | bank0F:6290 | Sprite def pointer low byte (weapon rendering) |
-| `sprite_def_ptr_hi_wpn` | bank0F:6329 | Sprite def pointer high byte (weapon rendering) |
+| `sprite_def_ptr_lo` | bank0F:6453 | Sprite def pointer low byte (entity rendering) |
+| `sprite_def_ptr_hi` | bank0F:6501 | Sprite def pointer high byte (entity rendering) |
+| `sprite_def_ptr_lo_wpn` | bank0F:6478 | Sprite def pointer low byte (weapon rendering) |
+| `sprite_def_ptr_hi_wpn` | bank0F:6517 | Sprite def pointer high byte (weapon rendering) |
 
 All high bytes are in the $FB–$FF range, placing all sprite definition data in the fixed bank ($FB00–$FFEF region).
 
@@ -1111,7 +1116,7 @@ A sprite def offset of `$00` signals **entity deactivation** (`LSR ent_flags` cl
 
 ### Animation State Machine
 
-`render_entity_normal` (bank0F:2045) runs each frame for active entities:
+`render_entity_normal` (bank0F:2090) runs each frame for active entities:
 
 1. Load sprite def pointer from `sprite_def_ptr_lo/hi` using `ent_type`
 2. Increment `ent_anim_frame` → compare against byte +1 (duration)
@@ -1122,10 +1127,10 @@ A sprite def offset of `$00` signals **entity deactivation** (`LSR ent_flags` cl
 
 | Routine | Location | Purpose |
 |---|---|---|
-| `render_entity_normal` | bank0F:2045 | Main entity animation + OAM write |
-| `render_entity_get_sprite_ptr` | bank0F:2003 | Special mode entity rendering (no animation advance) |
-| `render_weapon_get_sprite_ptr` | bank0F:2026 | Weapon/projectile rendering via `_wpn` tables |
-| `render_begin_oam_write` | bank0F:2081 | OAM assembly from sprite definition data |
+| `render_entity_normal` | bank0F:2090 | Main entity animation + OAM write |
+| `render_entity_get_sprite_ptr` | bank0F:2048 | Special mode entity rendering (no animation advance) |
+| `render_weapon_get_sprite_ptr` | bank0F:2071 | Weapon/projectile rendering via `_wpn` tables |
+| `render_begin_oam_write` | bank0F:2126 | OAM assembly from sprite definition data |
 
 ### Flash Effects
 
@@ -1158,13 +1163,13 @@ All PPU writes occur during NMI (vertical blank) via a queued buffer system:
 | Column update addr | $03B6–$03B7 | 2 bytes | VRAM target address (hi/lo) |
 | Column update tiles | $03B8–$03D7 | 32 bytes | Tile column data (32 tiles vertical) |
 
-`ppu_buffer_count` tracks the number of pending update entries. `ppu_buffer_transfer` (bank0F:2499) processes the queue during NMI in two modes:
+`ppu_buffer_count` tracks the number of pending update entries. `ppu_buffer_transfer` (bank0F:2545) processes the queue during NMI in two modes:
 - **Positive count**: Multi-entry structured writes (4×4 tile blocks per entry)
 - **Negative count**: Alternate mode — 8-byte row writes with attribute table merge
 
 ### Column Update System
 
-`ppu_scroll_column_update` (bank0F:2598) writes one 32-tile vertical column to the nametable during scrolling. The VRAM address is stored in `col_update_addr_lo/hi` ($03B6–$03B7), tile data in `col_update_tiles` ($03B8–$03D7). Also used for text rendering during stage intros.
+`ppu_scroll_column_update` (bank0F:2644) writes one 32-tile vertical column to the nametable during scrolling. The VRAM address is stored in `col_update_addr_lo/hi` ($03B6–$03B7), tile data in `col_update_tiles` ($03B8–$03D7). Also used for text rendering during stage intros.
 
 ### Text Encoding
 
