@@ -428,7 +428,7 @@ ora (other bits)  ; merge back
 
 ### Collision Gating (ent_flags bits 0-1)
 
-Before running any collision checks, `apply_entity_physics_alt` tests the low 2 bits of `ent_flags` (bank0F:5652):
+Before running any collision checks, `apply_entity_physics_alt` tests the low 2 bits of `ent_flags` (bank0F:5654):
 
 ```asm
 lda  ent_flags,x
@@ -477,19 +477,19 @@ Frame alternation means at most 4 weapon slots are tested per entity per frame. 
 
 ### Weapon Damage Dispatch
 
-On a confirmed hit, `weapon_collision_dispatch` (bank0F:4942) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
+On a confirmed hit, `weapon_collision_dispatch` (bank0F:4944) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
 
 | Weapon ID | Weapon | Handler | Damage Sub-Table |
 |-----------|--------|---------|-----------------|
-| $00 | Mega Buster | bank0F:4950 | `weapon_dmg_buster_tbl` |
-| $01 | Atomic Fire | bank0F:4998 | `weapon_dmg_buster_tbl` (uncharged) / `weapon_dmg_atomic_tbl` (full charge) |
-| $02 | Air Shooter | bank0F:5057 | $EA8C |
-| $03 | Leaf Shield | bank0F:5104 | $EB04 |
-| $04 | Bubble Lead | bank0F:5158 | `weapon_dmg_bubble_tbl` |
-| $05 | Quick Boomerang | bank0F:5205 | $EBF4 |
+| $00 | Mega Buster | bank0F:4952 | `weapon_dmg_buster_tbl` |
+| $01 | Atomic Fire | bank0F:5000 | `weapon_dmg_buster_tbl` (uncharged) / `weapon_dmg_atomic_tbl` (full charge) |
+| $02 | Air Shooter | bank0F:5059 | $EA8C |
+| $03 | Leaf Shield | bank0F:5106 | $EB04 |
+| $04 | Bubble Lead | bank0F:5160 | `weapon_dmg_bubble_tbl` |
+| $05 | Quick Boomerang | bank0F:5207 | $EBF4 |
 | $06 | Time Stopper | — | Handled separately (continuous damage, no dispatch) |
-| $07 | Metal Blade | bank0F:5318 | $ECE4 |
-| $08 | Crash Bomber | bank0F:5265 | `weapon_dmg_crash_tbl` |
+| $07 | Metal Blade | bank0F:5320 | $ECE4 |
+| $08 | Crash Bomber | bank0F:5267 | `weapon_dmg_crash_tbl` |
 
 Each sub-table has one entry per entity type (124 entries for Buster/contact, 120 for the rest — high types are never checked). The handler reads `damage_table[entity_type]` into `temp_00`. A value of $00 means immune. The handler then calls `apply_difficulty_modifier`, which doubles `temp_00` on Normal difficulty (ASL). The resulting damage is subtracted from `ent_hp`.
 

@@ -1014,7 +1014,9 @@ process_sound_jump_intro:  jmp     boss_defeated_sequence ; boss beaten — vict
 
 process_sound_done:  rts
 
-sound_column_copy:
+; ─── Copy one 32-byte column from bank A via the boss_work pointer ───
+; A = source PRG bank. Used by fortress bosses to stream arena tiles.
+banked_column_copy:
         pha
         lda     boss_work_var1
         sta     jump_ptr_hi
