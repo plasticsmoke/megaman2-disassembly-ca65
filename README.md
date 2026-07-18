@@ -48,7 +48,7 @@ Mapper 1 (MMC1), mode 3. 256 KB PRG (16 x 16 KB banks) + 8 KB CHR-RAM. Vertical 
 | $0A | `bank0A_sound.asm` | Music and sound data |
 | $0B | `bank0B_boss_ai.asm` | Boss AI, enemy AI, collision |
 | $0C | `bank0C_weapons_ui.asm` | Weapon system, UI rendering, sound engine |
-| $0D | `bank0D_stage_engine.asm` | Stage engine, player control, OAM |
+| $0D | `bank0D_menus.asm` | Menus, cutscenes & screens (title, password, stage select, weapon get, game over, ending) |
 | $0E | `bank0E_game_engine.asm` | Main game engine, entity AI dispatch |
 | $0F | `bank0F_fixed.asm` | **Fixed bank** ($C000-$FFFF): bank switch, NMI, PPU, controllers |
 
@@ -72,7 +72,7 @@ src/
   bank0A_sound.asm            Music and sound data
   bank0B_boss_ai.asm          Boss AI, enemy AI, collision
   bank0C_weapons_ui.asm       Weapon system, UI rendering, sound engine
-  bank0D_stage_engine.asm     Stage engine, player control, OAM
+  bank0D_menus.asm     Menus, cutscenes & screens (title, password, ending)
   bank0E_game_engine.asm      Main game engine, entity AI dispatch
   bank0F_fixed.asm            Fixed bank — NMI, PPU, bank switching, controllers
   nsfe_shim.asm               NSFe init/play driver shim ($C000)

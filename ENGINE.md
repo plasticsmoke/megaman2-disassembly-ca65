@@ -171,7 +171,7 @@ Camera offsets are normally zero. During boss fights, they're set to small oscil
 
 ## 6. Scrolling and Camera
 
-**Files:** `bank0E_game_engine.asm` (main scroll logic), `bank0F_fixed.asm` (NMI writes), `bank0D_stage_engine.asm` (init + column render)
+**Files:** `bank0E_game_engine.asm` (main scroll logic), `bank0F_fixed.asm` (NMI writes), `bank0D_menus.asm` (init + column render)
 
 ### Horizontal Scrolling
 
@@ -530,7 +530,7 @@ Types 2-3 are overloaded per-stage — they can mean ladder, spike, water, conve
 
 ## 12. Sprite Rendering and OAM
 
-**File:** `bank0F_fixed.asm` (`render_all_sprites`), `bank0D_stage_engine.asm` (player rendering)
+**File:** `bank0F_fixed.asm` (`render_all_sprites`), `bank0D_menus.asm` (player rendering)
 
 ### OAM Format
 
@@ -566,7 +566,7 @@ The player uses a special 3-layer rendering system (`render_player_sprites` in b
 
 ## 13. Player Physics
 
-**File:** `bank0D_stage_engine.asm`
+**File:** `bank0D_menus.asm`
 
 ### Horizontal Movement
 
@@ -806,7 +806,7 @@ SFX can override music channels temporarily. Priority is handled by the `channel
 
 ## 19. Password System
 
-**File:** `bank0D_stage_engine.asm`
+**File:** `bank0D_menus.asm`
 
 Passwords encode game progress in a 5×5 grid with exactly 9 dots:
 

@@ -26,7 +26,7 @@ BANK_SRCS = \
 	src/bank0A_sound.asm \
 	src/bank0B_boss_ai.asm \
 	src/bank0C_weapons_ui.asm \
-	src/bank0D_stage_engine.asm \
+	src/bank0D_menus.asm \
 	src/bank0E_game_engine.asm
 
 # Fixed bank source ($0F, $C000-$FFFF)
