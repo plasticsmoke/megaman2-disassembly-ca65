@@ -202,10 +202,10 @@ banked_0D_wily_map := $8006          ; Bank $0D: Wily castle map screen
 banked_0D_title := $8009            ; Bank $0D: title screen / prologue / attract
 banked_0E_init_respawn := $80AB     ; Bank $0E: game_init entry — respawn (keep lives/ammo)
 banked_0E_entity_update := $84EE    ; Bank $0E: per-frame entity update
-banked_09_scroll_code := $8600      ; Bank $09: scroll column update code
-banked_09_entry_3  := $8603         ; Bank $09: ending cutscene entry (scroll)
-banked_09_entry_6  := $8606         ; Bank $09: ending cutscene entry (walk init)
-banked_09_entry_9  := $8609         ; Bank $09: ending cutscene entry (walk step)
+banked_09_draw_sprites := $8600     ; Bank $09: ending — draw scene sprite block
+banked_09_col_tick := $8603         ; Bank $09: ending — column tile per 4 frames
+banked_09_walk_init := $8606        ; Bank $09: ending — init scene data pointer
+banked_09_walk_scroll := $8609      ; Bank $09: ending — smooth vertical pan
 ; Bank $0A sprite data tables (read while bank $0A is switched in; these
 ; alias the generic $8000+ code entry addresses of other banks)
 spr_frame_ptr_lo   := $8000         ; Bank $0A: entity frame data pointer (lo)
@@ -593,9 +593,12 @@ reset_sound_state:  lda     #$00
         sta     boss_phase
         rts
 
-; ─── ($C295 — no known callers) Screen init + CHR column upload ───
-; Runs 187 idle frames of palette animation, then streams $2E column-sized
-; chunks from bank $09 $8600+ into pattern table 1 via the column updater.
+; ─── ($C295 — DEAD CODE, unreachable) Screen init + CHR column upload ───
+; No JSR/JMP or pointer reference to $C295 (or the $C2D2 loop below) exists
+; anywhere in the ROM. Runs 187 idle frames of palette animation, then
+; streams $2E column-sized chunks from bank $09 $8600+ into pattern table 1
+; — but $8600 in bank $09 now holds the ending cutscene code, so this is a
+; leftover from an earlier data layout. Preserved as-is.
         lda     #$00
         sta     general_counter
         lda     #$02
@@ -1933,8 +1936,8 @@ clear_oam_loop:  sta     oam_buffer,x        ; write $F8 to OAM Y position
 ; =============================================================================
 ; render_all_sprites — Main sprite rendering — build OAM buffer from entity data ($CC77)
 ; =============================================================================
-render_all_sprites:  lda     #$0A       ; switch to sound data bank
-        jsr     bank_switch             ; bank $0A has sprite def ptrs
+render_all_sprites:  lda     #$0A       ; switch to sprite data bank
+        jsr     bank_switch             ; bank $0A: frame + OAM offset data
         jsr     clear_oam_buffer        ; clear all sprites first
         lda     #$00
         sta     temp_06
@@ -3125,7 +3128,7 @@ ending_player_anim:
         sty     temp_01
         lda     #$09
         jsr     bank_switch
-        jsr     banked_09_scroll_code
+        jsr     banked_09_draw_sprites
 ; ─── Switch to bank $0D and return ───
 switch_to_bank_0D:  lda     #$0D
         jsr     bank_switch
@@ -3135,19 +3138,19 @@ switch_to_bank_0D:  lda     #$0D
 ending_scroll_update:
         lda     #$09
         jsr     bank_switch
-        jsr     banked_09_entry_3       ; bank $09 ending entry ($8603)
+        jsr     banked_09_col_tick      ; bank $09 ending entry ($8603)
         jmp     switch_to_bank_0D
 
 ending_init_walk:
         lda     #$09
         jsr     bank_switch
-        jsr     banked_09_entry_6       ; bank $09 ending entry ($8606)
+        jsr     banked_09_walk_init     ; bank $09 ending entry ($8606)
         jmp     switch_to_bank_0D
 
 ending_walk_step:
         lda     #$09
         jsr     bank_switch
-        jsr     banked_09_entry_9       ; bank $09 ending entry ($8609)
+        jsr     banked_09_walk_scroll   ; bank $09 ending entry ($8609)
         jmp     switch_to_bank_0D
 
 ; =============================================================================

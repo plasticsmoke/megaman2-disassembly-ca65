@@ -23,7 +23,7 @@ BANK_SRCS = \
 	src/bank07_stage_bubble.asm \
 	src/bank08_wily_1_2.asm \
 	src/bank09_wily_3_5.asm \
-	src/bank0A_sound.asm \
+	src/bank0A_sprites.asm \
 	src/bank0B_boss_ai.asm \
 	src/bank0C_sound_engine.asm \
 	src/bank0D_menus.asm \

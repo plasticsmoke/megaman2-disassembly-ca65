@@ -47,7 +47,7 @@ A lookup-oriented companion to [ENGINE.md](ENGINE.md). Use this file to find the
 | Entity AI handlers | `entity_ai_ptr_lo/hi/bank` — `bank0E:2656` |
 | Entity flags/hitboxes | `entity_flags_table` — `bank0F:3333` |
 | Entity AI behavior | `entity_ai_behavior_tbl` — `bank0F:3383` |
-| Sprite definitions | `sprite_def_ptr_lo/hi` — `bank0F:6462` |
+| Sprite definitions | `sprite_def_ptr_lo/hi` — `bank0F:6503` |
 | Text tile encoding | CHR tile indices: $C1=A ... $DA=Z — `bank0D:4784` |
 
 ---
@@ -1114,10 +1114,10 @@ Four 128-byte pointer tables in fixed bank $0F map entity types ($00–$7F) to s
 
 | Table | Location | Purpose |
 |---|---|---|
-| `sprite_def_ptr_lo` | bank0F:6462 | Sprite def pointer low byte (entity rendering) |
-| `sprite_def_ptr_hi` | bank0F:6510 | Sprite def pointer high byte (entity rendering) |
-| `sprite_def_ptr_lo_wpn` | bank0F:6487 | Sprite def pointer low byte (weapon rendering) |
-| `sprite_def_ptr_hi_wpn` | bank0F:6526 | Sprite def pointer high byte (weapon rendering) |
+| `sprite_def_ptr_lo` | bank0F:6503 | Sprite def pointer low byte (entity rendering) |
+| `sprite_def_ptr_hi` | bank0F:6551 | Sprite def pointer high byte (entity rendering) |
+| `sprite_def_ptr_lo_wpn` | bank0F:6528 | Sprite def pointer low byte (weapon rendering) |
+| `sprite_def_ptr_hi_wpn` | bank0F:6567 | Sprite def pointer high byte (weapon rendering) |
 
 All high bytes are in the $FB–$FF range, placing all sprite definition data in the fixed bank ($FB00–$FFEF region).
 
@@ -1131,32 +1131,36 @@ Each sprite definition block starts with a 2-byte header followed by per-sequenc
 |---|---|---|
 | +0 | Max sequence index | Animation wraps to 0 after this value |
 | +1 | Frame duration | Frames between animation steps |
-| +2... | Sprite def offsets | One byte per sequence — pointer into sprite data |
+| +2... | Frame IDs | One byte per sequence — index into bank $0A frame pointer tables |
 
-A sprite def offset of `$00` signals **entity deactivation** (`LSR ent_flags` clears bit 7, marking the entity dead).
+A frame ID of `$00` signals **entity deactivation** (`LSR ent_flags` clears bit 7, marking the entity dead).
 
 ### Animation State Machine
 
-`render_entity_normal` (bank0F:2096) runs each frame for active entities:
+`render_entity_normal` (bank0F:2125) runs each frame for active entities:
 
 1. Load sprite def pointer from `sprite_def_ptr_lo/hi` using `ent_type`
 2. Increment `ent_anim_frame` → compare against byte +1 (duration)
 3. If exceeded: reset frame to 0, increment `ent_anim_id`
 4. Compare `ent_anim_id` against byte +0 (max sequences) → wrap to 0
-5. Read sprite def offset at index `[anim_id + 2]` → if $00, deactivate entity
+5. Read frame ID at index `[anim_id + 2]` → if $00, deactivate entity
 6. Jump to `render_begin_oam_write` to assemble OAM entries
 
 | Routine | Location | Purpose |
 |---|---|---|
-| `render_entity_normal` | bank0F:2096 | Main entity animation + OAM write |
-| `render_entity_get_sprite_ptr` | bank0F:2054 | Special mode entity rendering (no animation advance) |
-| `render_weapon_get_sprite_ptr` | bank0F:2077 | Weapon/projectile rendering via `_wpn` tables |
-| `render_begin_oam_write` | bank0F:2132 | OAM assembly from sprite definition data |
+| `render_entity_normal` | bank0F:2125 | Main entity animation + OAM write |
+| `render_entity_get_sprite_ptr` | bank0F:2083 | Special mode entity rendering (no animation advance) |
+| `render_weapon_get_sprite_ptr` | bank0F:2106 | Weapon/projectile rendering via `_wpn` tables |
+| `render_begin_oam_write` | bank0F:2161 | OAM assembly from bank $0A frame data |
 
 ### Flash Effects
 
 - **Player i-frames**: When `invincibility_timer` > 0, sprite is hidden every other frame (`frame_counter AND #$02`). Timer decrements each render frame.
-- **Boss hit flash**: When `boss_hit_timer` > 0, alternates between normal sprite offset and `$18` (blank/flash sprite) every 2 frames. Timer decrements each render frame.
+- **Boss hit flash**: When `boss_hit_timer` > 0, alternates between the normal frame and frame ID `$18` (white flash frame) every 2 frames. Timer decrements each render frame.
+
+### Frame & OAM Layout Data (bank $0A)
+
+`render_all_sprites` (bank0F:1936) switches to bank $0A each frame. Frame IDs index four 256-entry pointer tables there — `spr_frame_ptr_lo/hi` ($8000/$8200, entity slots $00-$0F) and `wpn_frame_ptr_lo/hi` ($8100/$8300, weapon slots $10-$1F). Frame data ($8700+): `[sprite_count, offset_idx, (tile, attr) × count]`. The `offset_idx` selects an OAM offset blob via `spr_offset_ptr_lo/hi` ($8400/$8500): `(y_off, x_off)` pixel-offset pairs read in lockstep with the tile/attr pairs. H-flipped entities map X offsets through `spr_flip_x_tbl` ($8600, `flip[x] = -(x+8)`). See `src/bank0A_sprites.asm`.
 
 ### Animation Variables
 

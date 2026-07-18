@@ -1,10 +1,14 @@
 .segment "BANK09"
 
 ; =============================================================================
-; Bank $09 — Wily Stages 3-5 (stage indices $0A-$0C)
+; Bank $09 — Wily Stages 3-5 (stage indices $0A-$0C) + Ending Cutscene Code
 ; Tile patterns, metatile definitions, screen layouts, and room data.
-; Also contains executable scroll update routines for vertical-scrolling
-; Wily fortress sections (the only code in any data bank).
+; Also contains the ENDING cutscene engine ($8600-$86xx, the only code in any
+; data bank): a 4-entry jump vector called from bank0F trampolines
+; (ending_player_render / ending_scroll_update / ending_init_walk /
+; ending_walk_step) while bank0D runs the ending. Ending scene sprite blocks
+; and column data follow at $8700+; title/prologue screens also stream
+; column data from this bank via ppu_column_fill (bank0F:1147).
 ; Wily 3/4/5 share this bank (stage_bank_table maps all three to $09).
 ; Entity spawns for these stages live in banks $02/$03/$04 (via AND #$07).
 ; =============================================================================
@@ -255,12 +259,26 @@ col_update_tiles    = $03B8     ; column update tile data buffer
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$4C,$0C,$86,$4C,$37,$86
-        .byte   $4C,$78,$86,$4C,$81,$86
-        ldy     $01
-        lda     sprite_data_ptr_lo,y
+        .byte   $00,$00
+
+; =============================================================================
+; Ending Cutscene Entry Vectors ($8600)
+; Called via bank0F trampolines while bank0D runs the ending sequence.
+; =============================================================================
+        jmp     ending_draw_sprites     ; $8600: draw scene sprite block ($01 = index)
+        jmp     ending_column_tick      ; $8603: one column tile per 4 frames (walk scene)
+        jmp     ending_init_data_ptr    ; $8606: init scene column data pointer ($8C95)
+        jmp     ending_scroll_step      ; $8609: smooth vertical pan (final walk)
+
+; =============================================================================
+; ending_draw_sprites — copy a pre-built OAM sprite block to $0200 ($860C)
+; $01 = block index (0-7) → ending_sprite_block_lo/hi → [count, entries...]
+; Each entry is 4 raw OAM bytes (Y, tile, attr, X).
+; =============================================================================
+ending_draw_sprites:  ldy     $01
+        lda     ending_sprite_block_lo,y
         sta     $08
-        lda     sprite_data_ptr_hi,y
+        lda     ending_sprite_block_hi,y
         sta     $09
         ldy     #$00
         lda     ($08),y
@@ -268,59 +286,53 @@ col_update_tiles    = $03B8     ; column update tile data buffer
         iny
         ldx     #$00
 
-; =============================================================================
-; Stage Scroll / Column Update Routines
-; Handles vertical scrolling nametable updates for Wily stages.
-; =============================================================================
-copy_sprite_block:  lda     #$04        ; Copy 4-byte sprite entries to OAM
+ending_sprite_copy:  lda     #$04        ; Copy 4-byte OAM entries to $0200
         sta     $01
-copy_sprite_loop:  lda     ($08),y
+ending_sprite_copy_loop:  lda     ($08),y
         sta     $0200,x
         iny
         inx
         dec     $01
-        bne     copy_sprite_loop
+        bne     ending_sprite_copy_loop
         dec     $02
-        bne     copy_sprite_block
+        bne     ending_sprite_copy
         stx     $00
         rts
 
 ; =============================================================================
-; Vertical Scroll Routines — Wily Fortress Section-Based Scrolling
+; Ending Scene Column / Scroll Routines
 ; =============================================================================
-; These are the ONLY executable code in any stage data bank (bank09).
-; Used by Wily Stages 3-5 for vertical-scrolling fortress sections.
-; The scroll system divides the vertical area into sections ($06A0 = index).
-; Each frame, if frame_counter is aligned (every 4th frame), one column
-; tile is transferred to the PPU buffer. When a section boundary is
-; reached, advance to the next section.
+; Drive the ending walk scenes: scene data is divided into sections
+; ($06A0 = section index, $0680 = offset within section). Every 4th frame
+; one tile is transferred into the PPU column buffer; at a section boundary
+; the section index advances.
 ;
 ; PPU buffer layout: col_update_addr_hi/lo = PPUADDR, col_update_tiles = data.
 ; col_update_count ($47) signals NMI to perform the actual VRAM write.
 ; =============================================================================
 
-; --- Incremental column scroll (called every 4th frame) ---
-        lda     $1C                     ; frame_counter
+; ─── entry $8603: one column tile per 4 frames (ending walk scene loop) ───
+ending_column_tick:  lda     $1C         ; frame_counter
         and     #$03
-        bne     scroll_update_done      ; only update every 4th frame
+        bne     ending_tick_done      ; only update every 4th frame
         ldx     $06A0                   ; current scroll section index
         lda     $0680                   ; column offset within section
         tay
-        cmp     scroll_boundary_table,x ; reached end of this section?
-        beq     advance_scroll_section
+        cmp     ending_section_len,x ; reached end of this section?
+        beq     ending_next_section
         clc
-        adc     scroll_increment_table,x ; compute tile index offset
+        adc     ending_col_index_base,x ; compute tile index offset
         tax
-        lda     column_tile_index,x     ; look up tile ID for this column
+        lda     ending_col_tiles,x     ; look up tile ID for this column
         sta     col_update_tiles        ; store in PPU buffer
         inc     $47                     ; signal NMI: 1 tile to write
         inc     col_update_addr_lo      ; advance PPU target address
         inc     $0680                   ; advance column offset
-        bne     scroll_update_done
-advance_scroll_section:                 ; Move to next scroll section
+        bne     ending_tick_done
+ending_next_section:                 ; Move to next scroll section
         lda     $06A0
         and     #$01                    ; only advance on even sections
-        bne     scroll_update_done
+        bne     ending_tick_done
         inc     $06A0                   ; next section
         lda     #$00
         sta     $0680                   ; reset column offset
@@ -328,63 +340,63 @@ advance_scroll_section:                 ; Move to next scroll section
         sta     col_update_addr_hi
         lda     #$CC
         sta     col_update_addr_lo
-scroll_update_done:  rts
+ending_tick_done:  rts
 
-; --- Initialize metatile data pointer for section ---
-        lda     #$8C
+; ─── entry $8606: point $DE/$DF at the ending scene column data ($8C95) ───
+ending_init_data_ptr:  lda     #$8C
         sta     $DF                     ; metatile data pointer high
         lda     #$95
         sta     $DE                     ; metatile data pointer low ($DE/$DF)
         rts
 
-; --- Smooth vertical scroll update (sub-pixel accumulator) ---
+; ─── entry $8609: smooth vertical pan (ending final walk) ───
 ; Adds $78 sub-pixels to scroll_y_page ($21) each call, carries into
 ; scroll_y ($22). Wraps at $F0 (NES visible scanline limit = 240).
-; When scroll_y crosses an 8-pixel boundary (AND #$07 = 0), triggers
-; a full column of blank tiles ($20 bytes) to clear the incoming row.
-        clc
+; When scroll_y crosses an 8-pixel boundary (AND #$07 = 0), clears the
+; incoming tile row (32 blank tiles); otherwise checks section triggers.
+ending_scroll_step:  clc
         lda     $21                     ; scroll_y_page (sub-pixel accumulator)
         adc     #$78                    ; add $78 sub-pixels per frame
         sta     $21
         lda     $22                     ; scroll_y (pixel position)
         adc     #$00                    ; carry from sub-pixel addition
         cmp     #$F0                    ; wrap at 240 (NES visible height)
-        bcc     store_scroll_y
+        bcc     ending_store_scroll_y
         lda     #$00
-store_scroll_y:  sta     $22
+ending_store_scroll_y:  sta     $22
         and     #$07                    ; crossed 8-pixel tile boundary?
-        bne     check_scroll_boundary   ; no: check section-based triggers instead
+        bne     ending_check_triggers   ; no: check section-based triggers instead
         sec                             ; yes: clear an entire row of tiles
         lda     $22
         sta     $01                     ; Y position for address calculation
-        jsr     calc_nametable_addr     ; compute PPU address for this row
+        jsr     ending_calc_nt_addr     ; compute PPU address for this row
         ldx     #$20
         stx     $47                     ; 32 tiles to write (full row)
         dex
         lda     #$00                    ; fill with blank tile ($00)
-clear_ppu_buf_loop:  sta     col_update_tiles,x ; clear PPU buffer
+ending_clear_row_loop:  sta     col_update_tiles,x ; clear PPU buffer
         dex
-        bpl     clear_ppu_buf_loop
+        bpl     ending_clear_row_loop
         rts
 
 ; --- Section-based scroll trigger check ---
 ; Each section has a specific scroll_y value that triggers column data
 ; transfer from ROM (via $DE/$DF pointer) into the PPU buffer.
-check_scroll_boundary:  ldx     $06A0   ; current section index
+ending_check_triggers:  ldx     $06A0   ; current section index
         lda     $22                     ; scroll_y
-        cmp     section_scroll_triggers,x ; at trigger position?
-        bne     column_copy_done        ; no: skip
+        cmp     ending_scroll_triggers,x ; at trigger position?
+        bne     ending_col_done        ; no: skip
         lda     $22
         and     #$F8                    ; align to 8-pixel boundary
         sta     $01
-        jsr     calc_nametable_addr     ; compute PPU target address
-        lda     section_ppu_buffer_hi,x ; set PPU buffer high byte
+        jsr     ending_calc_nt_addr     ; compute PPU target address
+        lda     ending_ppu_addr_lo,x ; per-section PPUADDR low byte
         sta     col_update_addr_lo
-        lda     section_column_count,x  ; tiles to copy this section
+        lda     ending_col_count,x  ; tiles to copy this section
         sta     $47                     ; → col_update_count for NMI
         ldy     #$00
         ldx     #$00
-copy_column_data:  lda     ($DE),y      ; read tile from metatile data
+ending_copy_col_loop:  lda     ($DE),y      ; read tile from metatile data
         sta     col_update_tiles,x      ; store in PPU buffer
         clc
         lda     $DE                     ; advance source pointer
@@ -395,14 +407,14 @@ copy_column_data:  lda     ($DE),y      ; read tile from metatile data
         sta     $DF
         inx
         cpx     $47                     ; copied all tiles?
-        bne     copy_column_data
+        bne     ending_copy_col_loop
         inc     $06A0                   ; advance to next section
-column_copy_done:  rts
+ending_col_done:  rts
 
 ; --- Calculate nametable VRAM address from Y scroll position ---
 ; Input: $01 = Y position (aligned to 8px). Output: col_update_addr = PPUADDR.
 ; Formula: addr = $0800 | (Y << 2), where high byte accumulates via ROL.
-calc_nametable_addr:  lda     #$08      ; base high byte ($08 → $20xx or $28xx)
+ending_calc_nt_addr:  lda     #$08      ; base high byte ($08 → $20xx or $28xx)
         sta     $00
         lda     $01                     ; Y position
         asl     a                       ; shift left twice: Y * 4
@@ -416,12 +428,13 @@ calc_nametable_addr:  lda     #$08      ; base high byte ($08 → $20xx or $28xx
 
 
 ; =============================================================================
-; Stage Scroll Data Tables
+; Ending Scene Data Tables
+; 8 pre-built OAM sprite blocks ($8710-$8A7B) + per-section scroll tables.
 ; =============================================================================
-sprite_data_ptr_lo:  .byte   $10,$9D,$26,$B3,$3C,$C9
+ending_sprite_block_lo:  .byte   $10,$9D,$26,$B3,$3C,$C9
         .byte   $EE
         .byte   $7B
-sprite_data_ptr_hi:  .byte   $87
+ending_sprite_block_hi:  .byte   $87
         .byte   $87,$88,$88,$89,$89,$89,$8A,$23
         .byte   $80,$50,$00
         .byte   $C0,$80
@@ -669,12 +682,12 @@ sprite_data_ptr_hi:  .byte   $87
         .byte   $01,$48
         .byte   $49,$DA
         .byte   $01,$50
-scroll_increment_table:  .byte   $00
+ending_col_index_base:  .byte   $00
         .byte   $10,$1E,$2C,$3A,$4B,$59,$69,$7B
         .byte   $8B,$98,$A8,$B7,$C6,$D7,$E6
-scroll_boundary_table:  .byte   $10,$0E,$0E,$0E,$11,$0E,$10,$12
+ending_section_len:  .byte   $10,$0E,$0E,$0E,$11,$0E,$10,$12
         .byte   $10,$0D,$10,$0F,$0F,$11,$0F,$12
-column_tile_index:  .byte   $0E,$0F,$1C,$30,$30,$39,$20
+ending_col_tiles:  .byte   $0E,$0F,$1C,$30,$30,$39,$20
         .byte   $20,$0D,$05
         .byte   $14
         .byte   $01,$0C
@@ -729,7 +742,7 @@ column_tile_index:  .byte   $0E,$0F,$1C,$30,$30,$39,$20
         .byte   $0F,$0F,$04,$0D,$01,$0E,$0D,$01
         .byte   $13,$01,$0B,$01,$14,$13,$15,$20
         .byte   $09,$03,$08,$09,$0B,$01,$17,$01
-section_scroll_triggers:  .byte   $24,$4C,$5C,$6C,$7C,$8C,$9C,$04
+ending_scroll_triggers:  .byte   $24,$4C,$5C,$6C,$7C,$8C,$9C,$04
         .byte   $2C,$3C,$4C,$A4,$CC,$34,$5C,$C4
         .byte   $0C,$1C,$2C,$3C,$4C,$5C,$6C,$7C
         .byte   $8C,$9C,$AC,$BC,$CC,$DC,$EC,$0C
@@ -737,7 +750,7 @@ section_scroll_triggers:  .byte   $24,$4C,$5C,$6C,$7C,$8C,$9C,$04
         .byte   $9C,$AC,$BC,$CC,$DC,$EC,$0C,$1C
         .byte   $2C,$3C,$4C,$5C,$6C,$7C,$8C,$9C
         .byte   $AC,$EC,$64,$74,$01
-section_ppu_buffer_hi:  .byte   $87,$2B,$6C,$AC,$EC,$2B,$6E,$08
+ending_ppu_addr_lo:  .byte   $87,$2B,$6C,$AC,$EC,$2B,$6E,$08
         .byte   $AA,$EA,$28,$8B,$2D,$CC,$6E,$08
         .byte   $27,$68,$A9,$E8,$27,$67,$A7,$E7
         .byte   $2C,$67,$A7,$E7,$2C,$69,$AA,$28
@@ -745,7 +758,7 @@ section_ppu_buffer_hi:  .byte   $87,$2B,$6C,$AC,$EC,$2B,$6E,$08
         .byte   $69,$AB,$E7,$28,$66,$AA,$27,$67
         .byte   $AA,$E9,$2A,$66,$A6,$E6,$26,$68
         .byte   $AB,$A5,$8A,$CA
-section_column_count:  .byte   $12,$09,$08,$07,$08,$0A,$03,$10
+ending_col_count:  .byte   $12,$09,$08,$07,$08,$0A,$03,$10
         .byte   $0C,$0C,$10,$0A,$06,$07,$03,$0E
         .byte   $10,$0D,$0F,$0D,$12
         .byte   $10,$0E
