@@ -210,8 +210,8 @@ fade_end:
 ; Music names from code context and VGMRips.
 ; SFX names verified against in-game playback.
 ;
-; Sound IDs $00-$07 map to stage themes via stage_bank_table in bank $0E.
-; Sound IDs $08-$09 map to Wily stages via the same table.
+; Sound IDs $00-$09 are the stage themes, queued via stage_music_table
+; (bank $0E). Sound IDs $08-$09 are the Wily stage themes.
 ; Sound IDs $0A-$17 are UI/jingle/ending music triggered directly.
 ; Sound IDs $21-$42 are sound effects dispatched via bank_switch_enqueue.
 ; =============================================================================

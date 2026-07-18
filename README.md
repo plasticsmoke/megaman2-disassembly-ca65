@@ -35,16 +35,16 @@ Mapper 1 (MMC1), mode 3. 256 KB PRG (16 x 16 KB banks) + 8 KB CHR-RAM. Vertical 
 
 | Bank | File | Contents |
 |------|------|----------|
-| $00 | `bank00_stage_flash.asm` | Flash Man stage data |
-| $01 | `bank01_stage_wood.asm` | Wood Man stage data |
-| $02 | `bank02_stage_crash.asm` | Crash Man stage data |
-| $03 | `bank03_stage_heat.asm` | Heat Man stage data |
-| $04 | `bank04_stage_air.asm` | Air Man stage data |
-| $05 | `bank05_stage_metal.asm` | Metal Man stage data |
-| $06 | `bank06_stage_quick.asm` | Quick Man stage data |
-| $07 | `bank07_stage_bubble.asm` | Bubble Man stage data |
-| $08 | `bank08_wily_1_2.asm` | Wily Stages 1-2 data |
-| $09 | `bank09_wily_3_5.asm` | Wily Stages 3-5 data + scroll code |
+| $00 | `bank00_heat_wily1.asm` | Heat Man + Wily 1 stage data |
+| $01 | `bank01_air_wily2.asm` | Air Man + Wily 2 stage data |
+| $02 | `bank02_wood_wily3.asm` | Wood Man + Wily 3 stage data |
+| $03 | `bank03_bubble_wily4.asm` | Bubble Man + Wily 4 stage data |
+| $04 | `bank04_quick_wily5.asm` | Quick Man + Wily 5 stage data |
+| $05 | `bank05_flash_wily6.asm` | Flash Man + Wily 6 stage data |
+| $06 | `bank06_metal.asm` | Metal Man stage data |
+| $07 | `bank07_crash.asm` | Crash Man stage data |
+| $08 | `bank08_menu_chr.asm` | Menu/cutscene CHR graphics |
+| $09 | `bank09_cutscenes.asm` | Shared CHR + ending engine, credits |
 | $0A | `bank0A_sprites.asm` | Sprite frame + OAM layout data |
 | $0B | `bank0B_boss_ai.asm` | Boss AI, enemy AI, collision |
 | $0C | `bank0C_sound_engine.asm` | Sound engine + all music/SFX data |
@@ -52,23 +52,23 @@ Mapper 1 (MMC1), mode 3. 256 KB PRG (16 x 16 KB banks) + 8 KB CHR-RAM. Vertical 
 | $0E | `bank0E_game_engine.asm` | Main game engine, entity AI dispatch |
 | $0F | `bank0F_fixed.asm` | **Fixed bank** ($C000-$FFFF): bank switch, NMI, PPU, controllers |
 
-Banks $00-$0A are primarily data (tile maps, entity spawn tables, music). Each of banks $00-$07 contains tile data for one stage and entity spawn data for a different stage (see [Dual Bank Mapping](#dual-bank-mapping)). Banks $0B-$0F are the engine code banks.
+Banks $00-$0A are primarily data (stage data, graphics, sprite tables). Each of banks $00-$07 holds one Robot Master stage + its paired Wily stage (see [Stage Data Banks](#stage-data-banks)). Banks $0B-$0F are the engine code banks.
 
 ## Project Structure
 
 ```
 src/
   header.asm                  iNES header (Mapper 1 / MMC1)
-  bank00_stage_flash.asm      Flash Man stage data
-  bank01_stage_wood.asm       Wood Man stage data
-  bank02_stage_crash.asm      Crash Man stage data
-  bank03_stage_heat.asm       Heat Man stage data
-  bank04_stage_air.asm        Air Man stage data
-  bank05_stage_metal.asm      Metal Man stage data
-  bank06_stage_quick.asm      Quick Man stage data
-  bank07_stage_bubble.asm     Bubble Man stage data
-  bank08_wily_1_2.asm         Wily Stages 1-2 data
-  bank09_wily_3_5.asm         Wily Stages 3-5 data + scroll code
+  bank00_heat_wily1.asm       Heat Man + Wily 1 stage data
+  bank01_air_wily2.asm        Air Man + Wily 2 stage data
+  bank02_wood_wily3.asm       Wood Man + Wily 3 stage data
+  bank03_bubble_wily4.asm     Bubble Man + Wily 4 stage data
+  bank04_quick_wily5.asm      Quick Man + Wily 5 stage data
+  bank05_flash_wily6.asm      Flash Man + Wily 6 stage data
+  bank06_metal.asm            Metal Man stage data
+  bank07_crash.asm            Crash Man stage data
+  bank08_menu_chr.asm         Menu/cutscene CHR graphics
+  bank09_cutscenes.asm        Shared CHR + ending engine, credits
   bank0A_sprites.asm          Sprite frame + OAM layout data
   bank0B_boss_ai.asm          Boss AI, enemy AI, collision
   bank0C_sound_engine.asm     Sound engine + all music/SFX data
@@ -133,36 +133,31 @@ For a comprehensive guide to the engine internals, see **[ENGINE.md](ENGINE.md)*
 - Player physics (jump, gravity, floor/ceiling snap)
 - Weapon system (firing pipeline, per-weapon handlers)
 - Boss AI (phase state machines, attack patterns, utilities)
-- Stage data format and dual bank mapping
+- Stage data format and bank layout
 - Password and difficulty systems
 - 6502 tricks (self-modifying code, skip-byte, sub-pixel math)
 
-## Dual Bank Mapping
+## Stage Data Banks
 
-Stage data banks $00-$07 each contain data for **two different stages**, accessed through different bank-selection methods:
+A stage's data bank is `current_stage AND #$07` — a Robot Master stage and
+its paired Wily stage (index +8) share one bank containing the pair's
+metatiles, room layouts, spawns, checkpoints, CHR upload lists and palettes:
 
-- **Tile/map data** (CHR patterns, metatiles, screen layouts, room config) — selected via a `stage_bank_table` lookup in bank $0E. Each stage index maps to a non-obvious bank number.
-- **Entity spawn tables and BG palettes** (at offsets $3600-$3A00 and $3E00 within each bank) — selected by masking the stage index directly (`current_stage AND #$07`). The spawn table has 4 sub-arrays at $B600/$B700/$B800/$B900: screen number, X position, Y position, and entity type ID.
+| Bank | Stages |
+|------|--------|
+| $00 | Heat Man + Wily 1 |
+| $01 | Air Man + Wily 2 |
+| $02 | Wood Man + Wily 3 |
+| $03 | Bubble Man + Wily 4 |
+| $04 | Quick Man + Wily 5 |
+| $05 | Flash Man + Wily 6 |
+| $06 | Metal Man |
+| $07 | Crash Man |
 
-For example, bank $00 contains Flash Man's tile data but Heat Man's entity spawn tables. The full mapping:
-
-| Stage index | Stage | Tile bank | Entity bank |
-|-------------|-------|-----------|-------------|
-| $00 | Heat Man | $03 | $00 |
-| $01 | Air Man | $04 | $01 |
-| $02 | Wood Man | $01 | $02 |
-| $03 | Bubble Man | $07 | $03 |
-| $04 | Quick Man | $06 | $04 |
-| $05 | Flash Man | $00 | $05 |
-| $06 | Metal Man | $05 | $06 |
-| $07 | Crash Man | $02 | $07 |
-| $08 | Wily 1 | $08 | $00 (shared with Heat) |
-| $09 | Wily 2 | $08 | $01 (shared with Air) |
-| $0A | Wily 3 | $09 | $02 (shared with Wood) |
-| $0B | Wily 4 | $09 | $03 (shared with Bubble) |
-| $0C | Wily 5 | $09 | $04 (shared with Quick) |
-
-Wily stages share entity spawn banks with Robot Master stages — both stages' entities coexist in one table, sorted by screen number. Banks $08-$09 contain only tile/layout data. Bank filenames follow the tile data mapping (primary content by volume).
+CHR pattern data is cross-bank: each stage's graphics are assembled from
+explicit (bank, page) reference lists (e.g. Mega Man's tiles come from bank
+$00 $9000 for every stage). Banks $08/$09 hold menu/cutscene graphics, the
+ending engine and the credits text — no stage data.
 
 ## NSFe Soundtrack
 

@@ -38,7 +38,7 @@ A lookup-oriented companion to [ENGINE.md](ENGINE.md). Use this file to find the
 | Gravity | `gravity_hi_table` — `bank0E:1474` |
 | Item drop rates | `item_drop_calc` — `bank0F:6186` |
 | Difficulty flag | `difficulty` ($CB) — `include/zeropage.inc` |
-| Stage → bank mapping | `stage_bank_table` — `bank0E:334` |
+| Stage → data bank | `current_stage AND #$07`; music via `stage_music_table` — `bank0E:334` |
 | Weapon palettes | `weapon_palette_data` — `bank0F:2810` |
 | Stage BG palettes | Bank offset $3E00 in stage banks $00–$09 |
 | Music triggers | `sound_queue_push` with sound ID — `bank0F:271` |
@@ -656,34 +656,44 @@ Entity slot $01 is directly accessible via `boss_*` equates in `include/ram.inc`
 
 ### Stage → Bank Mapping
 
-`stage_bank_table` (bank0E:334) — maps `current_stage` ($2A) to PRG bank for tile/map data:
+A stage's data bank is simply `current_stage AND #$07` — layouts, metatiles,
+spawns, checkpoints, CHR lists and palettes for a Robot Master stage and its
+paired Wily stage share one bank. CHR pattern data is pulled from explicit
+(bank, page) reference lists and can live in any bank.
 
-| Stage | Index | Tile Bank | Entity Bank (AND $07) | Boss |
+`stage_music_table` (bank0E:334) maps `current_stage` to the stage MUSIC
+track. (It was long believed to be a "tile bank" table — the values only
+resemble bank numbers because of the music track numbering.)
+
+| Stage | Index | Data Bank (AND $07) | File | Boss |
 |---|---|---|---|---|
-| Heat Man | $00 | $03 | $00 | Heat Man |
-| Air Man | $01 | $04 | $01 | Air Man |
-| Wood Man | $02 | $01 | $02 | Wood Man |
-| Bubble Man | $03 | $07 | $03 | Bubble Man |
-| Quick Man | $04 | $06 | $04 | Quick Man |
-| Flash Man | $05 | $00 | $05 | Flash Man |
-| Metal Man | $06 | $05 | $06 | Metal Man |
-| Crash Man | $07 | $02 | $07 | Crash Man |
-| Wily 1 | $08 | $08 | $00 | Mecha Dragon |
-| Wily 2 | $09 | $08 | $01 | Picopico-kun |
-| Wily 3 | $0A | $09 | $02 | Guts-Dozer |
-| Wily 4 | $0B | $09 | $03 | Boobeam Trap |
-| Wily 5 | $0C | $09 | $04 | Wily Machine |
-| Wily 6 | $0D | — | $05 | Alien |
+| Heat Man | $00 | $00 | `bank00_heat_wily1.asm` | Heat Man |
+| Air Man | $01 | $01 | `bank01_air_wily2.asm` | Air Man |
+| Wood Man | $02 | $02 | `bank02_wood_wily3.asm` | Wood Man |
+| Bubble Man | $03 | $03 | `bank03_bubble_wily4.asm` | Bubble Man |
+| Quick Man | $04 | $04 | `bank04_quick_wily5.asm` | Quick Man |
+| Flash Man | $05 | $05 | `bank05_flash_wily6.asm` | Flash Man |
+| Metal Man | $06 | $06 | `bank06_metal.asm` | Metal Man |
+| Crash Man | $07 | $07 | `bank07_crash.asm` | Crash Man |
+| Wily 1 | $08 | $00 | `bank00_heat_wily1.asm` | Mecha Dragon |
+| Wily 2 | $09 | $01 | `bank01_air_wily2.asm` | Picopico-kun |
+| Wily 3 | $0A | $02 | `bank02_wood_wily3.asm` | Guts-Dozer |
+| Wily 4 | $0B | $03 | `bank03_bubble_wily4.asm` | Boobeam Trap |
+| Wily 5 | $0C | $04 | `bank04_quick_wily5.asm` | Wily Machine |
+| Wily 6 | $0D | $05 | `bank05_flash_wily6.asm` | Alien |
 
-**Dual bank mapping**: Each stage bank serves two stages. Tile/map data uses `stage_bank_table` lookup. Entity spawn data and BG palettes use `current_stage AND #$07` directly, so stages 0 and 8 share bank $08's entity data at the entity-bank level.
+Within a bank, the RM stage's rooms occupy low screen indices ($00+) and the
+Wily stage's rooms start around $16-$18 (exact ranges in each bank file's
+`screen_layouts` header). Banks $08/$09 are never stage banks: $08 holds
+menu/cutscene CHR, $09 holds shared CHR + the ending engine and credits.
 
 ### Per-Bank Data Layout
 
-Each stage bank plays TWO roles at different regions (see dual bank mapping
-above): the tile-bank role ($8000-$Bxxx, selected via `stage_bank_table`) and
-the entity-bank role ($B400-$BF61, selected via `current_stage AND #$07`).
+Each stage bank (`current_stage AND #$07`) holds all of its stage pair's
+data: layouts at $8000-$8FFF+ and gameplay tables at $B400-$BF61. CHR
+pattern regions in between are shared property, referenced cross-bank.
 
-**Tile-bank role:**
+**Layout region:**
 
 | Address | Contents |
 |---|---|
@@ -698,7 +708,7 @@ collision class (see below), bits 5-0 select CHR tiles `G*4 .. G*4+3` as a
 (bank0F:1473, rendering), `lookup_tile_from_map` (bank0F:1824, collision),
 `render_full_nametable` (bank0E:2306, `ptr = $8500 + screen×$40`).
 
-**Entity-bank role:**
+**Gameplay tables:**
 
 | Address | Contents |
 |---|---|
@@ -810,7 +820,7 @@ Mega Man 2 uses **CHR-RAM** — all tile graphics are uploaded from PRG-ROM at r
 - Pattern table $0000 = sprite tiles, $1000 = background tiles
 - Dynamic CHR updates are possible (e.g., animated water tiles in Bubble Man)
 
-Stage CHR data is loaded from the tile bank selected via `stage_bank_table` (see `chr_ram_bank_load`, bank0F).
+Stage CHR is assembled from explicit (src_bank, src_page) record lists: the stage's `chr_upload_list_rm/wily` at $BC00/$BD00 of its data bank (see section 6); menu screens use the fixed-bank chr group tables (`chr_ram_bank_load`, bank0F:1068).
 
 ---
 
@@ -900,20 +910,20 @@ The dispatch at $8003 (bank0C:56-93) routes by value:
 
 ### Music Track IDs
 
-Sound IDs $00-$17 are music tracks. IDs $00-$09 double as stage bank numbers — `stage_bank_table` values are enqueued directly as music IDs.
+Sound IDs $00-$17 are music tracks. IDs $00-$09 are the stage themes, queued from `stage_music_table`.
 
 | ID | Track | Trigger context |
 |---|---|---|
-| $00 | Flash Man Stage | `stage_bank_table[$05]` |
-| $01 | Wood Man Stage | `stage_bank_table[$02]` |
-| $02 | Crash Man Stage | `stage_bank_table[$07]` |
-| $03 | Heat Man Stage | `stage_bank_table[$00]` |
-| $04 | Air Man Stage | `stage_bank_table[$01]` |
-| $05 | Metal Man Stage | `stage_bank_table[$06]` |
-| $06 | Quick Man Stage | `stage_bank_table[$04]` |
-| $07 | Bubble Man Stage | `stage_bank_table[$03]` |
-| $08 | Dr. Wily Stage 1-2 | `stage_bank_table[$08/$09]` |
-| $09 | Dr. Wily Stage 3-4 | `stage_bank_table[$0A/$0B/$0C]` |
+| $00 | Flash Man Stage | `stage_music_table[$05]` |
+| $01 | Wood Man Stage | `stage_music_table[$02]` |
+| $02 | Crash Man Stage | `stage_music_table[$07]` |
+| $03 | Heat Man Stage | `stage_music_table[$00]` |
+| $04 | Air Man Stage | `stage_music_table[$01]` |
+| $05 | Metal Man Stage | `stage_music_table[$06]` |
+| $06 | Quick Man Stage | `stage_music_table[$04]` |
+| $07 | Bubble Man Stage | `stage_music_table[$03]` |
+| $08 | Dr. Wily Stage 1-2 | `stage_music_table[$08/$09]` |
+| $09 | Dr. Wily Stage 3-5 | `stage_music_table[$0A/$0B/$0C]` |
 | $0A | Stage Intro | Boss intro screen (bank0D:271) |
 | $0B | Boss Battle | Boss door (bank0E:621, 749), Picopico-kun (bank0B:2246), Wily 4 rematch (bank0E:6934) |
 | $0C | Stage Select | Stage select screen (bank0D:130) |
@@ -974,9 +984,9 @@ mute music channels during CPU-heavy scroll sequences; cmd $FE releases them.
 
 ### Stage-to-Music Mapping
 
-Music is loaded by enqueuing `stage_bank_table[current_stage]` (bank0E:250). Since stage bank numbers = music IDs for $00-$09, the tile bank table doubles as a stage-to-music mapping:
+Music is loaded by enqueuing `stage_music_table[current_stage]` (bank0E:250):
 
-| Stage | Bank/Music ID | Track |
+| Stage | Music ID | Track |
 |---|---|---|
 | $00 Heat Man | $03 | Heat Man Stage |
 | $01 Air Man | $04 | Air Man Stage |

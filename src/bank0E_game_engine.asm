@@ -247,8 +247,8 @@ game_init_respawn:  lda     #$00        ; $80AB: respawn entry (keeps lives/ammo
         lda     #$00
         sta     gravity_sub_hi
         ldx     current_stage
-        lda     stage_bank_table,x      ; stage music ID == stage tile bank number
-        jsr     sound_queue_push        ;   (shared table — queue stage music)
+        lda     stage_music_table,x     ; queue this stage's music track
+        jsr     sound_queue_push
         ldx     #$13
 game_init_copy_stage_sprites:  lda     stage_intro_oam_data,x
         sta     oam_buffer,x
@@ -331,21 +331,25 @@ stage_intro_oam_data:  .byte   $60,$96,$01,$6C,$60,$97,$01,$74 ; "READY" text sp
         .byte   $60,$98,$01,$7C,$60,$99,$01,$84
         .byte   $60,$9A,$01
         .byte   $8C
-stage_bank_table:                        ; PRG tile bank per stage ($2A); doubles as
-                                         ; the stage MUSIC track ID at stage start
-        .byte   $03                      ; $00 Heat Man   → bank $03
-        .byte   $04                      ; $01 Air Man    → bank $04
-        .byte   $01                      ; $02 Wood Man   → bank $01
-        .byte   $07                      ; $03 Bubble Man → bank $07
-        .byte   $06                      ; $04 Quick Man  → bank $06
-        .byte   $00                      ; $05 Flash Man  → bank $00
-        .byte   $05                      ; $06 Metal Man  → bank $05
-        .byte   $02                      ; $07 Crash Man  → bank $02
-        .byte   $08                      ; $08 Wily 1     → bank $08
-        .byte   $08                      ; $09 Wily 2     → bank $08
-        .byte   $09                      ; $0A Wily 3     → bank $09
-        .byte   $09                      ; $0B Wily 4     → bank $09
-        .byte   $09                      ; $0C Wily 5     → bank $09
+stage_music_table:                       ; stage MUSIC track ID per stage ($2A).
+                                         ; NOT a bank table: stage layouts load
+                                         ; from bank current_stage AND 7, CHR via
+                                         ; explicit (bank,page) lists. The values
+                                         ; only resemble bank numbers by track-
+                                         ; numbering coincidence.
+        .byte   $03                      ; $00 Heat Man   → music_heat_stage
+        .byte   $04                      ; $01 Air Man    → music_air_stage
+        .byte   $01                      ; $02 Wood Man   → music_wood_stage
+        .byte   $07                      ; $03 Bubble Man → music_bubble_stage
+        .byte   $06                      ; $04 Quick Man  → music_quick_stage
+        .byte   $00                      ; $05 Flash Man  → music_flash_stage
+        .byte   $05                      ; $06 Metal Man  → music_metal_stage
+        .byte   $02                      ; $07 Crash Man  → music_crash_stage
+        .byte   $08                      ; $08 Wily 1     → music_wily_stage1
+        .byte   $08                      ; $09 Wily 2     → music_wily_stage1
+        .byte   $09                      ; $0A Wily 3     → music_wily_stage2
+        .byte   $09                      ; $0B Wily 4     → music_wily_stage2
+        .byte   $09                      ; $0C Wily 5     → music_wily_stage2
         .byte   $FF                      ; terminator
 
 ; =============================================================================

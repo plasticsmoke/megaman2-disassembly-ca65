@@ -23,7 +23,7 @@ A detailed walkthrough of how the Mega Man 2 NES engine works, from power-on to 
 13. [Player Physics](#13-player-physics)
 14. [Weapon System](#14-weapon-system)
 15. [Boss AI](#15-boss-ai)
-16. [Stage Data and Dual Bank Mapping](#16-stage-data-and-dual-bank-mapping)
+16. [Stage Data Banks](#16-stage-data-banks)
 17. [Entity Spawn Tables](#17-entity-spawn-tables)
 18. [Sound Engine](#18-sound-engine)
 19. [Password System](#19-password-system)
@@ -703,51 +703,27 @@ Boss attacks fall into several patterns:
 
 ---
 
-## 16. Stage Data and Dual Bank Mapping
+## 16. Stage Data Banks
 
-**Files:** `bank00`-`bank09` (stage data banks), `bank0E_game_engine.asm` (bank table)
+**Files:** `bank00_heat_wily1.asm`-`bank07_crash.asm` (stage data), `bank08_menu_chr.asm`/`bank09_cutscenes.asm` (graphics/cutscene data)
 
-### Dual Mapping
+### Bank Selection
 
-Banks $00-$07 each serve **two different stages** through different access methods:
+A stage's data bank is simply `current_stage AND #$07`: a Robot Master stage
+and its paired Wily stage (index +8) share one bank. Everything for the pair
+lives there — metatile definitions ($8000), attribute bytes ($8400), room
+layouts ($8500+, RM rooms at low indices, Wily rooms from ~$16), connectivity
+and CHR-overlay tables ($B400+), spawn arrays ($B600+), checkpoint tables
+($BB00), CHR upload lists ($BC00/$BD00) and palette blocks ($BE00/$BF00).
+See DATA_REFERENCE §6 for the full format.
 
-- **Tile data** (CHR patterns, metatiles, screen layouts) — bank selected via `stage_bank_table` in bank $0E. The mapping is scrambled (Heat Man's tiles are in bank $03, not bank $00).
-
-- **Entity spawns + palettes** (at offsets $3600-$3A00 and $3E00) — bank selected by `current_stage AND #$07`. This direct masking means stage 0 and stage 8 share a bank for spawns.
-
-| Stage | Robot Master | Tile bank | Entity bank |
-|-------|-------------|-----------|-------------|
-| $00 | Heat Man | $03 | $00 |
-| $01 | Air Man | $04 | $01 |
-| $02 | Wood Man | $01 | $02 |
-| $03 | Bubble Man | $07 | $03 |
-| $04 | Quick Man | $06 | $04 |
-| $05 | Flash Man | $00 | $05 |
-| $06 | Metal Man | $05 | $06 |
-| $07 | Crash Man | $02 | $07 |
-| $08 | Wily 1 | $08 | $00 (shared) |
-| $09 | Wily 2 | $08 | $01 (shared) |
-| $0A | Wily 3 | $09 | $02 (shared) |
-| $0B | Wily 4 | $09 | $03 (shared) |
-| $0C | Wily 5 | $09 | $04 (shared) |
-
-Wily stages share entity banks with Robot Master stages. Both sets of spawn entries coexist in the same table, sorted by screen number.
-
-### Stage Data Layout (per bank)
-
-| Offset | Size | Contents |
-|--------|------|----------|
-| $0000-$1FFF | 8 KB | CHR tile patterns (uploaded to CHR-RAM) |
-| $2000-$2FFF | 4 KB | Metatile definitions (4 bytes each: 2×2 tile IDs) |
-| $3000-$35FF | 1.5 KB | Screen layouts (64 metatile indices per screen) |
-| $3600-$36FF | 256 B | Entity spawn table: screen numbers |
-| $3700-$37FF | 256 B | Entity spawn table: X positions |
-| $3800-$38FF | 256 B | Entity spawn table: Y positions |
-| $3900-$39FF | 256 B | Entity spawn table: entity type IDs |
-| $3A00-$3DFF | 1 KB | Secondary spawn tables |
-| $3E00-$3FFF | 512 B | Background palette data |
-
----
+CHR pattern data is the exception: it is assembled from explicit
+(src_bank, src_page) record lists and may live in any bank (e.g. every stage
+pulls Mega Man's tiles from bank $00 $9000 and HUD tiles from bank $09
+$8000). The old "tile bank" notion — `stage_music_table` (formerly
+`stage_bank_table`) selecting a scrambled data bank per stage — was a
+misreading: that table holds each stage's music track ID, whose values
+merely resemble bank numbers.
 
 ## 17. Entity Spawn Tables
 

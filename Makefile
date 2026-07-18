@@ -13,16 +13,16 @@ HEADER_SRC = src/header.asm
 
 # Switchable bank sources ($00-$0E)
 BANK_SRCS = \
-	src/bank00_stage_flash.asm \
-	src/bank01_stage_wood.asm \
-	src/bank02_stage_crash.asm \
-	src/bank03_stage_heat.asm \
-	src/bank04_stage_air.asm \
-	src/bank05_stage_metal.asm \
-	src/bank06_stage_quick.asm \
-	src/bank07_stage_bubble.asm \
-	src/bank08_wily_1_2.asm \
-	src/bank09_wily_3_5.asm \
+	src/bank00_heat_wily1.asm \
+	src/bank01_air_wily2.asm \
+	src/bank02_wood_wily3.asm \
+	src/bank03_bubble_wily4.asm \
+	src/bank04_quick_wily5.asm \
+	src/bank05_flash_wily6.asm \
+	src/bank06_metal.asm \
+	src/bank07_crash.asm \
+	src/bank08_menu_chr.asm \
+	src/bank09_cutscenes.asm \
 	src/bank0A_sprites.asm \
 	src/bank0B_boss_ai.asm \
 	src/bank0C_sound_engine.asm \
