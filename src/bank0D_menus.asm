@@ -4779,7 +4779,8 @@ title_megaman_def_ptr_hi:  .byte   $AB,$AB,$AB,$AB,$AB,$AC,$AC,$AC
         .byte   $00
 
 ; =============================================================================
-; Credits Text Data — ASCII text for ending credit screens
+; Prologue Story Text — high-bit ASCII ($C1+ = 'A'+); $00 = separator
+; (the ending staff-roll credits live in bank09 as credits_text)
 ; =============================================================================
 prologue_text_data:  .byte   $CE,$C1,$CD
         .byte   $C5,$C4

@@ -1,6 +1,6 @@
 # Mega Man 2 (U) — ca65 Disassembly
 
-A byte-perfect disassembly of **Mega Man 2** (NES, US release, PRG1) targeting the [ca65](https://cc65.github.io/doc/ca65.html) assembler. Engine banks ($0B-$0F) have descriptive labels, named constants, block headers, algorithm-level inline comments, and architecture overview diagrams. Stage/data banks ($00-$0A) have section headers and entity name annotations.
+A byte-perfect disassembly of **Mega Man 2** (NES, US release, PRG1) targeting the [ca65](https://cc65.github.io/doc/ca65.html) assembler. Engine banks ($0B-$0F) have descriptive labels, named constants, block headers, algorithm-level inline comments, and architecture overview diagrams. Stage/data banks ($00-$0A) are fully structured: labeled metatile/screen/spawn/checkpoint/palette tables, per-room ownership comments, entity names in spawn lists, and CHR regions tagged with their consumers.
 
 Built with [Claude Code](https://claude.com/claude-code) — starting from raw da65 output through label renaming, constant extraction, code/data verification, and annotation.
 
@@ -72,7 +72,7 @@ src/
   bank0A_sprites.asm          Sprite frame + OAM layout data
   bank0B_boss_ai.asm          Boss AI, enemy AI, collision
   bank0C_sound_engine.asm     Sound engine + all music/SFX data
-  bank0D_menus.asm     Menus, cutscenes & screens (title, password, ending)
+  bank0D_menus.asm            Menus, cutscenes & screens (title, password, ending)
   bank0E_game_engine.asm      Main game engine, entity AI dispatch
   bank0F_fixed.asm            Fixed bank — NMI, PPU, bank switching, controllers
   nsfe_shim.asm               NSFe init/play driver shim ($C000)
@@ -106,14 +106,14 @@ The da65 disassembler frequently confuses code and data — bytes that happen to
 
 | Banks | Description | Status |
 |-------|-------------|--------|
-| $00-$0A | Stage data + sound (11 banks, 571 BRK artifacts) | Done |
+| $00-$0A | Stage data, graphics, sprite tables (11 banks, 571 BRK artifacts) | Done |
 | $0B | Boss AI, enemy AI, collision | Done |
-| $0C | Weapon system, UI rendering | Done |
-| $0D | Stage engine, player control, OAM | Done |
+| $0C | Sound engine + music/SFX data | Done |
+| $0D | Menus, cutscenes & screens | Done |
 | $0E | Main game engine, entity AI dispatch | Done |
 | $0F | Fixed bank: NMI, PPU, bank switch | Done |
 
-Types of fixes applied: code-as-`.byte` (instruction sequences stored as raw data), data-as-instruction (table bytes decoded as opcodes), skip-byte tricks (intentional instruction overlaps), code/data overlaps (dual-purpose bytes), and instruction sync errors (da65 decoding at wrong byte boundary). Bank $09 contains the only executable code in the data banks (scroll update routines at $860C-$86FF).
+Types of fixes applied: code-as-`.byte` (instruction sequences stored as raw data), data-as-instruction (table bytes decoded as opcodes), skip-byte tricks (intentional instruction overlaps), code/data overlaps (dual-purpose bytes), and instruction sync errors (da65 decoding at wrong byte boundary). Bank $09 contains the only executable code in the data banks (the ending cutscene engine at $8600-$86FF).
 
 ### Entity Type Verification
 

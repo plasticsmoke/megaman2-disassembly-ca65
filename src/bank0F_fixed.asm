@@ -967,7 +967,7 @@ scroll_column_setup:  lda     col_update_addr_hi
         pha
         lda     col_update_addr_lo
         pha
-        lda     #$32                    ; sound command $32: sound-engine bank switch
+        lda     #$32                    ; SFX $32: silent — mutes ch 1 during scroll
         jsr     sound_queue_push
         lda     #$0D
         jsr     bank_switch
