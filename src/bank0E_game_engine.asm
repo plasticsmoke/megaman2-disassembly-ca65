@@ -99,6 +99,17 @@ check_horiz_tile_collision           := $F0CF
 spawn_entity_from_parent           := $F159
 spawn_entity_init           := $F160
 calc_entity_velocity           := $F197
+hitbox_width_lo_tbl           := $DA01  ; bank0F: per-hitbox-class width (lo)
+hitbox_width_hi_tbl           := $DA02  ; bank0F: per-hitbox-class width (hi)
+hitbox_height_lo_tbl          := $DA21  ; bank0F: per-hitbox-class height (lo)
+hitbox_height_hi_tbl          := $DA22  ; bank0F: per-hitbox-class height (hi)
+scatter_offset_y_tbl          := $E11F  ; bank0F: crash blast scatter Y offsets
+scatter_offset_x_lo_tbl       := $E12F  ; bank0F: crash blast scatter X offsets (lo)
+platform_ai_h14               := $EDD8  ; bank0F: special AI #1 (rideable platform, h=$14)
+platform_ai_h18_a             := $EDF1  ; bank0F: special AI #2 (rideable platform, h=$18)
+platform_ai_h18_b             := $EE0A  ; bank0F: special AI #3 (rideable platform, h=$18)
+goblin_special_ai             := $EE23  ; bank0F: special AI #5/#6 (Goblin types $40/$41)
+changkey_special_ai           := $EE7C  ; bank0F: special AI #7 (Changkey type $23)
         sei
         ldx     #$FF
         txs
@@ -2201,7 +2212,7 @@ transition_right_attr_step:  jsr     wait_for_vblank ; let NMI process queued PP
         jsr     sound_queue_push     ; cmd $FE: cancel SFX, restore music channels
 transition_right_scroll:  lda     current_screen
         sta     general_ptr_lo
-        inc     general_ptr_lo                     ; $FE = destination screen index
+        inc     general_ptr_lo          ; general_ptr_lo = destination screen index
         jsr     transition_scroll_setup ; execute smooth scroll animation
         inc     nametable_select
         jsr     wait_for_vblank
@@ -2658,38 +2669,38 @@ entity_ai_next_special:
 ; =============================================================================
 ; entity_ai_ptr_lo -- Entity AI Pointer Table — 128 entries, low/high/bank for each type ($92F0)
 ; =============================================================================
-entity_ai_ptr_lo:  .byte   $8D,$8D,$23,$55,$D7,$4E,$71,$75 ; $00-$07: Shrink, Anko, Anko(02), AnkoSeg, M-445, Anko(05), DeathExplode, Claw
-        .byte   $E5,$6F,$76,$2B,$2F,$8F,$2B,$E3 ; $08-$0F: ClawVar, StageTrans, Tanishi, TanishiBare, Kerog, PetitKerog, Bubble, BossDeath
-        .byte   $43,$65,$73,$5B,$90,$CE,$81,$22 ; $10-$17: Anko(10), Anko(11), RailPlat, Crumble, LaserBeam, MetalBlade, Batton, Robbit
-        .byte   $2B,$D1,$36,$54,$69,$F4,$ED,$46 ; $18-$1F: QuickBoom, AirTornado1, AirTornado2, AtomicFire, Friender, Monking, KukkuSpawn, Kukku
-        .byte   $7E,$85,$A6,$C2,$2B,$5A,$AB,$B8 ; $20-$27: KukkuDesp, TellySpawn, Telly, Changkey, ChangkeyProj, Blackout, LightRestore, BlackoutEnd
-        .byte   $C5,$2A,$F1,$0D,$2E,$D7,$D7,$D3 ; $28-$2F: BlackoutRe, Gear, Pierrobot, FlyBoy(2B), FlyBoy, CrashWallVar, FrienderFire, BossDoor
-        .byte   $F2,$EA,$C3,$EC,$4E,$2B,$89,$A4 ; $30-$37: Press, Blocky, BlockyPh2, MechaFire, NeoMetall, GenericProj, Matasaburo, PipiSpawn
-        .byte   $12,$8F,$96,$2B,$30,$4C,$A3,$2B ; $38-$3F: Pipi, PipiDespawn, PipiEgg, EggHatch, Copipi, KaminariCloud, KaminariGoro, KaminariBolt
-        .byte   $49,$49,$81,$81,$A1,$E0,$1B,$FA ; $40-$47: Goblin, GoblinB, GoblinCleanA, GoblinCleanB, GoblinHorn, PetitGoblin, Springer, Mole
-        .byte   $8A,$97,$0B,$12,$12,$2B,$F0,$21 ; $48-$4F: MoleShotUp, MoleShotDn, MoleDespawn, CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
-        .byte   $96,$D0,$5C,$69,$6D,$71,$E5,$D7 ; $50-$57: ScwormNest, Scworm, PressRetract, AppearBlkA, AppearBlkB, AppearBlkC, NeoMetallFlip, CrashWall
-        .byte   $41,$E3,$2B,$20,$2B,$4B,$67,$2B ; $58-$5F: HeatmanFire, QuickBoomer, BubbleHazard, BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
-        .byte   $2B,$2B,$18,$55,$91,$7A,$B7,$CE ; $60-$67: BossDebris, WoodmanLeaf, WoodmanTornado, BossBody, BossBodyCtrl, DragonBodyA, DragonBodyB, DragonPart
-        .byte   $2B,$FE,$32,$EF,$2B,$25,$2B,$2B ; $68-$6F: DragonBreath, GutsdozerTurret, Picopico, WilyBall, WilyMachShot, BoobeamTurret, BoobeamShot, AlienBossShot
-        .byte   $98,$AD,$30,$30,$79,$A9,$A9,$B1 ; $70-$77: AlienBody, BigFish, FlashHaz(72), FlashHaz(73), RedLiquid, Pickup(75-unused), LargeHealth, SmallHealth
-        .byte   $A9,$B1,$A9,$A9,$08,$08,$08,$24 ; $78-$7F: LargeWeapon, SmallWeapon, ETank, ExtraLife, WilyGateBoss, WilyGateOpen, WilyGateBg, (7F-unused)
-entity_ai_ptr_hi:  .byte   $94,$94,$95,$95,$95,$96,$96,$96 ; $00-$07
-        .byte   $96,$97,$97,$98,$98,$98,$98,$98 ; $08-$0F
-        .byte   $9A,$9A,$9A,$9C,$9C,$9D,$9E,$9F ; $10-$17
-        .byte   $98,$9F,$A1,$A1,$A1,$A2,$A3,$A4 ; $18-$1F
-        .byte   $A4,$A4,$A4,$A4,$98,$A5,$A5,$A5 ; $20-$27
-        .byte   $A5,$A6,$A6,$A7,$A7,$A7,$A7,$A7 ; $28-$2F
-        .byte   $A7,$A8,$A9,$A9,$AA,$98,$AB,$AB ; $30-$37
-        .byte   $AC,$AC,$AC,$98,$AD,$AD,$AD,$98 ; $38-$3F
-        .byte   $AE,$AE,$AF,$AF,$AF,$AF,$B0,$B0 ; $40-$47
-        .byte   $B1,$B1,$B2,$B2,$B2,$98,$B2,$B4 ; $48-$4F
-        .byte   $B4,$B4,$B5,$B5,$B5,$B5,$B5,$A7 ; $50-$57
-        .byte   $B6,$B6,$98,$B7,$98,$B7,$B7,$98 ; $58-$5F
-        .byte   $98,$98,$B8,$B8,$B8,$B9,$B9,$B9 ; $60-$67
-        .byte   $98,$B9,$BA,$BA,$98,$BB,$98,$98 ; $68-$6F
-        .byte   $BB,$BB,$BC,$BC,$BC,$BC,$BC,$BC ; $70-$77
-        .byte   $BC,$BC,$BC,$BC,$BD,$BD,$BD,$BD ; $78-$7F
+entity_ai_ptr_lo:  .byte   <shrink_ai_preamble,<shrink_ai_preamble,<anko_spawner_ai_entry,<anko_seg_entry,<m445_ai_entry,<enemy_destroy_setup,<death_explode_ai,<claw_ai_entry ; $00-$07: Shrink, Anko, Anko(02), AnkoSeg, M-445, Anko(05), DeathExplode, Claw
+        .byte   <claw_var_ai_entry,<stage_trans_ai,<tanishi_ai_main,<kerog_physics_rts,<kerog_ai_entry,<kerog_child_collision_check,<kerog_physics_rts,<boss_ai_init_entry ; $08-$0F: ClawVar, StageTrans, Tanishi, TanishiBare, Kerog, PetitKerog, Bubble, BossDeath
+        .byte   <anko_10_ai,<anko_11_ai,<rail_platform_ai,<crumble_block_ai,<laser_beam_ai,<laser_seg_ai,<batton_ai,<robbit_ai ; $10-$17: Anko(10), Anko(11), RailPlat, Crumble, LaserBeam, MetalBlade, Batton, Robbit
+        .byte   <kerog_physics_rts,<friender_flame_ai,<friender_flame2_ai,<fireball_ai,<friender_ai,<monking_ai,<kukku_spawner_ai,<kukku_body_ai ; $18-$1F: QuickBoom, AirTornado1, AirTornado2, AtomicFire, Friender, Monking, KukkuSpawn, Kukku
+        .byte   <kukku_despawn_ai,<telly_spawn_ai,<telly_ai,<changkey_ai,<kerog_physics_rts,<blackout_trigger_ai,<light_restore_ai,<blackout_end_ai ; $20-$27: KukkuDesp, TellySpawn, Telly, Changkey, ChangkeyProj, Blackout, LightRestore, BlackoutEnd
+        .byte   <blackout_restore_ai,<gear_ai,<pierrobot_ai,<fly_boy_spawn_ai,<fly_boy_ai,<entity_init_timer_short,<entity_init_timer_short,<entity_init_timer_long ; $28-$2F: BlackoutRe, Gear, Pierrobot, FlyBoy(2B), FlyBoy, CrashWallVar, FrienderFire, BossDoor
+        .byte   <press_ai,<blocky_ai,<guts_tank_child_ai,<blocky_phase2_ai,<mecha_fire_ai,<kerog_physics_rts,<matasaburo_wind_push,<pipi_spawn_ai ; $30-$37: Press, Blocky, BlockyPh2, MechaFire, NeoMetall, GenericProj, Matasaburo, PipiSpawn
+        .byte   <pipi_ai,<pipi_despawn_ai,<pipi_egg_ai,<kerog_physics_rts,<copipi_ai,<kaminari_cloud_ai,<kaminari_goro_ai,<kerog_physics_rts ; $38-$3F: Pipi, PipiDespawn, PipiEgg, EggHatch, Copipi, KaminariCloud, KaminariGoro, KaminariBolt
+        .byte   <goblin_ai_init,<goblin_ai_init,<goblin_cleanup_ai,<goblin_cleanup_ai,<goblin_horn_ai,<petit_goblin_ai,<springer_ai,<mole_ai ; $40-$47: Goblin, GoblinB, GoblinCleanA, GoblinCleanB, GoblinHorn, PetitGoblin, Springer, Mole
+        .byte   <mole_shot_up_ai,<mole_shot_dn_ai,<mole_4a_ai,<crazy_cannon_ai,<crazy_cannon_ai,<kerog_physics_rts,<sniper_armor_ai,<sniper_joe_ai ; $48-$4F: MoleShotUp, MoleShotDn, MoleDespawn, CrazyCannon, CrazyCannon(4C), Shotman, SniperArmor, SniperJoe
+        .byte   <scworm_nest_ai,<scworm_worm_ai,<press_retract_ai,<appear_block_a_ai,<appear_block_b_ai,<appear_block_c_ai,<neo_metall_flip_ai,<entity_init_timer_short ; $50-$57: ScwormNest, Scworm, PressRetract, AppearBlkA, AppearBlkB, AppearBlkC, NeoMetallFlip, CrashWall
+        .byte   <heatman_fire_ai,<quick_boomer_ai,<kerog_physics_rts,<bubble_shot_ai,<kerog_physics_rts,<air_tornado_boss_ai,<crash_bomb_ai,<kerog_physics_rts ; $58-$5F: HeatmanFire, QuickBoomer, BubbleHazard, BubbleShot, MetalmanBlade, AirTornado, CrashBomb, CrashBlast
+        .byte   <kerog_physics_rts,<kerog_physics_rts,<wood_tornado_ai,<boss_body_ai,<wily4_timer_check,<wily4_enemy_shared_ai,<dragon_body_facing_setup,<dragon_part_ai ; $60-$67: BossDebris, WoodmanLeaf, WoodmanTornado, BossBody, BossBodyCtrl, DragonBodyA, DragonBodyB, DragonPart
+        .byte   <kerog_physics_rts,<gutsdozer_turret_ai,<picopico_phase_check,<picopico_gravity,<kerog_physics_rts,<boobeam_turret_ai,<kerog_physics_rts,<kerog_physics_rts ; $68-$6F: DragonBreath, GutsdozerTurret, Picopico, WilyBall, WilyMachShot, BoobeamTurret, BoobeamShot, AlienBossShot
+        .byte   <alien_body_ai,<big_fish_ai_main,<flash_hazard_ai,<flash_hazard_ai,<pickup_ai_check,<pickup_setup_large,<pickup_setup_large,<pickup_setup_small ; $70-$77: AlienBody, BigFish, FlashHaz(72), FlashHaz(73), RedLiquid, Pickup(75-unused), LargeHealth, SmallHealth
+        .byte   <pickup_setup_large,<pickup_setup_small,<pickup_setup_large,<pickup_setup_large,<wily_gate_indicator_ai,<wily_gate_indicator_ai,<wily_gate_indicator_ai,<(boss_indicator_rts+1) ; $78-$7F: LargeWeapon, SmallWeapon, ETank, ExtraLife, WilyGateBoss, WilyGateOpen, WilyGateBg, (7F-unused)
+entity_ai_ptr_hi:  .byte   >shrink_ai_preamble,>shrink_ai_preamble,>anko_spawner_ai_entry,>anko_seg_entry,>m445_ai_entry,>enemy_destroy_setup,>death_explode_ai,>claw_ai_entry ; $00-$07
+        .byte   >claw_var_ai_entry,>stage_trans_ai,>tanishi_ai_main,>kerog_physics_rts,>kerog_ai_entry,>kerog_child_collision_check,>kerog_physics_rts,>boss_ai_init_entry ; $08-$0F
+        .byte   >anko_10_ai,>anko_11_ai,>rail_platform_ai,>crumble_block_ai,>laser_beam_ai,>laser_seg_ai,>batton_ai,>robbit_ai ; $10-$17
+        .byte   >kerog_physics_rts,>friender_flame_ai,>friender_flame2_ai,>fireball_ai,>friender_ai,>monking_ai,>kukku_spawner_ai,>kukku_body_ai ; $18-$1F
+        .byte   >kukku_despawn_ai,>telly_spawn_ai,>telly_ai,>changkey_ai,>kerog_physics_rts,>blackout_trigger_ai,>light_restore_ai,>blackout_end_ai ; $20-$27
+        .byte   >blackout_restore_ai,>gear_ai,>pierrobot_ai,>fly_boy_spawn_ai,>fly_boy_ai,>entity_init_timer_short,>entity_init_timer_short,>entity_init_timer_long ; $28-$2F
+        .byte   >press_ai,>blocky_ai,>guts_tank_child_ai,>blocky_phase2_ai,>mecha_fire_ai,>kerog_physics_rts,>matasaburo_wind_push,>pipi_spawn_ai ; $30-$37
+        .byte   >pipi_ai,>pipi_despawn_ai,>pipi_egg_ai,>kerog_physics_rts,>copipi_ai,>kaminari_cloud_ai,>kaminari_goro_ai,>kerog_physics_rts ; $38-$3F
+        .byte   >goblin_ai_init,>goblin_ai_init,>goblin_cleanup_ai,>goblin_cleanup_ai,>goblin_horn_ai,>petit_goblin_ai,>springer_ai,>mole_ai ; $40-$47
+        .byte   >mole_shot_up_ai,>mole_shot_dn_ai,>mole_4a_ai,>crazy_cannon_ai,>crazy_cannon_ai,>kerog_physics_rts,>sniper_armor_ai,>sniper_joe_ai ; $48-$4F
+        .byte   >scworm_nest_ai,>scworm_worm_ai,>press_retract_ai,>appear_block_a_ai,>appear_block_b_ai,>appear_block_c_ai,>neo_metall_flip_ai,>entity_init_timer_short ; $50-$57
+        .byte   >heatman_fire_ai,>quick_boomer_ai,>kerog_physics_rts,>bubble_shot_ai,>kerog_physics_rts,>air_tornado_boss_ai,>crash_bomb_ai,>kerog_physics_rts ; $58-$5F
+        .byte   >kerog_physics_rts,>kerog_physics_rts,>wood_tornado_ai,>boss_body_ai,>wily4_timer_check,>wily4_enemy_shared_ai,>dragon_body_facing_setup,>dragon_part_ai ; $60-$67
+        .byte   >kerog_physics_rts,>gutsdozer_turret_ai,>picopico_phase_check,>picopico_gravity,>kerog_physics_rts,>boobeam_turret_ai,>kerog_physics_rts,>kerog_physics_rts ; $68-$6F
+        .byte   >alien_body_ai,>big_fish_ai_main,>flash_hazard_ai,>flash_hazard_ai,>pickup_ai_check,>pickup_setup_large,>pickup_setup_large,>pickup_setup_small ; $70-$77
+        .byte   >pickup_setup_large,>pickup_setup_small,>pickup_setup_large,>pickup_setup_large,>wily_gate_indicator_ai,>wily_gate_indicator_ai,>wily_gate_indicator_ai,>(boss_indicator_rts+1) ; $78-$7F
 entity_ai_bank_table:  .byte   $01,$02,$01,$00,$01,$00,$01,$00 ; $00-$07
         .byte   $01,$00,$01,$01,$01,$01,$00,$02 ; $08-$0F
         .byte   $02,$02,$03,$04,$01,$01,$01,$01 ; $10-$17
@@ -2706,13 +2717,18 @@ entity_ai_bank_table:  .byte   $01,$02,$01,$00,$01,$00,$01,$00 ; $00-$07
         .byte   $01,$01,$01,$01,$01,$00,$00,$00 ; $68-$6F
         .byte   $00,$01,$01,$01,$01,$00,$00,$00 ; $70-$77
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; $78-$7F
-entity_special_ai_ptr_lo:  .byte   $B3,$AF,$D8,$F1,$0A,$23,$23,$7C ; special AI pointer (low bytes)
-        .byte   $B5,$B5,$B5,$B5,$B5,$B5,$B5
-entity_special_ai_ptr_hi:  .byte   $EF,$EF,$ED,$ED,$EE,$EE,$EE,$EE ; special AI pointer (high bytes)
-        .byte   $EE,$EE,$E6,$EE,$EE,$EE,$BD
+; Special-mode AI pointers, indexed by (entity_ai_bank_table value - 1).
+; Only bank fields $01-$08 occur, so only the first 8 entries are live; the
+; trailing bytes are padding. (The hi table is 14 bytes: the $BD that follows
+; it is the first opcode of shrink_ai_preamble, not a 15th entry.)
+entity_special_ai_ptr_lo:  .byte   <apply_entity_physics_alt,<apply_simple_physics,<platform_ai_h14,<platform_ai_h18_a,<platform_ai_h18_b,<goblin_special_ai,<goblin_special_ai,<changkey_special_ai ; special AI pointer (low bytes)
+        .byte   $B5,$B5,$B5,$B5,$B5,$B5,$B5     ; unused padding
+entity_special_ai_ptr_hi:  .byte   >apply_entity_physics_alt,>apply_simple_physics,>platform_ai_h14,>platform_ai_h18_a,>platform_ai_h18_b,>goblin_special_ai,>goblin_special_ai,>changkey_special_ai ; special AI pointer (high bytes)
+        .byte   $EE,$EE,$E6,$EE,$EE,$EE     ; unused padding
+; ─── Shrink / Anko shared AI entry (types $00, $01; entity_ai_ptr → $948D) ───
 shrink_ai_preamble:
-        cpx     #$04
-        bne     shrink_update_timer
+        lda     ent_state,x
+        bne     shrink_update_timer             ; already initialised → run timer
         sta     ent_anim_frame,x
         lda     ent_parent_slot,x
         bne     shrink_reset_state
@@ -2739,13 +2755,13 @@ shrink_lunge_start:
         jmp     shrink_update_timer
 
 shrink_calc_aim:  jsr     entity_face_player
-        lda     $DA01
+        lda     hitbox_width_lo_tbl
         sta     ent_x_vel,x
-        lda     $DA02
+        lda     hitbox_width_hi_tbl
         sta     ent_x_vel_sub,x
-        lda     $DA21
+        lda     hitbox_height_lo_tbl
         sta     ent_y_vel,x
-        lda     $DA22
+        lda     hitbox_height_hi_tbl
         sta     ent_y_vel_sub,x
         bne     shrink_update_timer
 shrink_reset_state:
@@ -4082,7 +4098,7 @@ friender_flame_y_off_2:                  ; Heat Man flame Y offsets continued (9
         .byte   $F8,$00,$E8,$08,$00,$E8,$F8,$F0
         .byte   $08
         ; Friender flame #2 (type $1A): timed fade, simple physics
-        lda     ent_state,x
+friender_flame2_ai:  lda     ent_state,x
         bne     friender_flame2_check_state
         lda     #$6E
         sta     ent_state,x
@@ -6741,11 +6757,11 @@ crash_bomb_spawn_blast:  lda     #ENTITY_CRASH_BLAST
         ldx     temp_02
         clc
         lda     ent_y_spawn_px,y
-        adc     $E11F,x
+        adc     scatter_offset_y_tbl,x
         sta     ent_y_spawn_px,y
         clc
         lda     ent_x_spawn_px,y
-        adc     $E12F,x
+        adc     scatter_offset_x_lo_tbl,x
         sta     ent_x_spawn_px,y
         lda     ent_x_spawn_scr,y
         adc     $E13F,x
@@ -7148,9 +7164,10 @@ picopico_late_vert_check:
         lda     #$78
         sta     ent_y_vel_sub,x
         bne     big_fish_ai             ; unconditional ($78 always NZ)
-; --- DEAD CODE: unreachable after unconditional BNE above ---
-; Remnant of a cut/refactored boss routine. Contains velocity decel, BOOBEAM_SHOT
-; spawning, and boss HP (boss_hp) damage — never executed in the shipped game.
+; --- boobeam_turret_ai -- Enemy AI: Boobeam Trap turret (type $6D) ---
+; Entered via entity_ai_ptr[$6D] (not by fall-through: the BNE above is
+; unconditional). Velocity decel, BOOBEAM_SHOT spawning, boss HP damage.
+boobeam_turret_ai:
         sec
         lda     ent_x_vel_sub,x
         sbc     #$01

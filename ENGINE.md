@@ -310,7 +310,7 @@ friender_ai (bank0E:4115):
   5. NMI handler writes tiles to the nametable
 ```
 
-The entity has no sprite representation — its visual appearance is entirely background tiles. Animation frames are selected via `ent_anim_id`, indexing into 128 bytes of tile data (`friender_tile_data` at bank0E:4243 — 2 frames × 64 bytes per frame, covering a 4×4 metatile region). When the entity animates, the AI handler overwrites the nametable region with the new frame's tiles.
+The entity has no sprite representation — its visual appearance is entirely background tiles. Animation frames are selected via `ent_anim_id`, indexing into 128 bytes of tile data (`friender_tile_data` at bank0E:4259 — 2 frames × 64 bytes per frame, covering a 4×4 metatile region). When the entity animates, the AI handler overwrites the nametable region with the new frame's tiles.
 
 This technique allows arbitrarily large enemies (Friender fills a 4×4 metatile region) without hitting the 8-sprite-per-scanline limit. The tradeoff: background-tile enemies can't move smoothly (snapped to 16px metatile grid) and require the multi-entity hitbox pattern for collision.
 
@@ -338,6 +338,8 @@ The `game_mode` variable ($AA) controls how dispatch works:
 |-----------|----------|
 | 0 or 4 | **Normal** — Index into ptr_lo/ptr_hi, call in bank $0E. Bank field ignored. |
 | Other | **Special** — If entity's bank field ≠ 0, use alternate pointer in bank $0F |
+
+In special mode the bank field is not a bank number but an index: entries 1–8 select `entity_special_ai_ptr_lo/hi` (bank0E:2724, 8 live entries at bank−1, the rest is padding) → `apply_entity_physics_alt`, `apply_simple_physics`, `platform_ai_h14`, `platform_ai_h18_a`, `platform_ai_h18_b`, `goblin_special_ai` (×2, bank0F:5620), `changkey_special_ai` (bank0F:5667). Entities whose bank field is 0 use the normal table even in special mode.
 
 In normal gameplay (game_mode = 0), all 128 entity AI handlers live in bank $0E and the bank field is completely ignored. Special mode is used for cross-bank handlers during unusual game states.
 
@@ -476,7 +478,7 @@ Frame alternation means at most 4 weapon slots are tested per entity per frame. 
 
 ### Weapon Damage Dispatch
 
-On a confirmed hit, `weapon_collision_dispatch` (bank0F:4983) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
+On a confirmed hit, `weapon_collision_dispatch` (bank0F:4984) reads `current_weapon` and indexes into `weapon_handler_ptr_lo/hi` to call the appropriate handler:
 
 | Weapon ID | Weapon | Handler | Damage Sub-Table |
 |-----------|--------|---------|-----------------|

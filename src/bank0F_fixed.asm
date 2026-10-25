@@ -219,6 +219,7 @@ banked_0E_wily_check := $9115       ; Bank $0E: Wily stage check
 banked_sound_process := $925B       ; Banked: sound engine process
 find_entity_count_check := $96CF    ; Bank $0E: scan for entity type, check population limit
 banked_0B_item_spawn := $AF4C       ; Bank $0B: item/powerup spawn
+goblin_palette_index_table := $AF79 ; Bank $0E: Goblin palette slot per type ($40/$41)
 
 ; =============================================================================
 ; Bank Switching (MMC1)
@@ -5614,12 +5615,15 @@ platform_ai_h18_b:  lda     #$18
         sta     ent_plat_y,x
         rts
 
+; ─── Special AI #5/#6: Goblin (types $40/$41) — palette-gated hop + item drop ───
+; Reached via entity_special_ai_ptr[5..6] (bank0E) in special game modes.
+goblin_special_ai:
         jsr     entity_face_player
         sec
         lda     ent_type,x
-        sbc     #$40
+        sbc     #$40                    ; Goblin variant index
         tay
-        lda     $AF79,y
+        lda     goblin_palette_index_table,y
         sta     temp_01
         lda     ent_flags,x
         and     #$20
@@ -5658,7 +5662,9 @@ collision_inc_state:  inc     ent_state,x
 collision_apply_physics:  jsr     apply_entity_physics_alt
         rts
 
-        lda     ent_x_vel_sub,x
+; ─── Special AI #7: Changkey (type $23) — blackout trigger / light restore ───
+; Reached via entity_special_ai_ptr[7] (bank0E) in special game modes.
+changkey_special_ai:  lda     ent_x_vel_sub,x
         bne     @skip
         lda     #$6E
         sta     ent_state,x

@@ -157,9 +157,9 @@ heatman_ai:  dex
 boss_entrance_ai:  lda     boss_ai_state
         bne     boss_frame_update_rts_skip_2
         ldy     boss_id
-        lda     $813E,y
+        lda     boss_entrance_probe_x_tbl,y
         sta     temp_01
-        lda     $8146,y
+        lda     boss_entrance_probe_y_tbl,y
         sta     temp_02
         jsr     boss_floor_collision_check
         lda     temp_00
@@ -206,11 +206,14 @@ boss_palette_timer_tick:  lda     frame_counter
         jsr     sound_queue_push
 boss_palette_tick_rts:  rts
 
-        .byte   $09,$0C,$0F,$0A,$09,$09,$08,$08
-        .byte   $0C,$10,$10,$0C,$0C,$0C,$0C,$0C
+; per-boss floor-probe half-extents for boss_entrance_ai (→ temp_01 / temp_02)
+boss_entrance_probe_x_tbl:  .byte   $09,$0C,$0F,$0A,$09,$09,$08,$08
+boss_entrance_probe_y_tbl:  .byte   $0C,$10,$10,$0C,$0C,$0C,$0C,$0C
 enemy_state_transition:  .byte   $0F,$0F,$0B,$05,$09,$07,$05,$03
 boss_active_sprite_tbl:  .byte   $51,$67,$6D,$61,$55,$5C,$64,$6A ; battle-start sprite type per boss
-        lda     #ENTITY_HEATMAN_FIRE
+; ─── Heat Man phase 2 (heatman_phase[1]) ───
+
+heatman_phase2_ai:  lda     #ENTITY_HEATMAN_FIRE
         jsr     find_entity_by_type
         bcs     @skip
         lda     boss_anim_id
@@ -290,7 +293,9 @@ heatman_attack_rts:  rts
 heatman_proj_hitbox_y:  .byte   $36,$A8,$76
 heatman_proj_hitbox_mask:  .byte   $07,$05,$03
 heatman_proj_speed_table:  .byte   $3A,$2E,$1C
-        lda     boss_ai_state
+; ─── Heat Man phase 3 (heatman_phase[2]) ───
+
+heatman_phase3_ai:  lda     boss_ai_state
         bne     @skip_2
         lda     boss_anim_id
         cmp     #$02
@@ -356,7 +361,9 @@ heatman_check_death_anim:  lda     boss_anim_id
 heatman_jmp_frame_update:  jmp     heatman_frame_update
 
 heatman_random_delay_table:  .byte   $1F,$3E,$5D
-        lda     boss_anim_id
+; ─── Heat Man phase 4 (heatman_phase[3]) ───
+
+heatman_phase4_ai:  lda     boss_anim_id
         beq     @skip_2
         dec     boss_phase
         lda     #$8B
@@ -385,7 +392,8 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         jsr     boss_apply_movement_physics
         rts
 
-        lda     boss_anim_id
+; ─── Heat Man phase 5 (heatman_phase[4]) ───
+heatman_phase5_ai:  lda     boss_anim_id
         cmp     #$04
         beq     @done
         jmp     heatman_frame_update
@@ -393,8 +401,8 @@ heatman_random_delay_table:  .byte   $1F,$3E,$5D
         jmp     boss_activate_phase
 
 ; Heat Man phases: $80D3(entrance),$815E,$81FD,$8290,$82CC
-heatman_phase_lo:  .byte   $D3,$5E,$FD,$90,$CC
-heatman_phase_hi:  .byte   $80,$81,$81,$82,$82
+heatman_phase_lo:  .byte   <boss_entrance_ai,<heatman_phase2_ai,<heatman_phase3_ai,<heatman_phase4_ai,<heatman_phase5_ai
+heatman_phase_hi:  .byte   >boss_entrance_ai,>heatman_phase2_ai,>heatman_phase3_ai,>heatman_phase4_ai,>heatman_phase5_ai
 
 ; ─── Air Man main AI (boss $01): phase dispatch ───
 airman_ai:  dex
@@ -403,7 +411,9 @@ airman_ai:  dex
         lda     airman_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        lda     #$00
+; ─── Air Man phase 2 (airman_phase[1]) ───
+
+airman_phase2_ai:  lda     #$00
         sta     conveyor_type
         sta     scroll_lock_lo
         sta     scroll_lock_hi
@@ -612,8 +622,8 @@ boss_update_collision_check:  jsr     boss_check_weapon_hit
 boss_update_rts:  rts
 
 ; Air Man phases: $80D3(entrance),$82F1,$8419(volley wait),$8480(jump)
-airman_phase_lo:  .byte   $D3,$F1,$19,$80
-airman_phase_hi:  .byte   $80,$82,$84,$84
+airman_phase_lo:  .byte   <boss_entrance_ai,<airman_phase2_ai,<airman_volley_wait,<airman_jump_phase
+airman_phase_hi:  .byte   >boss_entrance_ai,>airman_phase2_ai,>airman_volley_wait,>airman_jump_phase
 
 ; ─── Wood Man main AI (boss $02): phase dispatch ───
 woodman_ai:  dex
@@ -623,7 +633,8 @@ woodman_ai:  dex
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-        jsr     calc_player_boss_distance
+; ─── Wood Man phase 2 (woodman_phase[1]) ───
+woodman_phase2_ai:  jsr     calc_player_boss_distance
         lda     boss_ai_state
         bne     woodman_check_phase
         lda     #ENTITY_WOODMAN_LEAF
@@ -778,8 +789,8 @@ woodman_collision_check:  jsr     boss_check_weapon_hit
 woodman_update_rts:  rts
 
 ; Wood Man phases: $80D3(entrance),$8509,$8583(leaf toss),$85BB(jump)
-woodman_phase_lo:  .byte   $D3,$09,$83,$BB
-woodman_phase_hi:  .byte   $80,$85,$85,$85
+woodman_phase_lo:  .byte   <boss_entrance_ai,<woodman_phase2_ai,<woodman_leaf_toss,<woodman_jump_phase
+woodman_phase_hi:  .byte   >boss_entrance_ai,>woodman_phase2_ai,>woodman_leaf_toss,>woodman_jump_phase
 
 ; ─── Bubble Man main AI (boss $03): phase dispatch ───
 bubbleman_ai:  dex
@@ -788,7 +799,9 @@ bubbleman_ai:  dex
         lda     bubbleman_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        lda     #$83
+; ─── Bubble Man phase 2 (bubbleman_phase[1]) ───
+
+bubbleman_phase2_ai:  lda     #$83
         sta     boss_flags
         jsr     calc_player_boss_distance
         lda     ent_anim_id,x
@@ -855,7 +868,8 @@ bubbleman_dec_aim_timer:  dec     boss_action_timer
 bubbleman_frame_update:  jsr     bubbleman_update_with_sound
         rts
 
-        lda     boss_ai_state
+; ─── Bubble Man phase 3 (bubbleman_phase[2]) ───
+bubbleman_phase3_ai:  lda     boss_ai_state
         sta     boss_flags
         jsr     bubbleman_update_with_sound
         lda     boss_y_px
@@ -902,7 +916,8 @@ bubbleman_check_anim_reset:  lda     boss_anim_id
         sta     boss_anim_id
 bubbleman_anim_rts:  rts
 
-        jsr     bubbleman_update_with_sound
+; ─── Bubble Man phase 4 (bubbleman_phase[3]) ───
+bubbleman_phase4_ai:  jsr     bubbleman_update_with_sound
         lda     temp_00
         beq     bubbleman_jump_track
         lda     #$02
@@ -934,8 +949,8 @@ bubbleman_collision_params:  lda     #$09
         rts
 
 ; Bubble Man phases: $80D3(entrance),$8664,$86EA,$8754
-bubbleman_phase_lo:  .byte   $D3,$64,$EA,$54
-bubbleman_phase_hi:  .byte   $80,$86,$86,$87
+bubbleman_phase_lo:  .byte   <boss_entrance_ai,<bubbleman_phase2_ai,<bubbleman_phase3_ai,<bubbleman_phase4_ai
+bubbleman_phase_hi:  .byte   >boss_entrance_ai,>bubbleman_phase2_ai,>bubbleman_phase3_ai,>bubbleman_phase4_ai
 
 ; ─── Quick Man main AI (boss $04): phase dispatch ───
 quickman_ai:  dex
@@ -945,7 +960,8 @@ quickman_ai:  dex
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-        lda     boss_ai_state
+; ─── Quick Man phase 2 (quickman_phase[1]) ───
+quickman_phase2_ai:  lda     boss_ai_state
         bne     @skip_2
         lda     #$87
         sta     boss_flags
@@ -1063,7 +1079,9 @@ quickman_frame_rts:  rts
 ; ─── per-arc jump parameters, indexed by (rand mod 3) ───
 quickman_y_vel_table:  .byte   $07,$08,$04 ; Y velocity per jump arc
 quickman_jump_dist_tbl:  .byte   $38,$40,$20 ; X-velocity divisor hi per arc
-        .byte   $20,$09,$A2,$A2,$00        ; (unreferenced leftover bytes)
+; ─── Quick Man phase 3 (quickman_phase[2]): re-aim, then fall into phase change ───
+quickman_phase3_ai:  jsr     calc_player_boss_distance
+        ldx     #$00                    ; index 0 → next phase $02, sound $55
 ; ─── Quick Man phase change and sound ───
 quickman_phase_transition:  lda     #$00
         sta     boss_ai_state
@@ -1077,11 +1095,15 @@ quickman_phase_transition:  lda     #$00
 
 quickman_phase_id_table:  .byte   $02,$05
 quickman_sound_table:  .byte   $55,$58
-        dec     boss_ai_state
+; ─── Quick Man phase 4 (quickman_phase[3]) ───
+
+quickman_phase4_ai:  dec     boss_ai_state
         beq     quickman_state2_frame_update_skip
         jsr     quickman_hitbox_params
         rts
-        lda     boss_ai_state
+; ─── Quick Man phase 5 (quickman_phase[4]) ───
+
+quickman_phase5_ai:  lda     boss_ai_state
         bne     @skip
         lda     #$87
         sta     boss_flags
@@ -1150,8 +1172,10 @@ quickman_hit_response:  lda     #$00
 quickman_update_rts:  rts
 
 ; Quick Man phases: $80D3(entrance),$87AC,$8899,$88B8,$88C1
-quickman_phase_lo:  .byte   $D3,$AC,$99,$B8,$C1
-quickman_phase_hi:  .byte   $80,$87,$88,$88,$88
+quickman_phase_lo:  .byte   <boss_entrance_ai,<quickman_phase2_ai,<quickman_phase3_ai,<quickman_phase4_ai
+        .byte   <quickman_phase5_ai
+quickman_phase_hi:  .byte   >boss_entrance_ai,>quickman_phase2_ai,>quickman_phase3_ai,>quickman_phase4_ai
+        .byte   >quickman_phase5_ai
 
 ; ─── Flash Man main AI (boss $05): phase dispatch ───
 flashman_ai:  dex
@@ -1160,7 +1184,9 @@ flashman_ai:  dex
         lda     flashman_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        lda     boss_flags
+; ─── Flash Man phase 2 (flashman_phase[1]) ───
+
+flashman_phase2_ai:  lda     boss_flags
         ora     #$04
         sta     boss_flags
         lda     #$06
@@ -1199,7 +1225,8 @@ flashman_ai:  dex
         jsr     boss_set_sprite
 flashman_rts:  rts
 
-        lda     #$00
+; ─── Flash Man phase 3 (flashman_phase[2]) ───
+flashman_phase3_ai:  lda     #$00
         sta     boss_x_vel_sub
         sta     boss_x_vel
         lda     boss_anim_id
@@ -1239,7 +1266,8 @@ flashman_rts:  rts
 flashman_frame_update:  jsr     flashman_update_with_sound
         rts
 
-        lda     #$0F
+; ─── Flash Man phase 4 (flashman_phase[3]) ───
+flashman_phase4_ai:  lda     #$0F
         sta     palette_sprite
         lda     boss_anim_id
         beq     flashman_frame_update
@@ -1316,7 +1344,9 @@ flashman_restore_y_pos:  pla
 flashman_jmp_frame_update:  jmp     flashman_frame_update
 
 flashman_aim_offset_table:  .byte   $08,$F8
-        lda     boss_ai_state
+; ─── Flash Man phase 5 (flashman_phase[4]) ───
+
+flashman_phase5_ai:  lda     boss_ai_state
         bne     @skip
         jsr     calc_player_boss_distance
         lda     #$00
@@ -1372,8 +1402,10 @@ flashman_no_hit:  lda     #$00
         rts
 
 ; Flash Man phases: $80D3(entrance),$8964,$89B6,$8A0C,$8AAD
-flashman_phase_lo:  .byte   $D3,$64,$B6,$0C,$AD
-flashman_phase_hi:  .byte   $80,$89,$89,$8A,$8A
+flashman_phase_lo:  .byte   <boss_entrance_ai,<flashman_phase2_ai,<flashman_phase3_ai,<flashman_phase4_ai
+        .byte   <flashman_phase5_ai
+flashman_phase_hi:  .byte   >boss_entrance_ai,>flashman_phase2_ai,>flashman_phase3_ai,>flashman_phase4_ai
+        .byte   >flashman_phase5_ai
 
 ; ─── Metal Man main AI (boss $06): phase dispatch ───
 metalman_ai:  dex
@@ -1382,7 +1414,9 @@ metalman_ai:  dex
         lda     metalman_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        lda     #$87
+; ─── Metal Man phase 2 (metalman_phase[1]) ───
+
+metalman_phase2_ai:  lda     #$87
         sta     boss_flags
         jsr     calc_player_boss_distance
         lda     p1_new_presses
@@ -1574,8 +1608,8 @@ metalman_hitbox_params:  lda     #$07
 
 metalman_palette_data:  .byte   $10,$10,$10,$15,$15,$10
 ; Metal Man phases: $80D3(entrance),$8B2E,$8BB5(jump/throw),$8BB5
-metalman_phase_lo:  .byte   $D3,$2E,$B5,$B5
-metalman_phase_hi:  .byte   $80,$8B,$8B,$8B
+metalman_phase_lo:  .byte   <boss_entrance_ai,<metalman_phase2_ai,<metalman_jump_phase,<metalman_jump_phase
+metalman_phase_hi:  .byte   >boss_entrance_ai,>metalman_phase2_ai,>metalman_jump_phase,>metalman_jump_phase
 
 ; ─── Crash Man main AI (boss $07): phase dispatch ───
 crashman_ai:  dex
@@ -1585,7 +1619,8 @@ crashman_ai:  dex
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-        lda     boss_ai_state
+; ─── Crash Man phase 2 (crashman_phase[1]) ───
+crashman_phase2_ai:  lda     boss_ai_state
         ora     #$83
         sta     boss_flags
         lda     #$00
@@ -1600,7 +1635,9 @@ crashman_ai:  dex
         inc     boss_phase
         jsr     crashman_update_with_sound
         rts
-        lda     p1_new_presses
+; ─── Crash Man phase 3 (crashman_phase[2]) ───
+
+crashman_phase3_ai:  lda     p1_new_presses
         and     #$02
         bne     @skip
         lda     crashman_response_timer
@@ -1671,7 +1708,8 @@ crashman_check_facing_flip:  lda     boss_ai_state
 crashman_frame_update:  jsr     crashman_update_with_sound
         rts
 
-        lda     crashman_saved_facing
+; ─── Crash Man phase 4 (crashman_phase[3]) ───
+crashman_phase4_ai:  lda     crashman_saved_facing
         sta     boss_flags
         lda     boss_y_vel
         php
@@ -1738,8 +1776,8 @@ crashman_collision_check:  jsr     boss_check_weapon_hit
 crashman_update_rts:  rts
 
 ; Crash Man phases: $80D3(entrance),$8CD1,$8CF6,$8D80
-crashman_phase_lo:  .byte   $D3,$D1,$F6,$80
-crashman_phase_hi:  .byte   $80,$8C,$8C,$8D
+crashman_phase_lo:  .byte   <boss_entrance_ai,<crashman_phase2_ai,<crashman_phase3_ai,<crashman_phase4_ai
+crashman_phase_hi:  .byte   >boss_entrance_ai,>crashman_phase2_ai,>crashman_phase3_ai,>crashman_phase4_ai
 
 ; ─── Mecha Dragon main AI (boss $08): phase dispatch ───
 dragon_ai:  dex
@@ -1748,7 +1786,9 @@ dragon_ai:  dex
         lda     dragon_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        lda     boss_ai_state
+; ─── Mecha Dragon phase 1 (dragon_phase[0]) ───
+
+dragon_phase1_ai:  lda     boss_ai_state
         bne     @skip_2
         lda     #$09
         jsr     banked_column_copy
@@ -1861,7 +1901,9 @@ dragon_column_length_table:  .byte   $03,$06,$08,$0A,$0B,$05,$02,$07
         .byte   $07,$08,$08,$08,$08,$07,$03
 dragon_attr_data:  .byte   $FF,$FF,$FF,$FF,$FF,$5F,$FF,$F3
         .byte   $FF,$55,$7F,$FF,$FF,$FF,$FF,$FF
-        lda     boss_ai_state
+; ─── Mecha Dragon phase 2 (dragon_phase[1]) ───
+
+dragon_phase2_ai:  lda     boss_ai_state
         bne     @skip
         lda     #ENTITY_DRAGON_PART
         ldx     #$01
@@ -1911,7 +1953,9 @@ dragon_palette_done:  rts
 
 dragon_palette_data:  .byte   $0F,$30,$29,$19,$0F,$27,$11,$19
         .byte   $0F,$11,$29,$19,$0F,$27,$29,$19
-        lda     #$63
+; ─── Mecha Dragon phase 3 (dragon_phase[2]) ───
+
+dragon_phase3_ai:  lda     #$63
         sta     temp_00
         ldy     #$0F
 
@@ -1971,7 +2015,8 @@ dragon_y_set_rising:  lda     boss_y_px
         sta     boss_y_vel_sub
         rts
 
-        lda     #$63
+; ─── Mecha Dragon phase 4 (dragon_phase[3]) ───
+dragon_phase4_ai:  lda     #$63
         sta     temp_00
         ldy     #$0F
 dragon_sprite_scan_2:  jsr     collision_check_sprite
@@ -2022,7 +2067,8 @@ dragon_fire_setup_velocity:  sta     jump_ptr_hi
         jsr     calc_velocity_toward_player
 dragon_fire_done:  rts
 
-        lda     boss_ai_state
+; ─── Mecha Dragon phase 5 (dragon_phase[4]) ───
+dragon_phase5_ai:  lda     boss_ai_state
         bne     @skip
         ldy     #$A0
         jsr     dragon_set_target_velocity
@@ -2081,7 +2127,8 @@ dragon_set_target_velocity:  lda     #$00
         sta     ent_x_px
         rts
 
-        lda     boss_ai_state
+; ─── Mecha Dragon phase 6 (dragon_phase[5]) ───
+dragon_phase6_ai:  lda     boss_ai_state
         bne     @skip
         ldy     #$58
         jsr     dragon_set_target_velocity
@@ -2114,7 +2161,8 @@ dragon_fire_range_check_2:  cmp     #$04
 dragon_no_fire:  clc
         rts
 
-        lda     boss_action_timer
+; ─── Mecha Dragon phase 7 (dragon_phase[6]; also fortress_boss_ptr[0]/[2] (Dragon, Guts Dozer fallback)) ───
+dragon_phase7_ai:  lda     boss_action_timer
         bne     @skip
         lda     #$0F
         sta     palette_sprite
@@ -2230,8 +2278,10 @@ dragon_move_facing_left:  sec
         rts
 
 ; Mecha Dragon phases (7): $8E1E,$8E86,$8FFC,$9064,$90E5,$9122
-dragon_phase_lo:  .byte   $1E,$16,$8A,$FC,$64,$E5,$22
-dragon_phase_hi:  .byte   $8E,$8F,$8F,$8F,$90,$90,$91
+dragon_phase_lo:  .byte   <dragon_phase1_ai,<dragon_phase2_ai,<dragon_phase3_ai,<dragon_phase4_ai
+        .byte   <dragon_phase5_ai,<dragon_phase6_ai,<dragon_phase7_ai
+dragon_phase_hi:  .byte   >dragon_phase1_ai,>dragon_phase2_ai,>dragon_phase3_ai,>dragon_phase4_ai
+        .byte   >dragon_phase5_ai,>dragon_phase6_ai,>dragon_phase7_ai
 
 ; ─── Picopico-kun main AI (boss $09): phase dispatch ───
 picopico_ai:  dex
@@ -2240,7 +2290,9 @@ picopico_ai:  dex
         lda     picopico_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        lda     boss_action_timer
+; ─── Picopico-kun phase 1 (picopico_phase[0]) ───
+
+picopico_phase1_ai:  lda     boss_action_timer
         bne     @skip
         inc     boss_action_timer
         lda     #$0B
@@ -2377,7 +2429,9 @@ picopico_phase_id_table:  .byte   $00
 picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
         .byte   $FF,$01,$00,$00,$CB,$8B,$50,$50
         .byte   $FF,$01,$00,$00,$8B,$CB,$50,$50
-        lda     boss_hp
+; ─── Picopico-kun phase 3 (picopico_phase[2]; also boobeam_phase[1] (Boobeam Trap phase 2)) ───
+
+picopico_phase3_ai:  lda     boss_hp
         bne     @done
         lda     #$BB
         sta     boss_action_timer
@@ -2386,7 +2440,9 @@ picopico_spawn_data:  .byte   $00,$00,$01,$01,$CB,$8B,$50,$50
         jsr     sound_queue_push
 @done:
         rts
-        lda     boss_action_timer
+; ─── Fortress boss fallback: Picopico-kun / Boobeam Trap (fortress_boss_ptr[1]/[3]) ───
+
+fortress_fallback_picopico_ai:  lda     boss_action_timer
         beq     @skip_2
         dec     boss_action_timer
         beq     @skip
@@ -2415,8 +2471,8 @@ picopico_palette_store:  stx     palette_sprite
         rts
 
 ; Picopico-kun phases: $9221,$9245,$9357
-picopico_phase_lo:  .byte   $21,$45,$57
-picopico_phase_hi:  .byte   $92,$92,$93
+picopico_phase_lo:  .byte   <picopico_phase1_ai,<picopico_spawn_phase,<picopico_phase3_ai
+picopico_phase_hi:  .byte   >picopico_phase1_ai,>picopico_spawn_phase,>picopico_phase3_ai
 
 ; ─── Guts-Dozer main AI (boss $0A): phase dispatch ───
 gutsdozer_ai:  dex
@@ -2426,7 +2482,8 @@ gutsdozer_ai:  dex
         sta     jump_ptr_hi
         jmp     (jump_ptr)
 
-        jsr     boss_health_bar_tick
+; ─── Guts Dozer phase 1 (gutsdozer_phase[0]) ───
+gutsdozer_phase1_ai:  jsr     boss_health_bar_tick
         lda     boss_ai_state
         bne     @skip
         lda     #$02
@@ -2555,7 +2612,7 @@ gutsdozer_setup_complete:  lda     #$00
         rts
 
 ; --- Guts-Dozer Movement — direction setup from scroll position ---
-        lda     boss_flags
+gutsdozer_phase2_ai:  lda     boss_flags
         bmi     @skip
         lda     #$FF
         sta     boss_x_px
@@ -2606,7 +2663,9 @@ gutsdozer_spawn_screen_table:  .byte   $D7,$C7,$A7,$8C
 gutsdozer_turret_type_table:  .byte   ENTITY_GUTSDOZER_TURRET,$00,ENTITY_BOSS_BODY,ENTITY_DRAGON_PART
 gutsdozer_turret_y_table:  .byte   $7F,$00,$A8,$68
 gutsdozer_turret_ai_table:  .byte   $09,$00,$14,$06
-        lda     camera_x_offset
+; ─── Guts Dozer phase 3 (gutsdozer_phase[2]) ───
+
+gutsdozer_phase3_ai:  lda     camera_x_offset
         cmp     #$30
         bne     @skip
         lda     #$7D
@@ -2620,7 +2679,8 @@ gutsdozer_set_facing:  sta     gutsdozer_saved_flags
         jsr     gutsdozer_spawn_tick
         rts
 
-        lda     camera_x_offset
+; ─── Guts Dozer phase 5 (gutsdozer_phase[4]) ───
+gutsdozer_phase5_ai:  lda     camera_x_offset
         cmp     #$80
         bne     @skip
         lda     #$7D
@@ -2629,9 +2689,13 @@ gutsdozer_set_facing:  sta     gutsdozer_saved_flags
 @skip:
         lda     #$CB
         bne     gutsdozer_set_facing
-        lda     #$05
+; ─── Guts Dozer phase 4 (gutsdozer_phase[3]) ───
+
+gutsdozer_phase4_ai:  lda     #$05
         bne     gutsdozer_dec_phase_timer
-        lda     #$03
+; ─── Guts Dozer phase 6 (gutsdozer_phase[5]) ───
+
+gutsdozer_phase6_ai:  lda     #$03
 gutsdozer_dec_phase_timer:  sta     temp_00
         dec     boss_action_timer
         bne     gutsdozer_clear_velocity
@@ -2761,8 +2825,10 @@ gutsdozer_apply_facing:  lda     gutsdozer_saved_flags
         rts
 
 ; Guts-Dozer phases: $93A9,$94AD,$951D,$9547,$9537,$954B
-gutsdozer_phase_lo:  .byte   $A9,$AD,$1D,$47,$37,$4B
-gutsdozer_phase_hi:  .byte   $93,$94,$95,$95,$95,$95
+gutsdozer_phase_lo:  .byte   <gutsdozer_phase1_ai,<gutsdozer_phase2_ai,<gutsdozer_phase3_ai,<gutsdozer_phase4_ai
+        .byte   <gutsdozer_phase5_ai,<gutsdozer_phase6_ai
+gutsdozer_phase_hi:  .byte   >gutsdozer_phase1_ai,>gutsdozer_phase2_ai,>gutsdozer_phase3_ai,>gutsdozer_phase4_ai
+        .byte   >gutsdozer_phase5_ai,>gutsdozer_phase6_ai
 
 ; ─── Boobeam Trap main AI (boss $0B): phase dispatch ───
 boobeam_ai:  dex
@@ -2771,7 +2837,9 @@ boobeam_ai:  dex
         lda     boobeam_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        jsr     boss_health_bar_tick
+; ─── Boobeam Trap phase 1 (boobeam_phase[0]) ───
+
+boobeam_phase1_ai:  jsr     boss_health_bar_tick
         lda     boss_hp
         cmp     #MAX_HP
         beq     @skip
@@ -2802,8 +2870,8 @@ boobeam_spawn_turret_loop:  lda     #ENTITY_BOOBEAM_TURRET
 boobeam_turret_x_table:  .byte   $14,$44,$AC,$EC,$EC
 boobeam_turret_y_table:  .byte   $60,$30,$40,$70,$B0
 boobeam_turret_flags_table:  .byte   $C3,$C3,$83,$83,$83
-boobeam_phase_lo:  .byte   $7C,$57
-boobeam_phase_hi:  .byte   $96,$93
+boobeam_phase_lo:  .byte   <boobeam_phase1_ai,<picopico_phase3_ai
+boobeam_phase_hi:  .byte   >boobeam_phase1_ai,>picopico_phase3_ai
 
 ; ─── Wily Machine main AI (boss $0C): phase dispatch (boss_phase-1) ───
 wilymachine_ai:  dex
@@ -2812,7 +2880,9 @@ wilymachine_ai:  dex
         lda     wilymachine_phase_hi,x
         sta     jump_ptr_hi
         jmp     (jump_ptr)
-        lda     #$00
+; ─── Wily Machine phase 1 (wilymachine_phase[0]) ───
+
+wilymachine_phase1_ai:  lda     #$00
         sta     boss_anim_frame
         lda     boss_ai_state
         bne     boobeam_fill_palette_loop_skip
@@ -2978,7 +3048,8 @@ boobeam_tile_row_loop:  lda     fortress_attr_data,x
         sta     col_update_addr_lo
         rts
 
-        lda     boss_x_px
+; ─── Wily Machine phase 2 (wilymachine_phase[1]; also wilymachine_phase[4] (phase 5)) ───
+wilymachine_phase2_ai:  lda     boss_x_px
         cmp     #$38
         bcs     @skip
         inc     boss_phase
@@ -3050,7 +3121,8 @@ wily_machine_store_facing:  lda     #$83
         sta     boss_flags
         rts
 
-        lda     boss_x_px
+; ─── Wily Machine phase 3 (wilymachine_phase[2]; also wilymachine_phase[5] (phase 6)) ───
+wilymachine_phase3_ai:  lda     boss_x_px
         cmp     #$98
         bcc     @skip
         dec     boss_phase
@@ -3058,7 +3130,8 @@ wily_machine_store_facing:  lda     #$83
         lda     #$C3
         jmp     wily_machine_apply_facing
 
-        jsr     boss_health_bar_tick
+; ─── Wily Machine phase 4 (wilymachine_phase[3]) ───
+wilymachine_phase4_ai:  jsr     boss_health_bar_tick
         lda     #$00
         sta     boss_anim_frame
         sta     boss_anim_id
@@ -3153,7 +3226,8 @@ wily_machine_advance_phase:  inc     boss_phase
         sta     boss_x_vel_sub
         rts
 
-        lda     boss_ai_state
+; ─── Wily Machine phase 7 (wilymachine_phase[6]; also fortress_boss_ptr[4] (Wily Machine fallback)) ───
+wilymachine_phase7_ai:  lda     boss_ai_state
         beq     wily_machine_scroll_rts_skip
         lda     ent_y_px
         cmp     #$E0
@@ -3315,8 +3389,10 @@ wilymachine_tile_data:
         .byte   $00,$00,$F1,$F2,$F3,$F4,$F5,$F6
         .byte   $F7,$F8,$F9,$FA,$FB,$00,$00,$00
         .byte   $00,$FC,$00,$00,$00,$00
-wilymachine_phase_lo:  .byte   $CE,$14,$A2,$B0,$14,$A2,$7B
-wilymachine_phase_hi:  .byte   $96,$98,$98,$98,$98,$98,$99
+wilymachine_phase_lo:  .byte   <wilymachine_phase1_ai,<wilymachine_phase2_ai,<wilymachine_phase3_ai,<wilymachine_phase4_ai
+        .byte   <wilymachine_phase2_ai,<wilymachine_phase3_ai,<wilymachine_phase7_ai
+wilymachine_phase_hi:  .byte   >wilymachine_phase1_ai,>wilymachine_phase2_ai,>wilymachine_phase3_ai,>wilymachine_phase4_ai
+        .byte   >wilymachine_phase2_ai,>wilymachine_phase3_ai,>wilymachine_phase7_ai
 
 ; ─── Alien main AI (boss $0D): phase dispatch (boss_phase-1) ───
 alien_shot_timer         := $05A7  ; shot countdown, resets to $3E
@@ -3329,7 +3405,8 @@ alien_ai:  dex
         jmp     (jump_ptr)
 
 
-        lda     boss_ai_state
+; ─── Alien phase 1 (alien_phase[0]) ───
+alien_phase1_ai:  lda     boss_ai_state
         bne     @skip
         ldy     #$0F
         ldx     #$0E
@@ -3459,7 +3536,9 @@ alien_palette_table:  .byte   $30,$38,$16,$0F,$16,$30,$30,$0F
         .byte   $16,$38,$38,$0F,$16,$38,$29,$0F
         .byte   $16,$38,$29,$0F,$16,$29,$19,$0F
         .byte   $16,$29,$19
-        jsr     alien_advance_timer
+; ─── Alien phase 2 (alien_phase[1]) ───
+
+alien_phase2_ai:  jsr     alien_advance_timer
         jsr     boss_check_weapon_hit
         ldx     #$0F
         lda     temp_02
@@ -3541,7 +3620,8 @@ alien_movement_pattern:
 alien_facing_store_2:  stx     boss_flags
         rts
 
-        ldx     boss_ai_state
+; ─── Alien phase 3 (alien_phase[2]; also fortress_boss_ptr[5] (Alien fallback)) ───
+alien_phase3_ai:  ldx     boss_ai_state
         bne     alien_phase_dispatch
         lda     #$E0
         sta     col_update_addr_lo
@@ -3583,7 +3663,8 @@ alien_palette_fill_loop:  sta     palette_ram,x
         bpl     alien_palette_fill_loop
         rts
 
-        jsr     alien_palette_flash_tick
+; ─── Alien phase 4 (alien_phase[3]) ───
+alien_phase4_ai:  jsr     alien_palette_flash_tick
         lda     boss_action_timer
         beq     @skip
         lda     #$08
@@ -3598,7 +3679,8 @@ alien_palette_fill_loop:  sta     palette_ram,x
         sta     general_ptr_lo
         rts
 
-        jsr     alien_palette_flash_tick
+; ─── Alien phase 5 (alien_phase[4]) ───
+alien_phase5_ai:  jsr     alien_palette_flash_tick
         lda     general_counter
         cmp     #$60
         bcs     @skip_2
@@ -3614,7 +3696,9 @@ alien_palette_fill_loop:  sta     palette_ram,x
         sta     column_index
         sta     ppu_buffer_count
         beq     alien_scroll_update
-        jsr     alien_palette_flash_tick
+; ─── Alien phase 6 (alien_phase[5]) ───
+
+alien_phase6_ai:  jsr     alien_palette_flash_tick
         lda     alien_scroll_col_lo
         and     #$3F
         beq     alien_scroll_setup_entities
@@ -3690,7 +3774,9 @@ alien_load_palette_loop:  lda     alien_stage_palette,x
 
 alien_stage_palette:  .byte   $0F,$20,$11,$01,$0F,$20,$2C,$1C
         .byte   $0F,$20,$23,$13,$0F,$20,$0F,$0F
-        .byte   $0F,$20,$6D,$9E
+        .byte   $0F                     ; pad byte
+; ─── Alien phase 7 (alien_phase[6]): flash sprite, then wait/advance ───
+alien_phase7_ai:  jsr     alien_sprite_flash
         lda     alien_wait_timer
         cmp     #$24
         beq     @skip
@@ -3722,7 +3808,9 @@ alien_sprite_flash_store:  stx     palette_sprite + $0A
 alien_fade_palette_data:  .byte   $0F,$20,$0F,$0F,$0F,$20,$0C,$0F
         .byte   $0F,$20,$1C,$0C,$0F,$20,$11,$0C
         .byte   $0F,$20,$11,$01
-        jsr     alien_sprite_flash
+; ─── Alien phase 8 (alien_phase[7]) ───
+
+alien_phase8_ai:  jsr     alien_sprite_flash
         lda     #$80
         sta     temp_03
         jsr     boss_apply_velocity
@@ -3767,7 +3855,9 @@ alien_deactivate_loop:  lsr     ent_spawn_flags,x
 
 alien_vel_y_data:  .byte   $76,$00
 alien_vel_y_hi_data:  .byte   $03,$02
-        lda     boss_action_timer
+; ─── Alien phase 9 (alien_phase[8]) ───
+
+alien_phase9_ai:  lda     boss_action_timer
         beq     alien_palette_flash_store_skip
         lda     frame_counter
         and     #$07
@@ -3819,7 +3909,8 @@ alien_advance_phase:  inc     boss_ai_state
         sta     boss_y_vel
         rts
 
-        lda     #$84
+; ─── Alien phase 10 (alien_phase[9]) ───
+alien_phase10_ai:  lda     #$84
         sta     temp_03
         jsr     boss_apply_velocity
         lda     #$0C
@@ -3850,7 +3941,8 @@ alien_facing_update:  sta     ent_flags
         jsr     sound_queue_push
         rts
 
-        jsr     calc_player_boss_distance
+; ─── Alien phase 11 (alien_phase[10]) ───
+alien_phase11_ai:  jsr     calc_player_boss_distance
         lda     alien_phase_counter
         beq     @skip
         dec     alien_phase_counter
@@ -3869,10 +3961,12 @@ alien_phase_rts:  rts
 
 ; 11-entry alien phase tables. The inner state dispatch (alien_phase_dispatch)
 ; indexes the same tables at +3 (boss_ai_state-relative).
-alien_phase_lo:  .byte   $38,$6B,$0F,$65,$80,$A2,$41,$8F
-        .byte   $F3,$57,$9A
-alien_phase_hi:  .byte   $9B,$9C,$9D,$9D,$9D,$9D,$9E,$9E
-        .byte   $9E,$9F,$9F
+alien_phase_lo:  .byte   <alien_phase1_ai,<alien_phase2_ai,<alien_phase3_ai,<alien_phase4_ai
+        .byte   <alien_phase5_ai,<alien_phase6_ai,<alien_phase7_ai,<alien_phase8_ai
+        .byte   <alien_phase9_ai,<alien_phase10_ai,<alien_phase11_ai
+alien_phase_hi:  .byte   >alien_phase1_ai,>alien_phase2_ai,>alien_phase3_ai,>alien_phase4_ai
+        .byte   >alien_phase5_ai,>alien_phase6_ai,>alien_phase7_ai,>alien_phase8_ai
+        .byte   >alien_phase9_ai,>alien_phase10_ai,>alien_phase11_ai
 
 
 ; =============================================================================
@@ -4020,8 +4114,10 @@ fortress_defeat_dec_timer:  dec     fortress_defeat_timer
         sta     boss_phase
 fortress_defeat_done:  rts
 
-fortress_boss_ptr_lo:  .byte   $22,$69,$22,$69,$7B,$0F
-fortress_boss_ptr_hi:  .byte   $91,$93,$91,$93,$99,$9D
+fortress_boss_ptr_lo:  .byte   <dragon_phase7_ai,<fortress_fallback_picopico_ai,<dragon_phase7_ai,<fortress_fallback_picopico_ai
+        .byte   <wilymachine_phase7_ai,<alien_phase3_ai
+fortress_boss_ptr_hi:  .byte   >dragon_phase7_ai,>fortress_fallback_picopico_ai,>dragon_phase7_ai,>fortress_fallback_picopico_ai
+        .byte   >wilymachine_phase7_ai,>alien_phase3_ai
 
 
 ; =============================================================================

@@ -1697,13 +1697,13 @@ wselect_sound_and_move:
         and     #$10                    ; bit 4 = up (move left in menu)
         bne     wselect_move_left
 wselect_move_right:
-        inc     $FD                     ; move cursor right
+        inc     general_counter         ; move cursor right
         cpx     general_counter         ; wrap at max position
         bcs     wselect_check_valid
         lda     #$00
         sta     general_counter
 wselect_check_valid:
-        ldy     $FD
+        ldy     general_counter
         beq     wselect_update_and_vblank ; cursor 0 = Buster (always valid)
         lda     weapon_bitmask_table,y  ; check if weapon available
         and     temp_07
@@ -1714,7 +1714,7 @@ wselect_move_left:
         bpl     wselect_check_valid_left
         stx     general_counter         ; wrap to max
 wselect_check_valid_left:
-        ldy     $FD
+        ldy     general_counter
         beq     wselect_update_and_vblank
         lda     weapon_bitmask_table,y
         and     temp_07
@@ -5305,11 +5305,9 @@ wily_castle_attr_data_2:  .byte   $FF,$FF,$55,$55,$55,$55,$55,$FF
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$66,$67,$68,$69,$6A
         .byte   $6B,$6C,$6D,$6E,$6F,$70,$71,$72
-        .byte   $73,$74,$75
-        ror     $77,x
-        sei
-        adc     $7B7A,y
-        .byte   $7C,$7D,$00,$00,$00,$00,$00,$00
+        .byte   $73,$74,$75,$76,$77,$78,$79,$7A
+        .byte   $7B,$7C,$7D,$00,$00,$00,$00,$00
+        .byte   $00
         .byte   $00,$00,$00,$50,$51,$52,$53,$54
         .byte   $55,$56,$57,$58,$59,$5A,$5B,$5C
         .byte   $5D,$5E,$5F,$60,$61,$62,$63,$64
