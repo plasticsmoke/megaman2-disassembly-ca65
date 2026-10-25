@@ -859,13 +859,13 @@ sound_frequency_calc:  lda     freq_register_hi
         lda     ($EC),y
         ldy     freq_register_hi
         clc
-        adc     ($EC),y                 ; X = (base_freq_lo + acc_lo)
+        adc     ($EC),y                 ; X = base freq lo + accumulator lo
         tax
         ldy     #SND_FREQ_ACC_HI
         lda     ($EC),y
         inc     freq_register_hi        ; offset+2 = base freq hi field
         ldy     freq_register_hi
-        adc     ($EC),y                 ; Y = (base_freq_hi + acc_hi + carry)
+        adc     ($EC),y                 ; Y = base freq hi + accumulator hi + carry
         tay
         lda     #$01                    ; noise channel? (channel 1 = noise)
         cmp     active_channel_count
@@ -1317,7 +1317,7 @@ sound_pattern_noise_check:  ldy     #$01
         ldx     #$00                    ; noise: high byte always 0
         jmp     sound_pattern_store_freq
 
-sound_pattern_freq_table:  asl     a   ; note_index * 2 (16-bit table entries)
+sound_pattern_freq_table:  asl     a   ; note index * 2 (16-bit table entries)
         ldy     #SND_FREQ_TBL_LO       ; add to channel's frequency table base
         clc
         adc     ($EC),y

@@ -48,3 +48,8 @@ MMC1_CONTROL  = $8000   ; $8000-$9FFF: Control (mirroring, PRG/CHR mode)
 MMC1_CHR0     = $A000   ; $A000-$BFFF: CHR bank 0
 MMC1_CHR1     = $C000   ; $C000-$DFFF: CHR bank 1
 MMC1_PRG      = $E000   ; $E000-$FFFF: PRG bank + PRG-RAM enable
+; Addresses the game actually writes (any address inside a register's 8 KB window
+; selects it). CHR0 writes go to mmc1_shift_register (a bank0E ROM byte) and PRG
+; writes to mmc1_scratch ($FFF0, bank0F).
+MMC1_CONTROL_W = $9FFF  ; control register write target (mmc1_write_control)
+MMC1_CHR1_W    = $DFFF  ; CHR bank 1 register write target (cold boot)

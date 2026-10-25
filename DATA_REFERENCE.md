@@ -728,6 +728,8 @@ collision class (see below), bits 5-0 select CHR tiles `G*4 .. G*4+3` as a
 | $BC00 / $BD00 | CHR upload list, RM / Wily stage: `[count, (src_page, page_count, src_bank) × count]` → CHR-RAM from $0000 (`chr_upload_init` bank0F:800) |
 | $BE00-$BE61 / $BF00-$BF61 | Palette block, RM / Wily stage: anim_target, anim_counter, 32-byte palette, 4 × 16-byte palette animation frames — copied verbatim to $0354-$03B5 |
 
+The fixed bank addresses these structures through the `STAGE_*` equates in `include/constants.inc` (`STAGE_SPAWN_SCREEN`, `STAGE_CKPT_*`, `STAGE_CHR_OVERLAY`, …); the spawn arrays are 1-indexed, so the scan code reads `STAGE_SPAWN_SCREEN-1,y`.
+
 **Checkpoint tables** (index = `checkpoint_idx` $B0, 0-5; Wily stages use
 slots 3-5 of the paired RM bank):
 
@@ -1009,7 +1011,7 @@ Music is loaded by enqueuing `stage_music_table[current_stage]` (bank0E:250):
 | $0B Wily 4 | $09 | Dr. Wily Stage 3-4 |
 | $0C Wily 5 | $09 | Dr. Wily Stage 3-4 (overridden to $17) |
 
-Wily 6 (stage $0D) has no `stage_music_table` entry — its rooms queue music directly (Wily theme $09 at bank0E:345, boss music $0B at the gates). ID $17 is the Weapon Get jingle, queued by `weapon_get_screen_init` (bank0D:5820).
+Wily 6 (stage $0D) has no `stage_music_table` entry — its rooms queue music directly (Wily theme $09 at bank0E:345, boss music $0B at the gates). ID $17 is the Weapon Get jingle, queued by `weapon_get_screen_init` (bank0D:5586).
 
 ### Boss Sprite Types
 
@@ -1053,7 +1055,7 @@ sprite types, not sound IDs (an old misreading corrected in Phase A4):
 
 ## 11. Password System
 
-Location: `password_screen_init` (bank0D:3497), `password_all_dots_placed` (bank0D:3664).
+Location: `password_screen_init` (bank0D:3330), `password_all_dots_placed` (bank0D:3497).
 
 ### Grid Layout
 
@@ -1175,7 +1177,9 @@ Four 128-byte pointer tables in fixed bank $0F map entity types ($00–$7F) to s
 | `sprite_def_ptr_lo_wpn` | bank0F:6531 | Sprite def pointer low byte (weapon rendering) |
 | `sprite_def_ptr_hi_wpn` | bank0F:6570 | Sprite def pointer high byte (weapon rendering) |
 
-All high bytes are in the $FB–$FF range, placing all sprite definition data in the fixed bank ($FB00–$FFEF region).
+All four tables are symbolic (`.byte <label`/`>label`). The 186 distinct sprite definitions live in the fixed bank at $FB00–$FF87 and are labelled `sprdef_<entity>` (named after the lowest entity type that uses them through `sprite_def_ptr_lo`, e.g. `sprdef_shrink` bank0F:6578) or `sprdef_w_<entity>` when only the weapon-slot table references them. Each label's comment lists every table entry that points at it. `sprite_def_ptr_lo_wpn[$7F]` is a dead slot that points into the trailing $FF padding (`sprdef_w_7f_unused`).
+
+The menu bank has three analogous frame tables, also symbolic: `boss_intro_sprite_ptr_lo/hi` → `boss_intro_frame_00` (bank0D:983) … `_28`, `entity_sprite_ptr_lo/hi` → `map_entity_sprite_00` (bank0D:2695) … `_0A`, `title_megaman_def_ptr_lo/hi` → `title_megaman_frame_00` (bank0D:4447) … `_0C`. Those frames are OAM lists: a count byte followed by 4-byte entries.
 
 Entity rendering uses `sprite_def_ptr_lo/hi`. Weapon/projectile rendering uses `sprite_def_ptr_lo_wpn/hi_wpn`. The two sets allow the same entity type to have different sprites depending on rendering context (e.g., entity slot vs weapon slot).
 
@@ -1267,7 +1271,7 @@ Example: `"MEGAMAN"` = `$CD,$C5,$C7,$C1,$CD,$C1,$CE`
 
 ### Credits Text
 
-`prologue_text_data` (bank0D:4785) — prologue/story text in high-bit ASCII ($C1+ = A+); `$00` bytes are separators. The ending staff-roll credits live in bank $09 as `credits_text` (bank09 $8C95, letter tiles $01-$1A = A-Z), typed out by `ending_column_tick`.
+`prologue_text_data` (bank0D:4551) — prologue/story text in high-bit ASCII ($C1+ = A+); `$00` bytes are separators. The ending staff-roll credits live in bank $09 as `credits_text` (bank09 $8C95, letter tiles $01-$1A = A-Z), typed out by `ending_column_tick`.
 
 Decoded excerpt:
 
@@ -1280,18 +1284,18 @@ $C4,$D2,$DC                       = "DR."
 $CC,$C9,$C7,$C8,$D4               = "LIGHT"
 ```
 
-Title/prologue fades use the brightness ramp `title_fade_brightness` (bank0D:4819).
+Title/prologue fades use the brightness ramp `title_fade_brightness` (bank0D:4585).
 
 ### Stage Intro Text
 
-Weapon-name rendering on the GET EQUIPPED screen (`weapon_get_draw_name`, bank0D:5875) writes the name letter-by-letter via `col_update_tiles` with frame delays — a typewriter effect.
+Weapon-name rendering on the GET EQUIPPED screen (`weapon_get_draw_name`, bank0D:5641) writes the name letter-by-letter via `col_update_tiles` with frame delays — a typewriter effect.
 
-The `weapon_name_data` table (bank0D, indexed by `current_stage`) provides per-stage name tile data. After all letters are drawn, `weapon_get_name_blink` (bank0D:5903) alternates the text between white and weapon colors using the `weapon_get_pal_lo/hi` tables.
+The `weapon_name_data` table (bank0D, indexed by `current_stage`) provides per-stage name tile data. After all letters are drawn, `weapon_get_name_blink` (bank0D:5669) alternates the text between white and weapon colors using the `weapon_get_pal_lo/hi` tables.
 
 ### Password Screen
 
-`password_screen_init` (bank0D:3497) renders the password grid via direct PPU writes from `password_ppu_layout_data` tables. Grid tiles are written outside of NMI (during forced blank). The blinking cursor position is maintained in the OAM buffer at `oam_buffer` ($0200).
+`password_screen_init` (bank0D:3330) renders the password grid via direct PPU writes from `password_ppu_layout_data` tables. Grid tiles are written outside of NMI (during forced blank). The blinking cursor position is maintained in the OAM buffer at `oam_buffer` ($0200).
 
 ### Boss Get Screen
 
-`wily_map_screen_init` (bank0D:2187) renders the weapon acquisition screen. The nametable is filled with `wily_nametable_fill_tiles` tile patterns, then boss/weapon name text is written via PPU buffer updates. Palette data loaded from `wily_map_palette_data` (bank0D:2835).
+`wily_map_screen_init` (bank0D:2028) renders the weapon acquisition screen. The nametable is filled with `wily_nametable_fill_tiles` tile patterns, then boss/weapon name text is written via PPU buffer updates. Palette data loaded from `wily_map_palette_data` (bank0D:2676).

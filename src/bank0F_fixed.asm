@@ -283,15 +283,15 @@ sound_queue_push_rts:  rts
 ; Called cross-bank ($C05D) from bank $0E cold boot with A=$0E:
 ; PRG mode 3 (fix $C000-$FFFF), CHR mode 1, vertical mirroring.
 mmc1_write_control:
-        sta     $9FFF
+        sta     MMC1_CONTROL_W
         lsr     a
-        sta     $9FFF
+        sta     MMC1_CONTROL_W
         lsr     a
-        sta     $9FFF
+        sta     MMC1_CONTROL_W
         lsr     a
-        sta     $9FFF
+        sta     MMC1_CONTROL_W
         lsr     a
-        sta     $9FFF
+        sta     MMC1_CONTROL_W
         rts
 ; ─── Show the Wily castle map screen (bank $0D) ───
 show_wily_map:
@@ -868,28 +868,28 @@ checkpoint_respawn:
         and     #$07
         jsr     bank_switch
         ldy     checkpoint_idx
-        lda     $BB06,y
+        lda     STAGE_CKPT_SCREEN,y
         sta     nametable_select
         sta     ent_x_screen
-        lda     $BB0C,y
+        lda     STAGE_CKPT_SPAWN_IDX,y
         sta     spawn_scan_bwd
         sta     spawn_scan_fwd
-        lda     $BB12,y
+        lda     STAGE_CKPT_SPAWN2_IDX,y
         sta     spawn_scan_sec_bwd
         sta     spawn_scan_sec_fwd
-        lda     $BB18,y
+        lda     STAGE_CKPT_MT_PTR_HI,y
         sta     metatile_ptr_hi
-        lda     $BB1E,y
+        lda     STAGE_CKPT_MT_PTR_LO,y
         sta     metatile_ptr_lo
-        lda     $BB24,y
+        lda     STAGE_CKPT_COL_PTR_HI,y
         sta     column_ptr_hi
-        lda     $BB2A,y
+        lda     STAGE_CKPT_COL_PTR_LO,y
         sta     column_ptr_lo
-        lda     $BB30,y
+        lda     STAGE_CKPT_CUR_SCREEN,y
         sta     current_screen
-        lda     $BB36,y
+        lda     STAGE_CKPT_SCROLL_LO,y
         sta     scroll_screen_lo
-        lda     $BB3C,y
+        lda     STAGE_CKPT_SCROLL_HI,y
         sta     scroll_screen_hi
         ldx     current_screen
         jsr     scroll_col_load_palette
@@ -1204,7 +1204,7 @@ get_screen_boundary:
         lda     current_stage
         and     #$07
         jsr     bank_switch
-        lda     $B400,y
+        lda     STAGE_SCREEN_FLAGS,y
         tay
         lda     #$0E
         jsr     bank_switch
@@ -1230,7 +1230,7 @@ boss_entrance_scroll:  lda     current_stage
         adc     #$10
         sta     ent_y_px
         ldx     checkpoint_idx
-        cmp     $BB00,x
+        cmp     STAGE_CKPT_LAND_Y,x
         beq     boss_entrance_done
         jsr     render_all_sprites
         jsr     wait_for_vblank
@@ -1480,7 +1480,7 @@ column_data_copy:  lda     current_stage
         lda     (jump_ptr),y
         tax
         tay
-        lda     $8400,y
+        lda     STAGE_METATILE_ATTR,y
         pha
         txa
         asl     a
@@ -1680,7 +1680,7 @@ metatile_attr_inner:  lda     (temp_0A),y
         ldy     #$F0
 metatile_attr_mask_setup:  sty     ppu_update_buf + $14
         ldy     temp_03
-        lda     $8400,y
+        lda     STAGE_METATILE_ATTR,y
         and     ppu_update_buf + $14
         ldy     temp_01
         sta     ppu_update_buf + $15,y
@@ -1736,11 +1736,11 @@ scroll_column_render:  lda     general_counter
         jsr     scroll_col_load_palette
         clc
         pla
-        adc     $B42C,x
+        adc     STAGE_SCREEN_CHR_IDX,x
         tax
-        lda     $B460,x
+        lda     STAGE_CHR_OVERLAY,x
         sta     jump_ptr_hi
-        lda     $B461,x
+        lda     STAGE_CHR_OVERLAY+1,x
         jsr     bank_switch
         ldy     #$1F
 scroll_col_copy_loop:  lda     (jump_ptr),y
@@ -1757,17 +1757,17 @@ scroll_col_copy_loop:  lda     (jump_ptr),y
 
 ; ─── Load sprite palette for scroll column ───
 scroll_col_load_palette:  ldy     $B42C,x
-        lda     $B46C,y
+        lda     STAGE_SPRITE_PAL,y
         sta     palette_sprite + $09
-        lda     $B46D,y
+        lda     STAGE_SPRITE_PAL+1,y
         sta     palette_sprite + $0A
-        lda     $B46E,y
+        lda     STAGE_SPRITE_PAL+2,y
         sta     palette_sprite + $0B
-        lda     $B46F,y
+        lda     STAGE_SPRITE_PAL+3,y
         sta     palette_sprite + $0D
-        lda     $B470,y
+        lda     STAGE_SPRITE_PAL+4,y
         sta     palette_sprite + $0E
-        lda     $B471,y
+        lda     STAGE_SPRITE_PAL+5,y
         sta     palette_sprite + $0F
         rts
 
@@ -2857,7 +2857,7 @@ player_damage_knockback:
         sta     weapon_fire_dir
         sta     general_timer
         lda     #$02
-        sta     game_substate           ; player state = weapon active
+        sta     game_substate           ; player state $02 = firing
         jsr     player_set_sprite
         lda     #$01
         sta     ent_anim_id
@@ -3174,11 +3174,11 @@ entity_spawn_scan:  lda     current_stage
         bne     spawn_scan_right_scroll
 spawn_scan_backward:  ldy     spawn_scan_bwd
         beq     spawn_scan_forward
-        lda     $B5FF,y
+        lda     STAGE_SPAWN_SCREEN-1,y
         cmp     temp_0B
         bcc     spawn_scan_forward
         bne     spawn_backward_despawn
-        lda     $B6FF,y
+        lda     STAGE_SPAWN_X-1,y
         cmp     temp_0A
         bcc     spawn_scan_forward
 spawn_backward_despawn:  dey
@@ -3191,7 +3191,7 @@ spawn_forward_check:  lda     $B5FF,y
         cmp     jump_ptr_hi
         bcc     spawn_forward_done
         bne     spawn_forward_skip
-        lda     $B6FF,y
+        lda     STAGE_SPAWN_X-1,y
         cmp     jump_ptr
         bcc     spawn_forward_done
 spawn_forward_skip:  dey
@@ -3199,11 +3199,11 @@ spawn_forward_skip:  dey
 spawn_forward_done:  sty     spawn_scan_fwd
 spawn_secondary_backward:  ldy     spawn_scan_sec_bwd
         beq     spawn_secondary_forward
-        lda     $B9FF,y
+        lda     STAGE_SPAWN2_SCREEN-1,y
         cmp     temp_0B
         bcc     spawn_secondary_forward
         bne     spawn_sec_check_active
-        lda     $BA3F,y
+        lda     STAGE_SPAWN2_X-1,y
         cmp     temp_0A
         bcc     spawn_secondary_forward
 spawn_sec_check_active:  lda     ent_parent_ref + $0F,y
@@ -3218,7 +3218,7 @@ spawn_sec_forward_check:  lda     $B9FF,y
         cmp     jump_ptr_hi
         bcc     spawn_sec_forward_done
         bne     spawn_sec_forward_skip
-        lda     $BA3F,y
+        lda     STAGE_SPAWN2_X-1,y
         cmp     jump_ptr
         bcc     spawn_sec_forward_done
 spawn_sec_forward_skip:  dey
@@ -3228,33 +3228,33 @@ spawn_sec_forward_done:  sty     spawn_scan_sec_fwd
 
 spawn_scan_right_scroll:  ldy     spawn_scan_fwd
         lda     jump_ptr_hi
-        cmp     $B600,y
+        cmp     STAGE_SPAWN_SCREEN,y
         bcc     spawn_right_backward
         bne     spawn_right_activate
         lda     jump_ptr
-        cmp     $B700,y
+        cmp     STAGE_SPAWN_X,y
         bcc     spawn_right_backward
 spawn_right_activate:  jsr     activate_primary_entity
         inc     spawn_scan_fwd
         bne     spawn_scan_right_scroll
 spawn_right_backward:  ldy     spawn_scan_bwd
 spawn_right_back_check:  lda     temp_0B
-        cmp     $B600,y
+        cmp     STAGE_SPAWN_SCREEN,y
         bcc     spawn_right_back_done
         bne     spawn_right_back_skip
         lda     temp_0A
-        cmp     $B700,y
+        cmp     STAGE_SPAWN_X,y
         bcc     spawn_right_back_done
 spawn_right_back_skip:  iny
         bne     spawn_right_back_check
 spawn_right_back_done:  sty     spawn_scan_bwd
 spawn_right_sec_forward:  ldy     spawn_scan_sec_fwd
         lda     jump_ptr_hi
-        cmp     $BA00,y
+        cmp     STAGE_SPAWN2_SCREEN,y
         bcc     spawn_right_sec_backward
         bne     spawn_right_sec_check
         lda     jump_ptr
-        cmp     $BA40,y
+        cmp     STAGE_SPAWN2_X,y
         bcc     spawn_right_sec_backward
 spawn_right_sec_check:  lda     ent_child_hp,y
         beq     spawn_right_sec_next
@@ -3263,11 +3263,11 @@ spawn_right_sec_next:  inc     spawn_scan_sec_fwd
         bne     spawn_right_sec_forward
 spawn_right_sec_backward:  ldy     spawn_scan_sec_bwd
 spawn_right_sec_back_chk:  lda     temp_0B
-        cmp     $BA00,y
+        cmp     STAGE_SPAWN2_SCREEN,y
         bcc     spawn_right_sec_back_done
         bne     spawn_right_sec_back_skip
         lda     temp_0A
-        cmp     $BA40,y
+        cmp     STAGE_SPAWN2_X,y
         bcc     spawn_right_sec_back_done
 spawn_right_sec_back_skip:  iny
         bne     spawn_right_sec_back_chk
@@ -3289,13 +3289,13 @@ activate_check_dup:  cmp     ent_hit_count,x    ; check for duplicate spawn
         bcs     entity_activate_done
         tya
         sta     ent_hit_count,x
-        lda     $B600,y
+        lda     STAGE_SPAWN_SCREEN,y
         sta     ent_x_spawn_scr,x
-        lda     $B700,y
+        lda     STAGE_SPAWN_X,y
         sta     ent_x_spawn_px,x
-        lda     $B800,y
+        lda     STAGE_SPAWN_Y,y
         sta     ent_y_spawn_px,x
-        lda     $B900,y
+        lda     STAGE_SPAWN_TYPE,y
 ; =============================================================================
 ; entity_init_from_type — Initialize entity arrays from type ID ($D77C)
 ; =============================================================================
@@ -3354,13 +3354,13 @@ activate_sec_check_dup:  cmp     ent_parent_ref,x
         tya
         pha
         sta     ent_parent_ref,x
-        lda     $BA00,y
+        lda     STAGE_SPAWN2_SCREEN,y
         sta     ent_x_spawn_scr,x
-        lda     $BA40,y
+        lda     STAGE_SPAWN2_X,y
         sta     ent_x_spawn_px,x
-        lda     $BA80,y
+        lda     STAGE_SPAWN2_Y,y
         sta     ent_y_spawn_px,x
-        lda     $BAC0,y
+        lda     STAGE_SPAWN2_TYPE,y
         jsr     entity_init_from_type
         pla
         sta     ent_despawn,x
@@ -6167,7 +6167,7 @@ calc_vel_store_delta_y:
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit            ; quotient = base_speed / delta_x
+        jsr     divide_16bit            ; quotient = base speed / delta X
         lda     temp_0F                 ; multiply quotient by delta_y:
         sta     temp_0D                 ;   set up second division
         lda     temp_0E
@@ -6176,7 +6176,7 @@ calc_vel_store_delta_y:
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit            ; result = base_speed * delta_y / delta_x
+        jsr     divide_16bit            ; result = base speed * delta Y / delta X
         ldx     current_entity_slot
         lda     temp_0F
         sta     ent_y_vel,x            ; Y velocity (main byte)
@@ -6197,7 +6197,7 @@ calc_vel_y_greater:
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit            ; quotient = base_speed / delta_y
+        jsr     divide_16bit            ; quotient = base speed / delta Y
         lda     temp_0F
         sta     temp_0D
         lda     temp_0E
@@ -6206,7 +6206,7 @@ calc_vel_y_greater:
         sta     temp_0B
         lda     #$00
         sta     temp_0A
-        jsr     divide_16bit            ; result = base_speed * delta_x / delta_y
+        jsr     divide_16bit            ; result = base speed * delta X / delta Y
         ldx     current_entity_slot
         lda     temp_0F
         sta     ent_x_vel,x            ; X velocity (main byte)
@@ -6509,266 +6509,485 @@ cold_boot_init:                         ; Cold boot: init PPU, switch to bank $0
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF
-sprite_def_ptr_lo:  .byte   $00,$0D,$1A,$27,$34,$38,$3C,$40 ; sprite def pointer table (low bytes)
-        .byte   $44,$4A,$50,$56,$5C,$5F,$62,$65
-        .byte   $68,$6D,$72,$77,$7C,$81,$86,$8B
-        .byte   $90,$9C,$A4,$AB,$AF,$B3,$B3,$B7
-        .byte   $BB,$BF,$BF,$C3,$C6,$CC,$D2,$D8
-        .byte   $D8,$D8,$D8,$D8,$D8
-        .byte   $D8
-        .byte   $D8
-        .byte   $D8
-        .byte   $DF,$EB,$F0,$F9,$FE,$04,$0C,$10
-        .byte   $1B,$2A,$36,$47,$4C,$4F,$56,$56
-        .byte   $5E,$5E,$5E,$5E,$5E,$5E,$5E,$5E
-        .byte   $5E,$5E,$5E,$5E,$5E,$5E,$5E,$5E
-        .byte   $5E,$70,$76,$86
-        .byte   $8A
-        .byte   $96,$9A
-        .byte   $9E,$A2,$A8,$AC,$B6,$BB,$BF,$C2
-        .byte   $C6,$D1,$D9
-        .byte   $DD,$E5,$ED
-        .byte   $F3,$F8,$0A,$10,$13,$19,$1F,$24
-        .byte   $32,$36,$3D,$43,$47,$4B,$4F,$53
-        .byte   $58,$5C,$62,$66,$69,$6D,$70,$74
-        .byte   $78
-        .byte   $78
-        .byte   $78
-sprite_def_ptr_lo_wpn:  .byte   $78
-        .byte   $82,$8C,$8C,$8C,$90,$90,$97,$97
-        .byte   $9B,$9B,$A3,$A6,$B5,$B9,$BD,$C1
-        .byte   $C8,$C8,$CC,$CF,$CF,$D2,$DD,$E3
-        .byte   $E6,$F1,$FA,$FE,$04,$10,$10,$16
-        .byte   $16,$16,$1E,$26,$26,$26,$26,$26
-        .byte   $2A,$2E,$32,$32,$40,$40,$40,$43
-        .byte   $46,$58,$58,$5B,$63,$66
-        .byte   $79,$79,$79
-        .byte   $7F,$82,$85,$89,$90,$94,$97,$97
-        .byte   $97,$97,$9B,$9E,$A3,$AB,$AB,$B0
-        .byte   $B5,$B5,$B5,$63,$C2,$C8,$CC,$CF
-        .byte   $CC,$E1,$E1,$E1,$E9,$40,$E9,$EE
-        .byte   $F4,$F9,$FD,$01,$06,$0D,$14,$1A
-        .byte   $20,$27,$27,$2A,$2E,$FE,$32,$36
-        .byte   $39,$42,$46,$49,$52,$63
-        .byte   $55,$59
-        .byte   $5D,$5D,$67
-        .byte   $6D,$6D,$71
-        .byte   $75,$79
-        .byte   $7D,$81,$84
-        .byte   $84,$84
-        .byte   $87
-sprite_def_ptr_hi:  .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB ; sprite def pointer table (high bytes)
-        .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB
-        .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB
-        .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB
-        .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB
-        .byte   $FB,$FB,$FB,$FB,$FB,$FB,$FB,$FB
-        .byte   $FB,$FB,$FB,$FB,$FB,$FC,$FC,$FC
-        .byte   $FC,$FC,$FC,$FC,$FC,$FC,$FC,$FC
-        .byte   $FC,$FC,$FC,$FC,$FC,$FC,$FC,$FC
-        .byte   $FC,$FC,$FC,$FC,$FC,$FC,$FC,$FC
-        .byte   $FC,$FC,$FC,$FC,$FC,$FC,$FC,$FC
-        .byte   $FC,$FC,$FC,$FC,$FC,$FC,$FC,$FC
-        .byte   $FC,$FC,$FC,$FC,$FC,$FC,$FC,$FD
-        .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
-        .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
-        .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
-sprite_def_ptr_hi_wpn:  .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
-        .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
-        .byte   $FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD
-        .byte   $FD,$FD,$FD,$FD,$FD,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FE,$FE,$FE
-        .byte   $FE,$FE,$FE,$FE,$FE,$FF,$FF,$FF
-        .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
-        .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FE
-        .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-        .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+sprite_def_ptr_lo:  .byte   <sprdef_shrink,<sprdef_anko,<sprdef_anko_02,<sprdef_ankoseg,<sprdef_m_445,<sprdef_anko_05,<sprdef_deathexplode,<sprdef_claw ; $00-$07
+        .byte   <sprdef_clawvar,<sprdef_stagetrans,<sprdef_tanishi,<sprdef_tanishibare,<sprdef_kerog,<sprdef_petitkerog,<sprdef_bubble,<sprdef_bossdeath ; $08-$0F
+        .byte   <sprdef_anko_10,<sprdef_anko_11,<sprdef_railplat,<sprdef_crumble,<sprdef_laserbeam,<sprdef_metalblade,<sprdef_batton,<sprdef_robbit ; $10-$17
+        .byte   <sprdef_quickboom,<sprdef_airtornado1,<sprdef_airtornado2,<sprdef_atomicfire,<sprdef_friender,<sprdef_monking,<sprdef_monking,<sprdef_kukku ; $18-$1F
+        .byte   <sprdef_kukkudesp,<sprdef_tellyspawn,<sprdef_tellyspawn,<sprdef_changkey,<sprdef_changkeyproj,<sprdef_blackout,<sprdef_lightrestore,<sprdef_blackoutend ; $20-$27
+        .byte   <sprdef_blackoutend,<sprdef_blackoutend,<sprdef_blackoutend,<sprdef_blackoutend,<sprdef_blackoutend,<sprdef_blackoutend,<sprdef_blackoutend,<sprdef_blackoutend ; $28-$2F
+        .byte   <sprdef_press,<sprdef_blocky,<sprdef_blockyph2,<sprdef_mechafire,<sprdef_neometall,<sprdef_genericproj,<sprdef_matasaburo,<sprdef_pipispawn ; $30-$37
+        .byte   <sprdef_pipi,<sprdef_pipidespawn,<sprdef_pipiegg,<sprdef_egghatch,<sprdef_copipi,<sprdef_kaminaricloud,<sprdef_kaminarigoro,<sprdef_kaminarigoro ; $38-$3F
+        .byte   <sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin ; $40-$47
+        .byte   <sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin,<sprdef_goblin ; $48-$4F
+        .byte   <sprdef_goblin,<sprdef_scworm,<sprdef_pressretract,<sprdef_appearblka,<sprdef_appearblkb,<sprdef_appearblkc,<sprdef_neometallflip,<sprdef_crashwall ; $50-$57
+        .byte   <sprdef_heatmanfire,<sprdef_quickboomer,<sprdef_bubblehazard,<sprdef_bubbleshot,<sprdef_metalmanblade,<sprdef_airtornado,<sprdef_crashbomb,<sprdef_crashblast ; $58-$5F
+        .byte   <sprdef_bossdebris,<sprdef_woodmanleaf,<sprdef_woodmantornado,<sprdef_bossbody,<sprdef_bossbodyctrl,<sprdef_dragonbodya,<sprdef_dragonbodyb,<sprdef_dragonpart ; $60-$67
+        .byte   <sprdef_dragonbreath,<sprdef_gutsdozerturret,<sprdef_picopico,<sprdef_wilyball,<sprdef_wilymachshot,<sprdef_boobeamturret,<sprdef_boobeamshot,<sprdef_alienbossshot ; $68-$6F
+        .byte   <sprdef_alienbody,<sprdef_bigfish,<sprdef_flashhaz_72,<sprdef_flashhaz_73,<sprdef_redliquid,<sprdef_pickup_75_unused,<sprdef_largehealth,<sprdef_smallhealth ; $70-$77
+        .byte   <sprdef_largeweapon,<sprdef_smallweapon,<sprdef_etank,<sprdef_extralife,<sprdef_wilygateboss,<sprdef_wilygateopen,<sprdef_wilygateopen,<sprdef_wilygateopen ; $78-$7F
+sprite_def_ptr_lo_wpn:  .byte   <sprdef_wilygateopen,<sprdef_w_anko,<sprdef_w_anko_02,<sprdef_w_anko_02,<sprdef_w_anko_02,<sprdef_w_anko_05,<sprdef_w_anko_05,<sprdef_w_claw ; $00-$07
+        .byte   <sprdef_w_claw,<sprdef_w_stagetrans,<sprdef_w_stagetrans,<sprdef_w_tanishibare,<sprdef_w_kerog,<sprdef_w_petitkerog,<sprdef_w_bubble,<sprdef_w_bossdeath ; $08-$0F
+        .byte   <sprdef_w_anko_10,<sprdef_w_anko_11,<sprdef_w_anko_11,<sprdef_w_crumble,<sprdef_w_laserbeam,<sprdef_w_laserbeam,<sprdef_w_batton,<sprdef_w_robbit ; $10-$17
+        .byte   <sprdef_w_quickboom,<sprdef_w_airtornado1,<sprdef_w_airtornado2,<sprdef_w_atomicfire,<sprdef_w_friender,<sprdef_w_monking,<sprdef_w_kukkuspawn,<sprdef_w_kukkuspawn ; $18-$1F
+        .byte   <sprdef_w_kukkudesp,<sprdef_w_kukkudesp,<sprdef_w_kukkudesp,<sprdef_w_changkey,<sprdef_w_changkeyproj,<sprdef_w_changkeyproj,<sprdef_w_changkeyproj,<sprdef_w_changkeyproj ; $20-$27
+        .byte   <sprdef_w_changkeyproj,<sprdef_w_gear,<sprdef_w_pierrobot,<sprdef_w_flyboy_2b,<sprdef_w_flyboy_2b,<sprdef_w_crashwallvar,<sprdef_w_crashwallvar,<sprdef_w_crashwallvar ; $28-$2F
+        .byte   <sprdef_w_press,<sprdef_w_blocky,<sprdef_w_blockyph2,<sprdef_w_blockyph2,<sprdef_w_neometall,<sprdef_w_genericproj,<sprdef_w_matasaburo,<sprdef_w_pipispawn ; $30-$37
+        .byte   <sprdef_w_pipispawn,<sprdef_w_pipispawn,<sprdef_w_pipiegg,<sprdef_w_egghatch,<sprdef_w_copipi,<sprdef_w_kaminaricloud,<sprdef_w_kaminarigoro,<sprdef_w_kaminaribolt ; $38-$3F
+        .byte   <sprdef_w_goblin,<sprdef_w_goblin,<sprdef_w_goblin,<sprdef_w_goblin,<sprdef_w_goblinhorn,<sprdef_w_petitgoblin,<sprdef_w_springer,<sprdef_w_mole ; $40-$47
+        .byte   <sprdef_w_mole,<sprdef_w_moleshotdn,<sprdef_w_moledespawn,<sprdef_w_moledespawn,<sprdef_w_moledespawn,<sprdef_w_genericproj,<sprdef_w_sniperarmor,<sprdef_w_sniperjoe ; $48-$4F
+        .byte   <sprdef_w_scwormnest,<sprdef_w_scworm,<sprdef_w_scwormnest,<sprdef_w_appearblka,<sprdef_w_appearblka,<sprdef_w_appearblka,<sprdef_w_neometallflip,<sprdef_w_crashwallvar ; $50-$57
+        .byte   <sprdef_w_neometallflip,<sprdef_w_quickboomer,<sprdef_w_bubblehazard,<sprdef_w_bubbleshot,<sprdef_w_metalmanblade,<sprdef_w_airtornado,<sprdef_w_crashbomb,<sprdef_w_crashblast ; $58-$5F
+        .byte   <sprdef_w_bossdebris,<sprdef_w_woodmanleaf,<sprdef_w_woodmantornado,<sprdef_w_bossbody,<sprdef_w_bossbody,<sprdef_w_dragonbodya,<sprdef_w_dragonbodyb,<sprdef_w_friender ; $60-$67
+        .byte   <sprdef_w_dragonbreath,<sprdef_w_gutsdozerturret,<sprdef_w_picopico,<sprdef_w_wilyball,<sprdef_w_wilymachshot,<sprdef_w_boobeamturret,<sprdef_w_boobeamshot,<sprdef_w_genericproj ; $68-$6F
+        .byte   <sprdef_w_alienbody,<sprdef_w_bigfish,<sprdef_w_flashhaz_72,<sprdef_w_flashhaz_72,<sprdef_w_redliquid,<sprdef_w_pickup_75_unused,<sprdef_w_pickup_75_unused,<sprdef_w_smallhealth ; $70-$77
+        .byte   <sprdef_w_largeweapon,<sprdef_w_smallweapon,<sprdef_w_etank,<sprdef_w_extralife,<sprdef_w_wilygateboss,<sprdef_w_wilygateboss,<sprdef_w_wilygateboss,<sprdef_w_7f_unused ; $78-$7F
+sprite_def_ptr_hi:  .byte   >sprdef_shrink,>sprdef_anko,>sprdef_anko_02,>sprdef_ankoseg,>sprdef_m_445,>sprdef_anko_05,>sprdef_deathexplode,>sprdef_claw ; $00-$07
+        .byte   >sprdef_clawvar,>sprdef_stagetrans,>sprdef_tanishi,>sprdef_tanishibare,>sprdef_kerog,>sprdef_petitkerog,>sprdef_bubble,>sprdef_bossdeath ; $08-$0F
+        .byte   >sprdef_anko_10,>sprdef_anko_11,>sprdef_railplat,>sprdef_crumble,>sprdef_laserbeam,>sprdef_metalblade,>sprdef_batton,>sprdef_robbit ; $10-$17
+        .byte   >sprdef_quickboom,>sprdef_airtornado1,>sprdef_airtornado2,>sprdef_atomicfire,>sprdef_friender,>sprdef_monking,>sprdef_monking,>sprdef_kukku ; $18-$1F
+        .byte   >sprdef_kukkudesp,>sprdef_tellyspawn,>sprdef_tellyspawn,>sprdef_changkey,>sprdef_changkeyproj,>sprdef_blackout,>sprdef_lightrestore,>sprdef_blackoutend ; $20-$27
+        .byte   >sprdef_blackoutend,>sprdef_blackoutend,>sprdef_blackoutend,>sprdef_blackoutend,>sprdef_blackoutend,>sprdef_blackoutend,>sprdef_blackoutend,>sprdef_blackoutend ; $28-$2F
+        .byte   >sprdef_press,>sprdef_blocky,>sprdef_blockyph2,>sprdef_mechafire,>sprdef_neometall,>sprdef_genericproj,>sprdef_matasaburo,>sprdef_pipispawn ; $30-$37
+        .byte   >sprdef_pipi,>sprdef_pipidespawn,>sprdef_pipiegg,>sprdef_egghatch,>sprdef_copipi,>sprdef_kaminaricloud,>sprdef_kaminarigoro,>sprdef_kaminarigoro ; $38-$3F
+        .byte   >sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin ; $40-$47
+        .byte   >sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin,>sprdef_goblin ; $48-$4F
+        .byte   >sprdef_goblin,>sprdef_scworm,>sprdef_pressretract,>sprdef_appearblka,>sprdef_appearblkb,>sprdef_appearblkc,>sprdef_neometallflip,>sprdef_crashwall ; $50-$57
+        .byte   >sprdef_heatmanfire,>sprdef_quickboomer,>sprdef_bubblehazard,>sprdef_bubbleshot,>sprdef_metalmanblade,>sprdef_airtornado,>sprdef_crashbomb,>sprdef_crashblast ; $58-$5F
+        .byte   >sprdef_bossdebris,>sprdef_woodmanleaf,>sprdef_woodmantornado,>sprdef_bossbody,>sprdef_bossbodyctrl,>sprdef_dragonbodya,>sprdef_dragonbodyb,>sprdef_dragonpart ; $60-$67
+        .byte   >sprdef_dragonbreath,>sprdef_gutsdozerturret,>sprdef_picopico,>sprdef_wilyball,>sprdef_wilymachshot,>sprdef_boobeamturret,>sprdef_boobeamshot,>sprdef_alienbossshot ; $68-$6F
+        .byte   >sprdef_alienbody,>sprdef_bigfish,>sprdef_flashhaz_72,>sprdef_flashhaz_73,>sprdef_redliquid,>sprdef_pickup_75_unused,>sprdef_largehealth,>sprdef_smallhealth ; $70-$77
+        .byte   >sprdef_largeweapon,>sprdef_smallweapon,>sprdef_etank,>sprdef_extralife,>sprdef_wilygateboss,>sprdef_wilygateopen,>sprdef_wilygateopen,>sprdef_wilygateopen ; $78-$7F
+sprite_def_ptr_hi_wpn:  .byte   >sprdef_wilygateopen,>sprdef_w_anko,>sprdef_w_anko_02,>sprdef_w_anko_02,>sprdef_w_anko_02,>sprdef_w_anko_05,>sprdef_w_anko_05,>sprdef_w_claw ; $00-$07
+        .byte   >sprdef_w_claw,>sprdef_w_stagetrans,>sprdef_w_stagetrans,>sprdef_w_tanishibare,>sprdef_w_kerog,>sprdef_w_petitkerog,>sprdef_w_bubble,>sprdef_w_bossdeath ; $08-$0F
+        .byte   >sprdef_w_anko_10,>sprdef_w_anko_11,>sprdef_w_anko_11,>sprdef_w_crumble,>sprdef_w_laserbeam,>sprdef_w_laserbeam,>sprdef_w_batton,>sprdef_w_robbit ; $10-$17
+        .byte   >sprdef_w_quickboom,>sprdef_w_airtornado1,>sprdef_w_airtornado2,>sprdef_w_atomicfire,>sprdef_w_friender,>sprdef_w_monking,>sprdef_w_kukkuspawn,>sprdef_w_kukkuspawn ; $18-$1F
+        .byte   >sprdef_w_kukkudesp,>sprdef_w_kukkudesp,>sprdef_w_kukkudesp,>sprdef_w_changkey,>sprdef_w_changkeyproj,>sprdef_w_changkeyproj,>sprdef_w_changkeyproj,>sprdef_w_changkeyproj ; $20-$27
+        .byte   >sprdef_w_changkeyproj,>sprdef_w_gear,>sprdef_w_pierrobot,>sprdef_w_flyboy_2b,>sprdef_w_flyboy_2b,>sprdef_w_crashwallvar,>sprdef_w_crashwallvar,>sprdef_w_crashwallvar ; $28-$2F
+        .byte   >sprdef_w_press,>sprdef_w_blocky,>sprdef_w_blockyph2,>sprdef_w_blockyph2,>sprdef_w_neometall,>sprdef_w_genericproj,>sprdef_w_matasaburo,>sprdef_w_pipispawn ; $30-$37
+        .byte   >sprdef_w_pipispawn,>sprdef_w_pipispawn,>sprdef_w_pipiegg,>sprdef_w_egghatch,>sprdef_w_copipi,>sprdef_w_kaminaricloud,>sprdef_w_kaminarigoro,>sprdef_w_kaminaribolt ; $38-$3F
+        .byte   >sprdef_w_goblin,>sprdef_w_goblin,>sprdef_w_goblin,>sprdef_w_goblin,>sprdef_w_goblinhorn,>sprdef_w_petitgoblin,>sprdef_w_springer,>sprdef_w_mole ; $40-$47
+        .byte   >sprdef_w_mole,>sprdef_w_moleshotdn,>sprdef_w_moledespawn,>sprdef_w_moledespawn,>sprdef_w_moledespawn,>sprdef_w_genericproj,>sprdef_w_sniperarmor,>sprdef_w_sniperjoe ; $48-$4F
+        .byte   >sprdef_w_scwormnest,>sprdef_w_scworm,>sprdef_w_scwormnest,>sprdef_w_appearblka,>sprdef_w_appearblka,>sprdef_w_appearblka,>sprdef_w_neometallflip,>sprdef_w_crashwallvar ; $50-$57
+        .byte   >sprdef_w_neometallflip,>sprdef_w_quickboomer,>sprdef_w_bubblehazard,>sprdef_w_bubbleshot,>sprdef_w_metalmanblade,>sprdef_w_airtornado,>sprdef_w_crashbomb,>sprdef_w_crashblast ; $58-$5F
+        .byte   >sprdef_w_bossdebris,>sprdef_w_woodmanleaf,>sprdef_w_woodmantornado,>sprdef_w_bossbody,>sprdef_w_bossbody,>sprdef_w_dragonbodya,>sprdef_w_dragonbodyb,>sprdef_w_friender ; $60-$67
+        .byte   >sprdef_w_dragonbreath,>sprdef_w_gutsdozerturret,>sprdef_w_picopico,>sprdef_w_wilyball,>sprdef_w_wilymachshot,>sprdef_w_boobeamturret,>sprdef_w_boobeamshot,>sprdef_w_genericproj ; $68-$6F
+        .byte   >sprdef_w_alienbody,>sprdef_w_bigfish,>sprdef_w_flashhaz_72,>sprdef_w_flashhaz_72,>sprdef_w_redliquid,>sprdef_w_pickup_75_unused,>sprdef_w_pickup_75_unused,>sprdef_w_smallhealth ; $70-$77
+        .byte   >sprdef_w_largeweapon,>sprdef_w_smallweapon,>sprdef_w_etank,>sprdef_w_extralife,>sprdef_w_wilygateboss,>sprdef_w_wilygateboss,>sprdef_w_wilygateboss,>sprdef_w_7f_unused ; $78-$7F
+
+; ─── Sprite definitions: [max anim index, frame duration, frame IDs...] (DATA_REFERENCE §13) ───
+sprdef_shrink:  ; $FB00  ← sprite_def[$00]
         .byte   $0A,$08,$04,$04,$04,$04,$04,$04
-        .byte   $04,$04,$04,$04,$05,$0A,$08,$09
-        .byte   $09,$09,$09,$09,$09,$09,$09,$09
-        .byte   $09,$09,$0A,$08,$10,$10,$10,$10
-        .byte   $10,$10,$10,$10,$10,$10,$11,$0A
-        .byte   $08,$20,$20,$20,$20,$20
-        .byte   $20,$20,$20
-        .byte   $20,$20,$20
-        .byte   $01,$05
-        .byte   $06,$06
-        .byte   $01,$05
-        .byte   $09,$09
-        .byte   $01,$05
-        .byte   $12
-        .byte   $12,$01,$05,$20,$20,$03,$06,$01
-        .byte   $03,$02,$03,$03,$06,$0A,$0C,$0B
-        .byte   $0C,$03,$06,$0D,$0F,$0E,$0F,$03
-        .byte   $06,$20,$20,$20,$20,$00,$00,$08
-        .byte   $00,$00,$14,$00,$00,$13,$00,$00
-        .byte   $1E,$02,$03,$06,$06,$06,$02,$03
-        .byte   $09,$09,$09,$02,$03,$12,$12,$12
-        .byte   $02,$06,$20,$20,$20,$02,$01,$02
-        .byte   $04,$04,$02,$01,$0B,$09,$09,$02
-        .byte   $01,$0E,$10,$10,$02,$01,$20,$20
-        .byte   $20,$09,$02,$18,$07,$07,$18,$07
-        .byte   $07,$18,$07,$07
-        .byte   $18
-        .byte   $05,$07
-        .byte   $1A,$1A,$1A,$1A,$1A,$1A,$04,$02
-        .byte   $1B,$1C,$1D,$1B,$1B,$01,$08,$15
-        .byte   $16,$01,$08,$19,$19,$01,$08,$1F
-        .byte   $1F,$01,$0A,$17,$21,$01,$0A,$19
-        .byte   $19,$01,$0A,$1F,$1F,$00,$00,$22
-        .byte   $03,$08,$23,$24,$25,$00,$03,$01
-        .byte   $26,$27,$28,$29,$03,$02,$1B,$1D
-        .byte   $1C,$1B,$04,$02,$39,$3A,$3B,$3C
-        .byte   $00,$09,$03,$2F,$4D,$4E,$4D,$4F
-        .byte   $50,$4F,$51,$52,$51,$02,$01,$3D
-        .byte   $3E,$3F,$06,$03,$53,$56,$58,$57
-        .byte   $59,$56,$2E,$02,$05
-        .byte   $48
-        .byte   $49,$4A
-        .byte   $03,$03,$44,$45,$46,$47,$05,$06
-        .byte   $2A,$2B,$2C,$2D,$2C,$2E,$01,$04
-        .byte   $4B,$4C,$08,$06,$30,$31,$32,$33
-        .byte   $34,$35,$36,$37,$38,$0C,$02,$5A
-        .byte   $5B,$5A,$5A,$2E,$5B,$2E,$5A,$39
-        .byte   $3A,$3B,$3C,$00,$09,$02,$5C,$5C
-        .byte   $5D,$5D,$5C,$39,$3A,$3B,$3C,$00
+        .byte   $04,$04,$04,$04,$05
+sprdef_anko:  ; $FB0D  ← sprite_def[$01]
+        .byte   $0A,$08,$09,$09,$09,$09,$09,$09
+        .byte   $09,$09,$09,$09,$09
+sprdef_anko_02:  ; $FB1A  ← sprite_def[$02]
+        .byte   $0A,$08,$10,$10,$10,$10,$10,$10
+        .byte   $10,$10,$10,$10,$11
+sprdef_ankoseg:  ; $FB27  ← sprite_def[$03]
+        .byte   $0A,$08,$20,$20,$20,$20,$20,$20
+        .byte   $20,$20,$20,$20,$20
+sprdef_m_445:  ; $FB34  ← sprite_def[$04]
+        .byte   $01,$05,$06,$06
+sprdef_anko_05:  ; $FB38  ← sprite_def[$05]
+        .byte   $01,$05,$09,$09
+sprdef_deathexplode:  ; $FB3C  ← sprite_def[$06]
+        .byte   $01,$05,$12,$12
+sprdef_claw:  ; $FB40  ← sprite_def[$07]
+        .byte   $01,$05,$20,$20
+sprdef_clawvar:  ; $FB44  ← sprite_def[$08]
+        .byte   $03,$06,$01,$03,$02,$03
+sprdef_stagetrans:  ; $FB4A  ← sprite_def[$09]
+        .byte   $03,$06,$0A,$0C,$0B,$0C
+sprdef_tanishi:  ; $FB50  ← sprite_def[$0A]
+        .byte   $03,$06,$0D,$0F,$0E,$0F
+sprdef_tanishibare:  ; $FB56  ← sprite_def[$0B]
+        .byte   $03,$06,$20,$20,$20,$20
+sprdef_kerog:  ; $FB5C  ← sprite_def[$0C]
+        .byte   $00,$00,$08
+sprdef_petitkerog:  ; $FB5F  ← sprite_def[$0D]
+        .byte   $00,$00,$14
+sprdef_bubble:  ; $FB62  ← sprite_def[$0E]
+        .byte   $00,$00,$13
+sprdef_bossdeath:  ; $FB65  ← sprite_def[$0F]
+        .byte   $00,$00,$1E
+sprdef_anko_10:  ; $FB68  ← sprite_def[$10]
+        .byte   $02,$03,$06,$06,$06
+sprdef_anko_11:  ; $FB6D  ← sprite_def[$11]
+        .byte   $02,$03,$09,$09,$09
+sprdef_railplat:  ; $FB72  ← sprite_def[$12]
+        .byte   $02,$03,$12,$12,$12
+sprdef_crumble:  ; $FB77  ← sprite_def[$13]
+        .byte   $02,$06,$20,$20,$20
+sprdef_laserbeam:  ; $FB7C  ← sprite_def[$14]
+        .byte   $02,$01,$02,$04,$04
+sprdef_metalblade:  ; $FB81  ← sprite_def[$15]
+        .byte   $02,$01,$0B,$09,$09
+sprdef_batton:  ; $FB86  ← sprite_def[$16]
+        .byte   $02,$01,$0E,$10,$10
+sprdef_robbit:  ; $FB8B  ← sprite_def[$17]
+        .byte   $02,$01,$20,$20,$20
+sprdef_quickboom:  ; $FB90  ← sprite_def[$18]
+        .byte   $09,$02,$18,$07,$07,$18,$07,$07
+        .byte   $18,$07,$07,$18
+sprdef_airtornado1:  ; $FB9C  ← sprite_def[$19]
+        .byte   $05,$07,$1A,$1A,$1A,$1A,$1A,$1A
+sprdef_airtornado2:  ; $FBA4  ← sprite_def[$1A]
+        .byte   $04,$02,$1B,$1C,$1D,$1B,$1B
+sprdef_atomicfire:  ; $FBAB  ← sprite_def[$1B]
+        .byte   $01,$08,$15,$16
+sprdef_friender:  ; $FBAF  ← sprite_def[$1C]
+        .byte   $01,$08,$19,$19
+sprdef_monking:  ; $FBB3  ← sprite_def[$1D], sprite_def[$1E]
+        .byte   $01,$08,$1F,$1F
+sprdef_kukku:  ; $FBB7  ← sprite_def[$1F]
+        .byte   $01,$0A,$17,$21
+sprdef_kukkudesp:  ; $FBBB  ← sprite_def[$20]
+        .byte   $01,$0A,$19,$19
+sprdef_tellyspawn:  ; $FBBF  ← sprite_def[$21], sprite_def[$22]
+        .byte   $01,$0A,$1F,$1F
+sprdef_changkey:  ; $FBC3  ← sprite_def[$23]
+        .byte   $00,$00,$22
+sprdef_changkeyproj:  ; $FBC6  ← sprite_def[$24]
+        .byte   $03,$08,$23,$24,$25,$00
+sprdef_blackout:  ; $FBCC  ← sprite_def[$25]
+        .byte   $03,$01,$26,$27,$28,$29
+sprdef_lightrestore:  ; $FBD2  ← sprite_def[$26]
+        .byte   $03,$02,$1B,$1D,$1C,$1B
+sprdef_blackoutend:  ; $FBD8  ← sprite_def[$27], sprite_def[$28], sprite_def[$29], sprite_def[$2A], sprite_def[$2B], sprite_def[$2C], sprite_def[$2D], sprite_def[$2E], sprite_def[$2F]
+        .byte   $04,$02,$39,$3A,$3B,$3C,$00
+sprdef_press:  ; $FBDF  ← sprite_def[$30]
+        .byte   $09,$03,$2F,$4D,$4E,$4D,$4F,$50
+        .byte   $4F,$51,$52,$51
+sprdef_blocky:  ; $FBEB  ← sprite_def[$31]
+        .byte   $02,$01,$3D,$3E,$3F
+sprdef_blockyph2:  ; $FBF0  ← sprite_def[$32]
+        .byte   $06,$03,$53,$56,$58,$57,$59,$56
+        .byte   $2E
+sprdef_mechafire:  ; $FBF9  ← sprite_def[$33]
+        .byte   $02,$05,$48,$49,$4A
+sprdef_neometall:  ; $FBFE  ← sprite_def[$34]
+        .byte   $03,$03,$44,$45,$46,$47
+sprdef_genericproj:  ; $FC04  ← sprite_def[$35]
+        .byte   $05,$06,$2A,$2B,$2C,$2D,$2C,$2E
+sprdef_matasaburo:  ; $FC0C  ← sprite_def[$36]
+        .byte   $01,$04,$4B,$4C
+sprdef_pipispawn:  ; $FC10  ← sprite_def[$37]
+        .byte   $08,$06,$30,$31,$32,$33,$34,$35
+        .byte   $36,$37,$38
+sprdef_pipi:  ; $FC1B  ← sprite_def[$38]
+        .byte   $0C,$02,$5A,$5B,$5A,$5A,$2E,$5B
+        .byte   $2E,$5A,$39,$3A,$3B,$3C,$00
+sprdef_pipidespawn:  ; $FC2A  ← sprite_def[$39]
+        .byte   $09,$02,$5C,$5C,$5D,$5D,$5C,$39
+        .byte   $3A,$3B,$3C,$00
+sprdef_pipiegg:  ; $FC36  ← sprite_def[$3A]
         .byte   $0E,$02,$5E,$5E,$5F,$5F,$5E,$5E
         .byte   $2E,$5F,$2E,$5E,$39,$3A,$3B,$3C
-        .byte   $00,$02,$03,$57,$54,$55,$00,$00
-        .byte   $44,$04,$03,$40,$41,$42,$43,$00
+        .byte   $00
+sprdef_egghatch:  ; $FC47  ← sprite_def[$3B]
+        .byte   $02,$03,$57,$54,$55
+sprdef_copipi:  ; $FC4C  ← sprite_def[$3C]
+        .byte   $00,$00,$44
+sprdef_kaminaricloud:  ; $FC4F  ← sprite_def[$3D]
+        .byte   $04,$03,$40,$41,$42,$43,$00
+sprdef_kaminarigoro:  ; $FC56  ← sprite_def[$3E], sprite_def[$3F]
         .byte   $05,$04,$C3,$C4,$C5,$C6,$C6,$00
+sprdef_goblin:  ; $FC5E  ← sprite_def[$40], sprite_def[$41], sprite_def[$42], sprite_def[$43], sprite_def[$44], sprite_def[$45], sprite_def[$46], sprite_def[$47], sprite_def[$48], sprite_def[$49], sprite_def[$4A], sprite_def[$4B], sprite_def[$4C], sprite_def[$4D], sprite_def[$4E], sprite_def[$4F], sprite_def[$50]
         .byte   $0F,$02,$65,$62,$62,$61,$61,$60
         .byte   $63,$64,$63,$64,$63,$64,$63,$64
-        .byte   $63,$60,$03,$06,$60,$66,$67,$67
+        .byte   $63,$60
+sprdef_scworm:  ; $FC70  ← sprite_def[$51]
+        .byte   $03,$06,$60,$66,$67,$67
+sprdef_pressretract:  ; $FC76  ← sprite_def[$52]
         .byte   $0D,$02,$63,$64,$63,$68,$69,$6A
         .byte   $6B,$6C,$6D,$6B,$6A,$69,$68,$62
-        .byte   $01,$12,$62,$62,$09,$05,$7C,$6E
-        .byte   $6F,$70,$71,$72,$73,$74,$75,$70
-        .byte   $01,$06,$7C,$7B,$01,$10,$76,$76
-        .byte   $01,$7E,$77,$77,$03,$05,$78,$7A
-        .byte   $79,$7A,$01,$24,$7C,$7C,$07,$06
-        .byte   $84,$7D,$7E,$7F,$80,$81,$82,$7F
-        .byte   $02,$10,$7D,$83,$83,$01,$08,$86
-        .byte   $87,$00,$00,$84,$01,$12,$85,$85
+sprdef_appearblka:  ; $FC86  ← sprite_def[$53]
+        .byte   $01,$12,$62,$62
+sprdef_appearblkb:  ; $FC8A  ← sprite_def[$54]
+        .byte   $09,$05,$7C,$6E,$6F,$70,$71,$72
+        .byte   $73,$74,$75,$70
+sprdef_appearblkc:  ; $FC96  ← sprite_def[$55]
+        .byte   $01,$06,$7C,$7B
+sprdef_neometallflip:  ; $FC9A  ← sprite_def[$56]
+        .byte   $01,$10,$76,$76
+sprdef_crashwall:  ; $FC9E  ← sprite_def[$57]
+        .byte   $01,$7E,$77,$77
+sprdef_heatmanfire:  ; $FCA2  ← sprite_def[$58]
+        .byte   $03,$05,$78,$7A,$79,$7A
+sprdef_quickboomer:  ; $FCA8  ← sprite_def[$59]
+        .byte   $01,$24,$7C,$7C
+sprdef_bubblehazard:  ; $FCAC  ← sprite_def[$5A]
+        .byte   $07,$06,$84,$7D,$7E,$7F,$80,$81
+        .byte   $82,$7F
+sprdef_bubbleshot:  ; $FCB6  ← sprite_def[$5B]
+        .byte   $02,$10,$7D,$83,$83
+sprdef_metalmanblade:  ; $FCBB  ← sprite_def[$5C]
+        .byte   $01,$08,$86,$87
+sprdef_airtornado:  ; $FCBF  ← sprite_def[$5D]
+        .byte   $00,$00,$84
+sprdef_crashbomb:  ; $FCC2  ← sprite_def[$5E]
+        .byte   $01,$12,$85,$85
+sprdef_crashblast:  ; $FCC6  ← sprite_def[$5F]
         .byte   $08,$06,$88,$89,$8A,$8B,$8C,$8D
-        .byte   $8E,$8F,$90,$05,$08,$91,$91,$91
-        .byte   $91,$92,$93,$01,$08
-        .byte   $91,$96
-        .byte   $05,$05
-        .byte   $94,$95
-        .byte   $94,$97
-        .byte   $98
-        .byte   $97,$05,$08,$9C,$99,$99,$99,$9A
-        .byte   $9B,$03,$06,$9F,$A0,$A1,$A0,$02
-        .byte   $08,$9C
-        .byte   $9D,$9E,$0F
-        .byte   $03,$A5
-        .byte   $A2,$A3
-        .byte   $A4,$A3
-        .byte   $A4,$A2
-        .byte   $A3,$A4,$A3,$A4,$A2,$A3,$A4,$A3
-        .byte   $A2,$03,$03,$A6,$A3,$A4,$A3,$00
-        .byte   $00,$A5,$03,$08,$AA,$A7,$A8,$A9
-        .byte   $03,$06,$AD,$AE,$AF,$AE,$02,$06
-        .byte   $AA,$AB,$AC,$0B,$06,$B4,$B3,$B0
-        .byte   $B1,$B2,$B1,$B2,$B1,$B2,$B1,$B2
-        .byte   $B0,$01,$06
-        .byte   $B1,$B2
-        .byte   $04,$06,$B0,$B3,$B4,$B3,$B0,$03
-        .byte   $08,$B0,$B5
-        .byte   $B6,$B0
-        .byte   $01,$18
-        .byte   $B7,$B8,$01,$08,$B9,$BA,$01,$02
-        .byte   $BC,$BD,$01,$04,$BE,$BF,$02,$06
-        .byte   $C0,$C1,$C2,$01,$04,$C7,$C8,$03
-        .byte   $1C,$C9,$CA,$CB,$CC,$01,$05,$CC
-        .byte   $CD,$00,$00,$BB,$01,$06,$CE,$CF
-        .byte   $00,$00,$D0,$01,$0C,$D2,$D1,$01
-        .byte   $08,$D3,$D4,$07,$02,$45,$45,$46
-        .byte   $46,$45,$47,$45,$48,$07,$02,$45
-        .byte   $45,$46,$46,$45,$47,$45,$48,$01
-        .byte   $05,$39,$3A,$04,$02,$79,$7A,$7B
-        .byte   $7C,$00,$01,$06,$69,$6A,$05,$05
-        .byte   $61,$62,$61,$63,$64,$63,$00,$00
-        .byte   $7D,$0C,$06,$3E,$3F,$3E,$3F,$3E
-        .byte   $3F,$3E,$40,$3E,$41,$42,$42,$41
-        .byte   $01,$02,$44,$43,$01,$04,$7E,$7F
-        .byte   $01,$08,$80,$81,$04,$08,$82,$83
-        .byte   $82,$83,$82,$01,$06,$84,$85,$00
-        .byte   $00,$86,$00,$00,$87,$08,$04,$2C
-        .byte   $2C,$2D,$2E,$2F,$30,$31,$32,$30
-        .byte   $03,$04,$3B,$3C
-        .byte   $3D,$3C,$00
-        .byte   $00
-        .byte   $88,$08,$06,$89,$8A,$89,$8B,$8C
-        .byte   $89,$8B,$8C,$89,$06,$04,$8D,$8E
-        .byte   $8D,$8E,$8D,$8E,$8D,$01,$04,$8F
-        .byte   $90,$03
-        .byte   $00
-        .byte   $91,$92
-        .byte   $93,$93,$09,$0A,$22,$20,$20,$1F
-        .byte   $1E,$1D,$1E,$1F,$21,$22,$03,$04
-        .byte   $01,$02,$03,$02,$05,$06,$04,$05
-        .byte   $06,$07,$08,$09,$05,$06,$71,$72
-        .byte   $71,$74,$73,$73,$01,$04,$75,$76
-        .byte   $01,$06,$13,$14,$01,$08,$11,$12
+        .byte   $8E,$8F,$90
+sprdef_bossdebris:  ; $FCD1  ← sprite_def[$60]
+        .byte   $05,$08,$91,$91,$91,$91,$92,$93
+sprdef_woodmanleaf:  ; $FCD9  ← sprite_def[$61]
+        .byte   $01,$08,$91,$96
+sprdef_woodmantornado:  ; $FCDD  ← sprite_def[$62]
+        .byte   $05,$05,$94,$95,$94,$97,$98,$97
+sprdef_bossbody:  ; $FCE5  ← sprite_def[$63]
+        .byte   $05,$08,$9C,$99,$99,$99,$9A,$9B
+sprdef_bossbodyctrl:  ; $FCED  ← sprite_def[$64]
+        .byte   $03,$06,$9F,$A0,$A1,$A0
+sprdef_dragonbodya:  ; $FCF3  ← sprite_def[$65]
+        .byte   $02,$08,$9C,$9D,$9E
+sprdef_dragonbodyb:  ; $FCF8  ← sprite_def[$66]
+        .byte   $0F,$03,$A5,$A2,$A3,$A4,$A3,$A4
+        .byte   $A2,$A3,$A4,$A3,$A4,$A2,$A3,$A4
+        .byte   $A3,$A2
+sprdef_dragonpart:  ; $FD0A  ← sprite_def[$67]
+        .byte   $03,$03,$A6,$A3,$A4,$A3
+sprdef_dragonbreath:  ; $FD10  ← sprite_def[$68]
+        .byte   $00,$00,$A5
+sprdef_gutsdozerturret:  ; $FD13  ← sprite_def[$69]
+        .byte   $03,$08,$AA,$A7,$A8,$A9
+sprdef_picopico:  ; $FD19  ← sprite_def[$6A]
+        .byte   $03,$06,$AD,$AE,$AF,$AE
+sprdef_wilyball:  ; $FD1F  ← sprite_def[$6B]
+        .byte   $02,$06,$AA,$AB,$AC
+sprdef_wilymachshot:  ; $FD24  ← sprite_def[$6C]
+        .byte   $0B,$06,$B4,$B3,$B0,$B1,$B2,$B1
+        .byte   $B2,$B1,$B2,$B1,$B2,$B0
+sprdef_boobeamturret:  ; $FD32  ← sprite_def[$6D]
+        .byte   $01,$06,$B1,$B2
+sprdef_boobeamshot:  ; $FD36  ← sprite_def[$6E]
+        .byte   $04,$06,$B0,$B3,$B4,$B3,$B0
+sprdef_alienbossshot:  ; $FD3D  ← sprite_def[$6F]
+        .byte   $03,$08,$B0,$B5,$B6,$B0
+sprdef_alienbody:  ; $FD43  ← sprite_def[$70]
+        .byte   $01,$18,$B7,$B8
+sprdef_bigfish:  ; $FD47  ← sprite_def[$71]
+        .byte   $01,$08,$B9,$BA
+sprdef_flashhaz_72:  ; $FD4B  ← sprite_def[$72]
+        .byte   $01,$02,$BC,$BD
+sprdef_flashhaz_73:  ; $FD4F  ← sprite_def[$73]
+        .byte   $01,$04,$BE,$BF
+sprdef_redliquid:  ; $FD53  ← sprite_def[$74]
+        .byte   $02,$06,$C0,$C1,$C2
+sprdef_pickup_75_unused:  ; $FD58  ← sprite_def[$75]
+        .byte   $01,$04,$C7,$C8
+sprdef_largehealth:  ; $FD5C  ← sprite_def[$76]
+        .byte   $03,$1C,$C9,$CA,$CB,$CC
+sprdef_smallhealth:  ; $FD62  ← sprite_def[$77]
+        .byte   $01,$05,$CC,$CD
+sprdef_largeweapon:  ; $FD66  ← sprite_def[$78]
+        .byte   $00,$00,$BB
+sprdef_smallweapon:  ; $FD69  ← sprite_def[$79]
+        .byte   $01,$06,$CE,$CF
+sprdef_etank:  ; $FD6D  ← sprite_def[$7A]
+        .byte   $00,$00,$D0
+sprdef_extralife:  ; $FD70  ← sprite_def[$7B]
+        .byte   $01,$0C,$D2,$D1
+sprdef_wilygateboss:  ; $FD74  ← sprite_def[$7C]
+        .byte   $01,$08,$D3,$D4
+sprdef_wilygateopen:  ; $FD78  ← sprite_def[$7D], sprite_def[$7E], sprite_def[$7F], sprite_def_wpn[$00]
+        .byte   $07,$02,$45,$45,$46,$46,$45,$47
+        .byte   $45,$48
+sprdef_w_anko:  ; $FD82  ← sprite_def_wpn[$01]
+        .byte   $07,$02,$45,$45,$46,$46,$45,$47
+        .byte   $45,$48
+sprdef_w_anko_02:  ; $FD8C  ← sprite_def_wpn[$02], sprite_def_wpn[$03], sprite_def_wpn[$04]
+        .byte   $01,$05,$39,$3A
+sprdef_w_anko_05:  ; $FD90  ← sprite_def_wpn[$05], sprite_def_wpn[$06]
+        .byte   $04,$02,$79,$7A,$7B,$7C,$00
+sprdef_w_claw:  ; $FD97  ← sprite_def_wpn[$07], sprite_def_wpn[$08]
+        .byte   $01,$06,$69,$6A
+sprdef_w_stagetrans:  ; $FD9B  ← sprite_def_wpn[$09], sprite_def_wpn[$0A]
+        .byte   $05,$05,$61,$62,$61,$63,$64,$63
+sprdef_w_tanishibare:  ; $FDA3  ← sprite_def_wpn[$0B]
+        .byte   $00,$00,$7D
+sprdef_w_kerog:  ; $FDA6  ← sprite_def_wpn[$0C]
+        .byte   $0C,$06,$3E,$3F,$3E,$3F,$3E,$3F
+        .byte   $3E,$40,$3E,$41,$42,$42,$41
+sprdef_w_petitkerog:  ; $FDB5  ← sprite_def_wpn[$0D]
+        .byte   $01,$02,$44,$43
+sprdef_w_bubble:  ; $FDB9  ← sprite_def_wpn[$0E]
+        .byte   $01,$04,$7E,$7F
+sprdef_w_bossdeath:  ; $FDBD  ← sprite_def_wpn[$0F]
+        .byte   $01,$08,$80,$81
+sprdef_w_anko_10:  ; $FDC1  ← sprite_def_wpn[$10]
+        .byte   $04,$08,$82,$83,$82,$83,$82
+sprdef_w_anko_11:  ; $FDC8  ← sprite_def_wpn[$11], sprite_def_wpn[$12]
+        .byte   $01,$06,$84,$85
+sprdef_w_crumble:  ; $FDCC  ← sprite_def_wpn[$13]
+        .byte   $00,$00,$86
+sprdef_w_laserbeam:  ; $FDCF  ← sprite_def_wpn[$14], sprite_def_wpn[$15]
+        .byte   $00,$00,$87
+sprdef_w_batton:  ; $FDD2  ← sprite_def_wpn[$16]
+        .byte   $08,$04,$2C,$2C,$2D,$2E,$2F,$30
+        .byte   $31,$32,$30
+sprdef_w_robbit:  ; $FDDD  ← sprite_def_wpn[$17]
+        .byte   $03,$04,$3B,$3C,$3D,$3C
+sprdef_w_quickboom:  ; $FDE3  ← sprite_def_wpn[$18]
+        .byte   $00,$00,$88
+sprdef_w_airtornado1:  ; $FDE6  ← sprite_def_wpn[$19]
+        .byte   $08,$06,$89,$8A,$89,$8B,$8C,$89
+        .byte   $8B,$8C,$89
+sprdef_w_airtornado2:  ; $FDF1  ← sprite_def_wpn[$1A]
+        .byte   $06,$04,$8D,$8E,$8D,$8E,$8D,$8E
+        .byte   $8D
+sprdef_w_atomicfire:  ; $FDFA  ← sprite_def_wpn[$1B]
+        .byte   $01,$04,$8F,$90
+sprdef_w_friender:  ; $FDFE  ← sprite_def_wpn[$1C], sprite_def_wpn[$67]
+        .byte   $03,$00,$91,$92,$93,$93
+sprdef_w_monking:  ; $FE04  ← sprite_def_wpn[$1D]
+        .byte   $09,$0A,$22,$20,$20,$1F,$1E,$1D
+        .byte   $1E,$1F,$21,$22
+sprdef_w_kukkuspawn:  ; $FE10  ← sprite_def_wpn[$1E], sprite_def_wpn[$1F]
+        .byte   $03,$04,$01,$02,$03,$02
+sprdef_w_kukkudesp:  ; $FE16  ← sprite_def_wpn[$20], sprite_def_wpn[$21], sprite_def_wpn[$22]
+        .byte   $05,$06,$04,$05,$06,$07,$08,$09
+sprdef_w_changkey:  ; $FE1E  ← sprite_def_wpn[$23]
+        .byte   $05,$06,$71,$72,$71,$74,$73,$73
+sprdef_w_changkeyproj:  ; $FE26  ← sprite_def_wpn[$24], sprite_def_wpn[$25], sprite_def_wpn[$26], sprite_def_wpn[$27], sprite_def_wpn[$28]
+        .byte   $01,$04,$75,$76
+sprdef_w_gear:  ; $FE2A  ← sprite_def_wpn[$29]
+        .byte   $01,$06,$13,$14
+sprdef_w_pierrobot:  ; $FE2E  ← sprite_def_wpn[$2A]
+        .byte   $01,$08,$11,$12
+sprdef_w_flyboy_2b:  ; $FE32  ← sprite_def_wpn[$2B], sprite_def_wpn[$2C]
         .byte   $0B,$04,$0D,$0E,$0F,$0D,$0E,$0F
-        .byte   $0D,$0E,$0F,$10,$0F,$10,$00,$00
-        .byte   $94,$00,$00,$65,$0F,$06,$6B,$6C
-        .byte   $6B,$6D,$6B,$6C,$6B,$6D,$6E,$6C
-        .byte   $6B,$6D,$6D,$6F,$66,$66,$00,$00
-        .byte   $70,$05,$06,$5D,$5E,$5E,$5F,$60
-        .byte   $5F,$00,$00,$95,$10,$03,$29,$2A
+        .byte   $0D,$0E,$0F,$10,$0F,$10
+sprdef_w_crashwallvar:  ; $FE40  ← sprite_def_wpn[$2D], sprite_def_wpn[$2E], sprite_def_wpn[$2F], sprite_def_wpn[$57]
+        .byte   $00,$00,$94
+sprdef_w_press:  ; $FE43  ← sprite_def_wpn[$30]
+        .byte   $00,$00,$65
+sprdef_w_blocky:  ; $FE46  ← sprite_def_wpn[$31]
+        .byte   $0F,$06,$6B,$6C,$6B,$6D,$6B,$6C
+        .byte   $6B,$6D,$6E,$6C,$6B,$6D,$6D,$6F
+        .byte   $66,$66
+sprdef_w_blockyph2:  ; $FE58  ← sprite_def_wpn[$32], sprite_def_wpn[$33]
+        .byte   $00,$00,$70
+sprdef_w_neometall:  ; $FE5B  ← sprite_def_wpn[$34]
+        .byte   $05,$06,$5D,$5E,$5E,$5F,$60,$5F
+sprdef_w_genericproj:  ; $FE63  ← sprite_def_wpn[$35], sprite_def_wpn[$4D], sprite_def_wpn[$6F]
+        .byte   $00,$00,$95
+sprdef_w_matasaburo:  ; $FE66  ← sprite_def_wpn[$36]
+        .byte   $10,$03,$29,$2A,$2B,$2A,$2B,$2A
         .byte   $2B,$2A,$2B,$2A,$2B,$2A,$2B,$2A
-        .byte   $2B,$2A,$2B,$2A,$2B,$2A,$2B,$03
-        .byte   $04,$15,$16,$15,$17,$00,$00,$18
-        .byte   $00,$00,$19,$01,$04,$1B,$1C,$04
-        .byte   $08,$23,$24,$23,$25,$25,$01,$03
-        .byte   $27,$28,$00,$00,$26,$01,$08,$96
-        .byte   $97,$00,$00,$98,$02,$08,$0A,$0B
-        .byte   $0C,$05,$04,$99,$9A,$9B,$9C,$9D
-        .byte   $9A,$02,$0A,$49,$4A,$4B,$02,$0A
-        .byte   $4C,$4D,$4E,$0A,$04,$57,$58,$59
-        .byte   $5A,$5B,$5C,$5B,$5A,$59,$58,$57
-        .byte   $03,$08,$52,$53,$54,$53,$01,$04
-        .byte   $55,$56,$00,$00,$9E,$0F,$02,$9F
-        .byte   $9F,$A0,$A0,$A2,$A2,$A1,$A1,$A3
-        .byte   $A3,$A1,$79,$7A,$7B,$7C,$00,$05
-        .byte   $06,$A4,$A5,$A6,$A7,$A8,$A5,$02
-        .byte   $04,$B4,$B5,$B6,$03,$03,$B7,$B8
-        .byte   $B9,$BA,$02,$04,$BB,$BC
-        .byte   $BD,$01,$04
-        .byte   $BE,$BF,$01
-        .byte   $03
-        .byte   $C0,$C1
-        .byte   $02
-        .byte   $01,$C2
-        .byte   $C3,$C4,$06,$04
-        .byte   $C5,$C6
-        .byte   $C7,$C8,$C7,$04,$00,$79,$7A,$7B
-        .byte   $7C,$00,$03,$01,$79,$7A,$7B,$7C
-        .byte   $03,$03,$C9,$CA,$CB,$CC,$04,$02
-        .byte   $CD,$CE,$CF,$D0,$D1,$00,$00,$D2
-        .byte   $01,$02,$D3,$D4,$01,$05,$D6,$D5
-        .byte   $01,$03,$D7,$D8,$00,$00,$D9,$06
-        .byte   $04,$33,$34,$35,$36,$37,$38,$37
-        .byte   $01,$02,$7A,$79,$00,$00,$68,$06
-        .byte   $04,$4F,$50,$51,$DA,$DA,$DB,$DA
-        .byte   $00,$00,$DC,$01,$04,$DD,$DE,$01
-        .byte   $08,$77,$78,$07,$04,$DF,$E0,$DF
-        .byte   $E1,$E2,$E2,$E3,$E1,$03,$05,$E6
-        .byte   $E4,$E5,$00,$01,$04,$A9,$AA,$01
-        .byte   $04,$AB,$AC,$01,$04,$AD,$AE,$01
-        .byte   $04,$AF,$B0,$01,$04
-        .byte   $B1,$B2
-        .byte   $00
-        .byte   $00,$B3,$00,$00,$67,$FF,$FF,$FF
+        .byte   $2B,$2A,$2B
+sprdef_w_pipispawn:  ; $FE79  ← sprite_def_wpn[$37], sprite_def_wpn[$38], sprite_def_wpn[$39]
+        .byte   $03,$04,$15,$16,$15,$17
+sprdef_w_pipiegg:  ; $FE7F  ← sprite_def_wpn[$3A]
+        .byte   $00,$00,$18
+sprdef_w_egghatch:  ; $FE82  ← sprite_def_wpn[$3B]
+        .byte   $00,$00,$19
+sprdef_w_copipi:  ; $FE85  ← sprite_def_wpn[$3C]
+        .byte   $01,$04,$1B,$1C
+sprdef_w_kaminaricloud:  ; $FE89  ← sprite_def_wpn[$3D]
+        .byte   $04,$08,$23,$24,$23,$25,$25
+sprdef_w_kaminarigoro:  ; $FE90  ← sprite_def_wpn[$3E]
+        .byte   $01,$03,$27,$28
+sprdef_w_kaminaribolt:  ; $FE94  ← sprite_def_wpn[$3F]
+        .byte   $00,$00,$26
+sprdef_w_goblin:  ; $FE97  ← sprite_def_wpn[$40], sprite_def_wpn[$41], sprite_def_wpn[$42], sprite_def_wpn[$43]
+        .byte   $01,$08,$96,$97
+sprdef_w_goblinhorn:  ; $FE9B  ← sprite_def_wpn[$44]
+        .byte   $00,$00,$98
+sprdef_w_petitgoblin:  ; $FE9E  ← sprite_def_wpn[$45]
+        .byte   $02,$08,$0A,$0B,$0C
+sprdef_w_springer:  ; $FEA3  ← sprite_def_wpn[$46]
+        .byte   $05,$04,$99,$9A,$9B,$9C,$9D,$9A
+sprdef_w_mole:  ; $FEAB  ← sprite_def_wpn[$47], sprite_def_wpn[$48]
+        .byte   $02,$0A,$49,$4A,$4B
+sprdef_w_moleshotdn:  ; $FEB0  ← sprite_def_wpn[$49]
+        .byte   $02,$0A,$4C,$4D,$4E
+sprdef_w_moledespawn:  ; $FEB5  ← sprite_def_wpn[$4A], sprite_def_wpn[$4B], sprite_def_wpn[$4C]
+        .byte   $0A,$04,$57,$58,$59,$5A,$5B,$5C
+        .byte   $5B,$5A,$59,$58,$57
+sprdef_w_sniperarmor:  ; $FEC2  ← sprite_def_wpn[$4E]
+        .byte   $03,$08,$52,$53,$54,$53
+sprdef_w_sniperjoe:  ; $FEC8  ← sprite_def_wpn[$4F]
+        .byte   $01,$04,$55,$56
+sprdef_w_scwormnest:  ; $FECC  ← sprite_def_wpn[$50], sprite_def_wpn[$52]
+        .byte   $00,$00,$9E
+sprdef_w_scworm:  ; $FECF  ← sprite_def_wpn[$51]
+        .byte   $0F,$02,$9F,$9F,$A0,$A0,$A2,$A2
+        .byte   $A1,$A1,$A3,$A3,$A1,$79,$7A,$7B
+        .byte   $7C,$00
+sprdef_w_appearblka:  ; $FEE1  ← sprite_def_wpn[$53], sprite_def_wpn[$54], sprite_def_wpn[$55]
+        .byte   $05,$06,$A4,$A5,$A6,$A7,$A8,$A5
+sprdef_w_neometallflip:  ; $FEE9  ← sprite_def_wpn[$56], sprite_def_wpn[$58]
+        .byte   $02,$04,$B4,$B5,$B6
+sprdef_w_quickboomer:  ; $FEEE  ← sprite_def_wpn[$59]
+        .byte   $03,$03,$B7,$B8,$B9,$BA
+sprdef_w_bubblehazard:  ; $FEF4  ← sprite_def_wpn[$5A]
+        .byte   $02,$04,$BB,$BC,$BD
+sprdef_w_bubbleshot:  ; $FEF9  ← sprite_def_wpn[$5B]
+        .byte   $01,$04,$BE,$BF
+sprdef_w_metalmanblade:  ; $FEFD  ← sprite_def_wpn[$5C]
+        .byte   $01,$03,$C0,$C1
+sprdef_w_airtornado:  ; $FF01  ← sprite_def_wpn[$5D]
+        .byte   $02,$01,$C2,$C3,$C4
+sprdef_w_crashbomb:  ; $FF06  ← sprite_def_wpn[$5E]
+        .byte   $06,$04,$C5,$C6,$C7,$C8,$C7
+sprdef_w_crashblast:  ; $FF0D  ← sprite_def_wpn[$5F]
+        .byte   $04,$00,$79,$7A,$7B,$7C,$00
+sprdef_w_bossdebris:  ; $FF14  ← sprite_def_wpn[$60]
+        .byte   $03,$01,$79,$7A,$7B,$7C
+sprdef_w_woodmanleaf:  ; $FF1A  ← sprite_def_wpn[$61]
+        .byte   $03,$03,$C9,$CA,$CB,$CC
+sprdef_w_woodmantornado:  ; $FF20  ← sprite_def_wpn[$62]
+        .byte   $04,$02,$CD,$CE,$CF,$D0,$D1
+sprdef_w_bossbody:  ; $FF27  ← sprite_def_wpn[$63], sprite_def_wpn[$64]
+        .byte   $00,$00,$D2
+sprdef_w_dragonbodya:  ; $FF2A  ← sprite_def_wpn[$65]
+        .byte   $01,$02,$D3,$D4
+sprdef_w_dragonbodyb:  ; $FF2E  ← sprite_def_wpn[$66]
+        .byte   $01,$05,$D6,$D5
+sprdef_w_dragonbreath:  ; $FF32  ← sprite_def_wpn[$68]
+        .byte   $01,$03,$D7,$D8
+sprdef_w_gutsdozerturret:  ; $FF36  ← sprite_def_wpn[$69]
+        .byte   $00,$00,$D9
+sprdef_w_picopico:  ; $FF39  ← sprite_def_wpn[$6A]
+        .byte   $06,$04,$33,$34,$35,$36,$37,$38
+        .byte   $37
+sprdef_w_wilyball:  ; $FF42  ← sprite_def_wpn[$6B]
+        .byte   $01,$02,$7A,$79
+sprdef_w_wilymachshot:  ; $FF46  ← sprite_def_wpn[$6C]
+        .byte   $00,$00,$68
+sprdef_w_boobeamturret:  ; $FF49  ← sprite_def_wpn[$6D]
+        .byte   $06,$04,$4F,$50,$51,$DA,$DA,$DB
+        .byte   $DA
+sprdef_w_boobeamshot:  ; $FF52  ← sprite_def_wpn[$6E]
+        .byte   $00,$00,$DC
+sprdef_w_alienbody:  ; $FF55  ← sprite_def_wpn[$70]
+        .byte   $01,$04,$DD,$DE
+sprdef_w_bigfish:  ; $FF59  ← sprite_def_wpn[$71]
+        .byte   $01,$08,$77,$78
+sprdef_w_flashhaz_72:  ; $FF5D  ← sprite_def_wpn[$72], sprite_def_wpn[$73]
+        .byte   $07,$04,$DF,$E0,$DF,$E1,$E2,$E2
+        .byte   $E3,$E1
+sprdef_w_redliquid:  ; $FF67  ← sprite_def_wpn[$74]
+        .byte   $03,$05,$E6,$E4,$E5,$00
+sprdef_w_pickup_75_unused:  ; $FF6D  ← sprite_def_wpn[$75], sprite_def_wpn[$76]
+        .byte   $01,$04,$A9,$AA
+sprdef_w_smallhealth:  ; $FF71  ← sprite_def_wpn[$77]
+        .byte   $01,$04,$AB,$AC
+sprdef_w_largeweapon:  ; $FF75  ← sprite_def_wpn[$78]
+        .byte   $01,$04,$AD,$AE
+sprdef_w_smallweapon:  ; $FF79  ← sprite_def_wpn[$79]
+        .byte   $01,$04,$AF,$B0
+sprdef_w_etank:  ; $FF7D  ← sprite_def_wpn[$7A]
+        .byte   $01,$04,$B1,$B2
+sprdef_w_extralife:  ; $FF81  ← sprite_def_wpn[$7B]
+        .byte   $00,$00,$B3
+sprdef_w_wilygateboss:  ; $FF84  ← sprite_def_wpn[$7C], sprite_def_wpn[$7D], sprite_def_wpn[$7E]
+        .byte   $00,$00,$67
+sprdef_w_7f_unused:  ; $FF87  ← sprite_def_wpn[$7F] (dead slot: points into $FF padding)
+        .byte   $FF,$FF,$FF   ; padding
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
         .byte   $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF

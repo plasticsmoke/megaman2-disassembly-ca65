@@ -147,16 +147,16 @@ clear_ram_loop:  sta     (temp_00),y        ; zero out RAM page
         sta     mmc1_shift_register
         lsr     a
         sta     mmc1_shift_register
-        lda     #$1F
-        sta     $DFFF
+        lda     #$1F                    ; MMC1 CHR bank 1 = $1F (5 serial writes; unused with 8 KB CHR-RAM)
+        sta     MMC1_CHR1_W
         lsr     a
-        sta     $DFFF
+        sta     MMC1_CHR1_W
         lsr     a
-        sta     $DFFF
+        sta     MMC1_CHR1_W
         lsr     a
-        sta     $DFFF
+        sta     MMC1_CHR1_W
         lsr     a
-        sta     $DFFF
+        sta     MMC1_CHR1_W
         lda     #$03
         sta     current_lives
         lda     #$00

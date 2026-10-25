@@ -220,6 +220,37 @@ ENTITY_WILY_GATE_BOSS = $7C     ; Wily 4 boss-rematch gate indicator (per defeat
 ENTITY_WILY_GATE_OPEN = $7D     ; Wily 4 gate "all defeated" indicator (boss_mode_flag = $FF)
 ENTITY_WILY_GATE_BG = $7E       ; Wily 4 gate background entity (slot $0E, single instance)
 
+; ─── Stage bank data layout (bank = current_stage AND 7, mapped at $8000) ───
+; See DATA_REFERENCE §6. Spawn arrays are 1-indexed (code reads BASE-1,y).
+STAGE_METATILE_ATTR   = $8400   ; one attribute byte per metatile
+STAGE_SCREEN_FLAGS    = $B400   ; per-screen connectivity flags
+STAGE_SCREEN_CHR_IDX  = $B42C   ; per-screen CHR overlay / sprite palette set index
+STAGE_CHR_OVERLAY     = $B460   ; enemy CHR overlay list (src_page, src_bank) pairs
+STAGE_SPRITE_PAL      = $B46C   ; sprite palette sets, 6 bytes each
+STAGE_SPAWN_SCREEN    = $B600   ; primary spawn: screen
+STAGE_SPAWN_X         = $B700   ; primary spawn: X
+STAGE_SPAWN_Y         = $B800   ; primary spawn: Y
+STAGE_SPAWN_TYPE      = $B900   ; primary spawn: entity type
+STAGE_SPAWN2_SCREEN   = $BA00   ; secondary (persistent) spawn: screen
+STAGE_SPAWN2_X        = $BA40   ; secondary spawn: X
+STAGE_SPAWN2_Y        = $BA80   ; secondary spawn: Y
+STAGE_SPAWN2_TYPE     = $BAC0   ; secondary spawn: entity type
+STAGE_CKPT_LAND_Y     = $BB00   ; checkpoint tables, 6 entries each
+STAGE_CKPT_SCREEN     = $BB06
+STAGE_CKPT_SPAWN_IDX  = $BB0C
+STAGE_CKPT_SPAWN2_IDX = $BB12
+STAGE_CKPT_MT_PTR_HI  = $BB18
+STAGE_CKPT_MT_PTR_LO  = $BB1E
+STAGE_CKPT_COL_PTR_HI = $BB24
+STAGE_CKPT_COL_PTR_LO = $BB2A
+STAGE_CKPT_CUR_SCREEN = $BB30
+STAGE_CKPT_SCROLL_LO  = $BB36
+STAGE_CKPT_SCROLL_HI  = $BB3C
+STAGE_CHR_LIST_RM     = $BC00   ; CHR upload list, Robot Master stage
+STAGE_CHR_LIST_WILY   = $BD00   ; CHR upload list, Wily stage
+STAGE_PALETTE_RM      = $BE00   ; palette block, Robot Master stage
+STAGE_PALETTE_WILY    = $BF00   ; palette block, Wily stage
+
 ; ─── Fixed bank entry points ─────────────────────────────────────────────────
 ; These are called by all banks via the fixed bank
 BANK_SWITCH         = $C000     ; PRG bank switch (A = bank number)

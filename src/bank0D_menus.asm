@@ -966,523 +966,364 @@ boss_intro_frame_index:  .byte   $03,$02,$02,$01,$01,$00
 ; =============================================================================
 ; Projectile Sprite Pointer Tables — lo/hi address for each frame
 ; =============================================================================
-boss_intro_sprite_ptr_lo:  .byte   $3F,$78,$A9,$D2,$FF,$28,$59,$8A
-        .byte   $BB,$EC,$1D,$4E,$83,$B8
-        .byte   $ED,$1E,$4F
-        .byte   $84,$BD
-        .byte   $F2,$27,$5C,$91,$CA,$EF,$1C,$41
-        .byte   $6A,$AF
-        .byte   $F8
-        .byte   $41,$8E
-        .byte   $BB,$F0,$25,$5E,$9F,$DC,$1D,$62
-        .byte   $A7
-boss_intro_sprite_ptr_hi:  .byte   $88
-        .byte   $88
-        .byte   $88
-        .byte   $88
-        .byte   $88
-        .byte   $89,$89,$89,$89,$89,$8A,$8A,$8A
-        .byte   $8A,$8A,$8B,$8B,$8B,$8B,$8B,$8C
-        .byte   $8C,$8C,$8C,$8C,$8D,$8D
+boss_intro_sprite_ptr_lo:  .byte   <boss_intro_frame_00,<boss_intro_frame_01,<boss_intro_frame_02,<boss_intro_frame_03,<boss_intro_frame_04,<boss_intro_frame_05,<boss_intro_frame_06,<boss_intro_frame_07 ; $00-$07
+        .byte   <boss_intro_frame_08,<boss_intro_frame_09,<boss_intro_frame_0A,<boss_intro_frame_0B,<boss_intro_frame_0C,<boss_intro_frame_0D,<boss_intro_frame_0E,<boss_intro_frame_0F ; $08-$0F
+        .byte   <boss_intro_frame_10,<boss_intro_frame_11,<boss_intro_frame_12,<boss_intro_frame_13,<boss_intro_frame_14,<boss_intro_frame_15,<boss_intro_frame_16,<boss_intro_frame_17 ; $10-$17
+        .byte   <boss_intro_frame_18,<boss_intro_frame_19,<boss_intro_frame_1A,<boss_intro_frame_1B,<boss_intro_frame_1C,<boss_intro_frame_1D,<boss_intro_frame_1E,<boss_intro_frame_1F ; $18-$1F
+        .byte   <boss_intro_frame_20,<boss_intro_frame_21,<boss_intro_frame_22,<boss_intro_frame_23,<boss_intro_frame_24,<boss_intro_frame_25,<boss_intro_frame_26,<boss_intro_frame_27 ; $20-$27
+        .byte   <boss_intro_frame_28 ; $28-$28
+boss_intro_sprite_ptr_hi:  .byte   >boss_intro_frame_00,>boss_intro_frame_01,>boss_intro_frame_02,>boss_intro_frame_03,>boss_intro_frame_04,>boss_intro_frame_05,>boss_intro_frame_06,>boss_intro_frame_07 ; $00-$07
+        .byte   >boss_intro_frame_08,>boss_intro_frame_09,>boss_intro_frame_0A,>boss_intro_frame_0B,>boss_intro_frame_0C,>boss_intro_frame_0D,>boss_intro_frame_0E,>boss_intro_frame_0F ; $08-$0F
+        .byte   >boss_intro_frame_10,>boss_intro_frame_11,>boss_intro_frame_12,>boss_intro_frame_13,>boss_intro_frame_14,>boss_intro_frame_15,>boss_intro_frame_16,>boss_intro_frame_17 ; $10-$17
+        .byte   >boss_intro_frame_18,>boss_intro_frame_19,>boss_intro_frame_1A,>boss_intro_frame_1B,>boss_intro_frame_1C,>boss_intro_frame_1D,>boss_intro_frame_1E,>boss_intro_frame_1F ; $18-$1F
+        .byte   >boss_intro_frame_20,>boss_intro_frame_21,>boss_intro_frame_22,>boss_intro_frame_23,>boss_intro_frame_24,>boss_intro_frame_25,>boss_intro_frame_26,>boss_intro_frame_27 ; $20-$27
+        .byte   >boss_intro_frame_28 ; $28-$28
 
-; =============================================================================
-; Sprite Definition Data — raw OAM data for projectile/weapon sprites
-; =============================================================================
-        .byte   $8D,$8D,$8D
-        .byte   $8E,$8E,$8E
-        .byte   $8E,$8F,$8F
-        .byte   $8F,$8F,$90,$90,$90,$0E
-        .byte   $E0,$A0
-        .byte   $03,$FA,$E8
-        .byte   $A1,$03
-        .byte   $F0,$E8
-        .byte   $A2,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $A3,$03,$00,$E8,$A4,$03,$08,$F0
-        .byte   $A5,$03,$F0,$F0,$A6,$03,$F8,$F0
-        .byte   $A7,$03,$00,$F0,$A8,$03,$08,$F0
-        .byte   $C0,$01
+; ─── Boss intro sprite frames (OAM lists) ───
+boss_intro_frame_00:  ; $883F  ← boss_intro_sprite[$00]
+        .byte   $0E,$E0,$A0,$03,$FA,$E8,$A1,$03
+        .byte   $F0,$E8,$A2,$03,$F8,$E8,$A3,$03
+        .byte   $00,$E8,$A4,$03,$08,$F0,$A5,$03
+        .byte   $F0,$F0,$A6,$03,$F8,$F0,$A7,$03
+        .byte   $00,$F0,$A8,$03,$08,$F0,$C0,$01
         .byte   $FA,$F8,$A9,$03,$F0,$F8,$AA,$03
         .byte   $F8,$F8,$AB,$03,$00,$F8,$AC,$03
-        .byte   $08,$0C
-        .byte   $E0,$AD
-        .byte   $03,$FA,$E0,$AD,$03,$04,$E8,$AE
-        .byte   $03,$F4,$E8,$AF,$03,$FC,$E8,$B0
-        .byte   $03,$04,$F0,$B1,$03,$F4,$F0,$B2
-        .byte   $03,$FC,$F0,$B3,$03,$04,$EF,$C0
-        .byte   $01,$FA,$F8,$B4,$03,$F4,$F8,$B5
-        .byte   $03,$FC,$F8,$B6,$03,$04,$0A,$E8
-        .byte   $B7,$03,$F8,$E8,$B8,$03,$00,$F0
-        .byte   $B9,$03,$F0,$F0,$BA,$03,$F8,$F0
-        .byte   $BB,$03,$00,$F0,$B9,$43,$08,$F8
-        .byte   $BC,$03,$F0,$F8,$BD,$03,$F8,$F8
-        .byte   $BE,$03,$00,$F8,$BF,$03,$08,$0B
-        .byte   $E0,$DC,$03,$F8,$E0,$DD,$03,$00
-        .byte   $E8,$DE,$03,$F4,$E8,$E0,$03,$FC
-        .byte   $E8,$E1,$03,$04,$E9,$C0,$01,$FA
-        .byte   $F0,$E2,$03
-        .byte   $F4,$F0,$E3,$03,$FC,$F0,$E4,$03
-        .byte   $04,$F8
-        .byte   $E5,$03
-        .byte   $F7,$F8,$E6,$03,$04,$0A,$E0
-        .byte   $A0,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $A1,$03
+        .byte   $08
+boss_intro_frame_01:  ; $8878  ← boss_intro_sprite[$01]
+        .byte   $0C,$E0,$AD,$03,$FA,$E0,$AD,$03
+        .byte   $04,$E8,$AE,$03,$F4,$E8,$AF,$03
+        .byte   $FC,$E8,$B0,$03,$04,$F0,$B1,$03
+        .byte   $F4,$F0,$B2,$03,$FC,$F0,$B3,$03
+        .byte   $04,$EF,$C0,$01,$FA,$F8,$B4,$03
+        .byte   $F4,$F8,$B5,$03,$FC,$F8,$B6,$03
+        .byte   $04
+boss_intro_frame_02:  ; $88A9  ← boss_intro_sprite[$02]
+        .byte   $0A,$E8,$B7,$03,$F8,$E8,$B8,$03
+        .byte   $00,$F0,$B9,$03,$F0,$F0,$BA,$03
+        .byte   $F8,$F0,$BB,$03,$00,$F0,$B9,$43
+        .byte   $08,$F8,$BC,$03,$F0,$F8,$BD,$03
+        .byte   $F8,$F8,$BE,$03,$00,$F8,$BF,$03
+        .byte   $08
+boss_intro_frame_03:  ; $88D2  ← boss_intro_sprite[$03]
+        .byte   $0B,$E0,$DC,$03,$F8,$E0,$DD,$03
+        .byte   $00,$E8,$DE,$03,$F4,$E8,$E0,$03
+        .byte   $FC,$E8,$E1,$03,$04,$E9,$C0,$01
+        .byte   $FA,$F0,$E2,$03,$F4,$F0,$E3,$03
+        .byte   $FC,$F0,$E4,$03,$04,$F8,$E5,$03
+        .byte   $F7,$F8,$E6,$03,$04
+boss_intro_frame_04:  ; $88FF  ← boss_intro_sprite[$04]
+        .byte   $0A,$E0,$A0,$03,$F8,$E8,$A1,$03
         .byte   $F7,$E8,$A2,$03,$FF,$F0,$A3,$03
-        .byte   $F0,$F0,$A4,$03,$F8,$F0
-        .byte   $A5,$03
-        .byte   $00
-        .byte   $F8,$A6,$03,$F0,$F8,$A7,$03,$F8
-        .byte   $F8,$A8,$03,$00,$F8,$A9,$03,$08
+        .byte   $F0,$F0,$A4,$03,$F8,$F0,$A5,$03
+        .byte   $00,$F8,$A6,$03,$F0,$F8,$A7,$03
+        .byte   $F8,$F8,$A8,$03,$00,$F8,$A9,$03
+        .byte   $08
+boss_intro_frame_05:  ; $8928  ← boss_intro_sprite[$05]
         .byte   $0C,$E0,$AA,$03,$F2,$E0,$AB,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $AC,$03,$F0
-        .byte   $E8
-        .byte   $AD,$03,$F8
-        .byte   $E8
-        .byte   $AE,$03,$00
-        .byte   $F0,$AF
-        .byte   $03,$F0,$F0,$B0,$03,$F8,$F0
-        .byte   $B1,$03
-        .byte   $00
-        .byte   $F8
-        .byte   $B2,$03,$F0,$F8,$B3,$03,$F8,$F8
-        .byte   $B4,$03,$00,$F8,$B5,$03,$08,$0C
-        .byte   $E0,$B6,$03,$F8,$E8,$B7,$03,$F3
-        .byte   $E8,$B8,$03,$FB,$E8,$B9,$03,$03
-        .byte   $F0,$BA,$03,$F0,$F0,$BB,$03,$F8
-        .byte   $F0,$BC,$03,$00,$F0,$BD,$03,$08
-        .byte   $F8,$BE,$03,$F0,$F8,$BF,$03,$F8
-        .byte   $F8,$C0,$03,$00,$F8,$C1,$03,$08
-        .byte   $0C,$E0,$A0,$03,$F4
-        .byte   $E0,$A1
-        .byte   $03,$04,$E8
-        .byte   $A2,$03
-        .byte   $F4,$E8,$A3,$03,$FC,$E8,$A4,$03
-        .byte   $04,$EC,$BF
-        .byte   $01,$FC
-        .byte   $F0,$A5
-        .byte   $03,$F4,$F0,$A6,$03,$FC,$F0,$A7
-        .byte   $03,$04,$F8,$A8,$03,$F4,$F8,$A9
-        .byte   $03,$FC
-        .byte   $F8
-        .byte   $AA
-        .byte   $03,$04,$0C
-        .byte   $E0,$A0
-        .byte   $03,$F0,$E0,$A1,$03,$00,$E8,$B6
-        .byte   $03,$EC,$E8,$B7,$03,$F4,$E8,$B8
-        .byte   $03,$FC,$EC,$BF,$01,$F8,$F0,$B9
-        .byte   $03,$F4,$F0,$BA,$03,$FC,$F0,$BB
-        .byte   $03,$04,$F8,$BC,$03,$F4,$F8,$BD
-        .byte   $03,$FC
-        .byte   $F8
-        .byte   $BE,$03,$04
-        .byte   $0C
-        .byte   $E0,$AB
-        .byte   $03,$04,$E8,$AC,$03,$F4,$E8,$AD
-        .byte   $03,$FC,$E8,$AE,$03,$04,$EE,$BF
-        .byte   $01,$FB,$F0,$AF,$03,$F4,$F0,$B0
-        .byte   $03,$FC,$F0,$B1,$03,$04,$F8,$B2
-        .byte   $03,$EC,$F8,$B3,$03,$F4,$F8,$B4
-        .byte   $03,$FC,$F8,$B5,$03,$04,$0C,$E0
-        .byte   $AB,$03,$04
-        .byte   $E8
-        .byte   $C0,$02
+        .byte   $F8,$E8,$AC,$03,$F0,$E8,$AD,$03
+        .byte   $F8,$E8,$AE,$03,$00,$F0,$AF,$03
+        .byte   $F0,$F0,$B0,$03,$F8,$F0,$B1,$03
+        .byte   $00,$F8,$B2,$03,$F0,$F8,$B3,$03
+        .byte   $F8,$F8,$B4,$03,$00,$F8,$B5,$03
+        .byte   $08
+boss_intro_frame_06:  ; $8959  ← boss_intro_sprite[$06]
+        .byte   $0C,$E0,$B6,$03,$F8,$E8,$B7,$03
+        .byte   $F3,$E8,$B8,$03,$FB,$E8,$B9,$03
+        .byte   $03,$F0,$BA,$03,$F0,$F0,$BB,$03
+        .byte   $F8,$F0,$BC,$03,$00,$F0,$BD,$03
+        .byte   $08,$F8,$BE,$03,$F0,$F8,$BF,$03
+        .byte   $F8,$F8,$C0,$03,$00,$F8,$C1,$03
+        .byte   $08
+boss_intro_frame_07:  ; $898A  ← boss_intro_sprite[$07]
+        .byte   $0C,$E0,$A0,$03,$F4,$E0,$A1,$03
+        .byte   $04,$E8,$A2,$03,$F4,$E8,$A3,$03
+        .byte   $FC,$E8,$A4,$03,$04,$EC,$BF,$01
+        .byte   $FC,$F0,$A5,$03,$F4,$F0,$A6,$03
+        .byte   $FC,$F0,$A7,$03,$04,$F8,$A8,$03
+        .byte   $F4,$F8,$A9,$03,$FC,$F8,$AA,$03
+        .byte   $04
+boss_intro_frame_08:  ; $89BB  ← boss_intro_sprite[$08]
+        .byte   $0C,$E0,$A0,$03,$F0,$E0,$A1,$03
+        .byte   $00,$E8,$B6,$03,$EC,$E8,$B7,$03
+        .byte   $F4,$E8,$B8,$03,$FC,$EC,$BF,$01
+        .byte   $F8,$F0,$B9,$03,$F4,$F0,$BA,$03
+        .byte   $FC,$F0,$BB,$03,$04,$F8,$BC,$03
+        .byte   $F4,$F8,$BD,$03,$FC,$F8,$BE,$03
+        .byte   $04
+boss_intro_frame_09:  ; $89EC  ← boss_intro_sprite[$09]
+        .byte   $0C,$E0,$AB,$03,$04,$E8,$AC,$03
         .byte   $F4,$E8,$AD,$03,$FC,$E8,$AE,$03
         .byte   $04,$EE,$BF,$01,$FB,$F0,$AF,$03
         .byte   $F4,$F0,$B0,$03,$FC,$F0,$B1,$03
         .byte   $04,$F8,$B2,$03,$EC,$F8,$B3,$03
         .byte   $F4,$F8,$B4,$03,$FC,$F8,$B5,$03
-        .byte   $04,$0D,$E0,$AB,$03,$04,$E8,$C1
-        .byte   $03,$F4,$E8,$C2,$02,$FC,$E8,$C3
-        .byte   $03,$FC,$E8,$AE,$03,$04,$EE,$BF
-        .byte   $01,$FB,$F0,$AF,$03,$F4,$F0,$B0
-        .byte   $03,$FC,$F0,$B1,$03,$04,$F8,$B2
-        .byte   $03,$EC,$F8,$B3,$03,$F4,$F8,$B4
-        .byte   $03,$FC,$F8,$B5,$03,$04,$0D,$E0
-        .byte   $C5,$02,$04,$E8,$AC,$03,$F4
-        .byte   $E8
-        .byte   $C4,$02
-        .byte   $FC,$E8,$C3,$03,$FC,$E8,$AE,$03
+        .byte   $04
+boss_intro_frame_0A:  ; $8A1D  ← boss_intro_sprite[$0A]
+        .byte   $0C,$E0,$AB,$03,$04,$E8,$C0,$02
+        .byte   $F4,$E8,$AD,$03,$FC,$E8,$AE,$03
         .byte   $04,$EE,$BF,$01,$FB,$F0,$AF,$03
         .byte   $F4,$F0,$B0,$03,$FC,$F0,$B1,$03
         .byte   $04,$F8,$B2,$03,$EC,$F8,$B3,$03
         .byte   $F4,$F8,$B4,$03,$FC,$F8,$B5,$03
         .byte   $04
-        .byte   $0D,$E0,$C6
-        .byte   $02,$04
-        .byte   $E8
-        .byte   $AC,$03,$F4
-        .byte   $E8
-        .byte   $AD,$03,$FC
-        .byte   $E8
-        .byte   $AE,$03,$04
-        .byte   $E8
-        .byte   $C7,$02,$04,$EE,$BF,$01,$FB,$F0
-        .byte   $AF,$03,$F4,$F0,$B0,$03,$FC,$F0
-        .byte   $B1,$03,$04,$F8,$B2,$03,$EC,$F8
-        .byte   $B3,$03,$F4,$F8,$B4,$03,$FC,$F8
-        .byte   $B5,$03,$04,$0C,$E0,$C8,$02,$04
-        .byte   $E8,$AC,$03,$F4,$E8,$AD,$03,$FC
-        .byte   $E8,$AE,$03,$04,$EE,$BF,$01,$FB
-        .byte   $F0,$AF,$03,$F4,$F0,$B0,$03,$FC
-        .byte   $F0,$B1
-        .byte   $03,$04,$F8,$B2,$03,$EC,$F8,$B3
-        .byte   $03,$F4,$F8,$B4,$03,$FC,$F8,$B5
-        .byte   $03,$04,$0C,$E0
-        .byte   $A0,$03
-        .byte   $F3,$E0,$A1,$03,$03,$E8,$F5,$03
-        .byte   $F2,$E8,$F6,$03,$FA,$E8,$F7,$03
-        .byte   $02,$EC,$BF,$01
-        .byte   $FB,$F0,$F8,$03,$F4
-        .byte   $F0,$F9
-        .byte   $03,$FC,$F0,$FA,$03,$04,$F8,$FB
-        .byte   $03,$F4,$F8,$FC,$03,$FC,$00,$FD
-        .byte   $03,$FD,$0D,$E0,$A0,$03,$FC
-        .byte   $E8
-        .byte   $A1,$03
-        .byte   $F6,$E8
-        .byte   $A2,$03
-        .byte   $FE,$E8,$A3
-        .byte   $03,$06,$EB,$F4,$01,$FB,$F0,$A4
-        .byte   $03,$F0,$F0,$A5,$03,$F8,$F0,$A6
-        .byte   $03,$00,$F0,$A7,$03,$08,$F8,$A8
-        .byte   $03,$F0,$F8,$A9,$03,$F8,$F8,$AA
-        .byte   $03,$00,$F8,$AB,$03,$08,$0E,$E0
-        .byte   $AC,$03,$F1,$E0
-        .byte   $A0,$03
-        .byte   $FE,$E8,$AD
-        .byte   $03,$F0,$E8,$AE,$03,$F8,$E8,$AF
-        .byte   $03,$00,$E8
-        .byte   $B0,$03
+boss_intro_frame_0B:  ; $8A4E  ← boss_intro_sprite[$0B]
+        .byte   $0D,$E0,$AB,$03,$04,$E8,$C1,$03
+        .byte   $F4,$E8,$C2,$02,$FC,$E8,$C3,$03
+        .byte   $FC,$E8,$AE,$03,$04,$EE,$BF,$01
+        .byte   $FB,$F0,$AF,$03,$F4,$F0,$B0,$03
+        .byte   $FC,$F0,$B1,$03,$04,$F8,$B2,$03
+        .byte   $EC,$F8,$B3,$03,$F4,$F8,$B4,$03
+        .byte   $FC,$F8,$B5,$03,$04
+boss_intro_frame_0C:  ; $8A83  ← boss_intro_sprite[$0C]
+        .byte   $0D,$E0,$C5,$02,$04,$E8,$AC,$03
+        .byte   $F4,$E8,$C4,$02,$FC,$E8,$C3,$03
+        .byte   $FC,$E8,$AE,$03,$04,$EE,$BF,$01
+        .byte   $FB,$F0,$AF,$03,$F4,$F0,$B0,$03
+        .byte   $FC,$F0,$B1,$03,$04,$F8,$B2,$03
+        .byte   $EC,$F8,$B3,$03,$F4,$F8,$B4,$03
+        .byte   $FC,$F8,$B5,$03,$04
+boss_intro_frame_0D:  ; $8AB8  ← boss_intro_sprite[$0D]
+        .byte   $0D,$E0,$C6,$02,$04,$E8,$AC,$03
+        .byte   $F4,$E8,$AD,$03,$FC,$E8,$AE,$03
+        .byte   $04,$E8,$C7,$02,$04,$EE,$BF,$01
+        .byte   $FB,$F0,$AF,$03,$F4,$F0,$B0,$03
+        .byte   $FC,$F0,$B1,$03,$04,$F8,$B2,$03
+        .byte   $EC,$F8,$B3,$03,$F4,$F8,$B4,$03
+        .byte   $FC,$F8,$B5,$03,$04
+boss_intro_frame_0E:  ; $8AED  ← boss_intro_sprite[$0E]
+        .byte   $0C,$E0,$C8,$02,$04,$E8,$AC,$03
+        .byte   $F4,$E8,$AD,$03,$FC,$E8,$AE,$03
+        .byte   $04,$EE,$BF,$01,$FB,$F0,$AF,$03
+        .byte   $F4,$F0,$B0,$03,$FC,$F0,$B1,$03
+        .byte   $04,$F8,$B2,$03,$EC,$F8,$B3,$03
+        .byte   $F4,$F8,$B4,$03,$FC,$F8,$B5,$03
+        .byte   $04
+boss_intro_frame_0F:  ; $8B1E  ← boss_intro_sprite[$0F]
+        .byte   $0C,$E0,$A0,$03,$F3,$E0,$A1,$03
+        .byte   $03,$E8,$F5,$03,$F2,$E8,$F6,$03
+        .byte   $FA,$E8,$F7,$03,$02,$EC,$BF,$01
+        .byte   $FB,$F0,$F8,$03,$F4,$F0,$F9,$03
+        .byte   $FC,$F0,$FA,$03,$04,$F8,$FB,$03
+        .byte   $F4,$F8,$FC,$03,$FC,$00,$FD,$03
+        .byte   $FD
+boss_intro_frame_10:  ; $8B4F  ← boss_intro_sprite[$10]
+        .byte   $0D,$E0,$A0,$03,$FC,$E8,$A1,$03
+        .byte   $F6,$E8,$A2,$03,$FE,$E8,$A3,$03
+        .byte   $06,$EB,$F4,$01,$FB,$F0,$A4,$03
+        .byte   $F0,$F0,$A5,$03,$F8,$F0,$A6,$03
+        .byte   $00,$F0,$A7,$03,$08,$F8,$A8,$03
+        .byte   $F0,$F8,$A9,$03,$F8,$F8,$AA,$03
+        .byte   $00,$F8,$AB,$03,$08
+boss_intro_frame_11:  ; $8B84  ← boss_intro_sprite[$11]
+        .byte   $0E,$E0,$AC,$03,$F1,$E0,$A0,$03
+        .byte   $FE,$E8,$AD,$03,$F0,$E8,$AE,$03
+        .byte   $F8,$E8,$AF,$03,$00,$E8,$B0,$03
+        .byte   $08,$EB,$F4,$01,$FD,$F0,$B1,$03
+        .byte   $F8,$F0,$B2,$03,$00,$F0,$B3,$03
+        .byte   $08,$F8,$B4,$03,$F0,$F8,$B5,$03
+        .byte   $F8,$F8,$B6,$03,$00,$F8,$B7,$03
         .byte   $08
-        .byte   $EB,$F4
-        .byte   $01,$FD
-        .byte   $F0,$B1
-        .byte   $03,$F8,$F0,$B2,$03,$00,$F0,$B3
-        .byte   $03,$08,$F8,$B4,$03,$F0,$F8,$B5
-        .byte   $03,$F8,$F8,$B6,$03,$00,$F8,$B7
-        .byte   $03,$08,$0D,$E8,$B8,$03,$F0,$E8
-        .byte   $B9,$03,$F8,$E8,$BA,$03,$00,$E8
-        .byte   $BB,$03,$08,$ED,$F4,$01,$FD,$F0
-        .byte   $BC,$03,$F0,$F0,$BD,$03,$F8,$F0
-        .byte   $BE,$03,$00,$F0,$BF,$03,$08,$F8
-        .byte   $C0,$03,$F0,$F8,$C1,$03,$F8,$F8
-        .byte   $C2,$03,$00,$F8,$C3,$03,$08,$0D
-        .byte   $E8,$B8,$03,$F0,$E8,$C4,$03,$F8
-        .byte   $E8
-        .byte   $C5,$03
-        .byte   $00
-        .byte   $E8,$BB,$03,$08,$ED,$F4,$01,$FD
-        .byte   $F0,$BC,$03,$F0,$F0,$BD,$03,$F8
-        .byte   $F0,$BE,$03,$00,$F0,$BF,$03,$08
-        .byte   $F8,$C0,$03,$F0,$F8,$C1,$03,$F8
-        .byte   $F8,$C2,$03,$00,$F8,$C3,$03,$08
+boss_intro_frame_12:  ; $8BBD  ← boss_intro_sprite[$12]
+        .byte   $0D,$E8,$B8,$03,$F0,$E8,$B9,$03
+        .byte   $F8,$E8,$BA,$03,$00,$E8,$BB,$03
+        .byte   $08,$ED,$F4,$01,$FD,$F0,$BC,$03
+        .byte   $F0,$F0,$BD,$03,$F8,$F0,$BE,$03
+        .byte   $00,$F0,$BF,$03,$08,$F8,$C0,$03
+        .byte   $F0,$F8,$C1,$03,$F8,$F8,$C2,$03
+        .byte   $00,$F8,$C3,$03,$08
+boss_intro_frame_13:  ; $8BF2  ← boss_intro_sprite[$13]
+        .byte   $0D,$E8,$B8,$03,$F0,$E8,$C4,$03
+        .byte   $F8,$E8,$C5,$03,$00,$E8,$BB,$03
+        .byte   $08,$ED,$F4,$01,$FD,$F0,$BC,$03
+        .byte   $F0,$F0,$BD,$03,$F8,$F0,$BE,$03
+        .byte   $00,$F0,$BF,$03,$08,$F8,$C0,$03
+        .byte   $F0,$F8,$C1,$03,$F8,$F8,$C2,$03
+        .byte   $00,$F8,$C3,$03,$08
+boss_intro_frame_14:  ; $8C27  ← boss_intro_sprite[$14]
         .byte   $0D,$E8,$B8,$03,$F0,$E8,$B9,$03
         .byte   $F8,$E8,$BA,$03,$00,$E8,$BB,$03
         .byte   $08,$ED,$F4,$01,$FD,$F0,$BC,$03
         .byte   $F0,$F0,$BD,$02,$F8,$F0,$BE,$02
         .byte   $00,$F0,$BF,$03,$08,$F8,$C0,$03
         .byte   $F0,$F8,$C6,$03,$F8,$F8,$C7,$03
-        .byte   $00,$F8,$C3,$03,$08,$0D,$E8,$B8
-        .byte   $02,$F0,$E8,$B9,$02,$F8,$E8,$BA
-        .byte   $02,$00,$E8,$BB,$02,$08,$ED,$F4
-        .byte   $01,$FD,$F0,$BC,$02,$F0,$F0,$BD
-        .byte   $03,$F8,$F0,$BE,$03,$00,$F0
-        .byte   $BF,$02,$08
-        .byte   $F8
-        .byte   $C0,$02
-        .byte   $F0,$F8
-        .byte   $C8
-        .byte   $02,$F8,$F8,$C9,$03,$00,$F8,$C3
-        .byte   $02
-        .byte   $08
-        .byte   $0E,$E0,$AC
-        .byte   $03,$F1,$E0,$A0,$03,$FE,$E8,$AD
-        .byte   $03,$F0,$E8,$AE,$03,$F8,$E8,$AF
-        .byte   $03,$00,$E8,$B0,$03,$08,$EB,$F4
-        .byte   $01,$FD
-        .byte   $F0,$D6
-        .byte   $03,$F8,$F0,$D7,$03,$00,$F0,$D8
-        .byte   $03,$08,$F8,$D9,$03,$F8,$F8,$DA
-        .byte   $03,$00,$00,$DB,$03,$F8,$00,$DC
-        .byte   $03,$00,$09,$E8,$A1,$03,$F8,$E8
-        .byte   $A2,$03,$00,$E9,$A0,$01,$F9,$F0
-        .byte   $A3,$03,$F4,$F0,$A4,$03,$FC,$F0
-        .byte   $A5,$03,$04,$F8,$A6,$03,$F4,$F8
-        .byte   $A7,$03,$FC,$F8,$A8,$03,$04,$0B
-        .byte   $E8,$A9,$03,$F4,$E8,$AA,$03,$FC
-        .byte   $E8,$AB,$03,$04,$EA,$A0,$01,$F6
-        .byte   $F0,$AC
-        .byte   $03
-        .byte   $F1,$F0
-        .byte   $AD,$03,$F9
-        .byte   $F0,$AE
-        .byte   $03
-        .byte   $01,$F8
-        .byte   $AF,$03,$EC
-        .byte   $F8
-        .byte   $B0,$03
-        .byte   $F4,$F8,$B1
-        .byte   $03,$FC,$F8,$B2,$03,$04,$09,$E8
-        .byte   $B3,$03,$F4,$E8,$B4,$03,$FC,$E8
-        .byte   $B5,$03,$04,$E9,$A0,$01,$FC,$F0
-        .byte   $B6,$03,$F9,$F0,$B7,$03,$01
-        .byte   $F8
-        .byte   $B8
-        .byte   $03,$F4,$F8,$B9,$03,$FC,$F8,$BA
-        .byte   $03,$04,$0A,$E8,$A1,$03,$F8,$E8
-        .byte   $BB,$03,$00,$E9,$A0,$01,$F9,$F0
-        .byte   $BC,$03,$F4,$F0,$BD,$03,$FC,$F0
-        .byte   $BE,$03,$04,$F8,$BF,$03,$F4,$F8
-        .byte   $C0,$03,$FC,$F8,$C1,$03,$04,$00
-        .byte   $C2,$03,$FA,$11,$E0,$A0,$03,$F0
-        .byte   $E0,$A1,$03,$F8,$E0,$A2,$03,$00
-        .byte   $E0,$A3,$03,$08,$E8,$A4,$03,$F0
-        .byte   $E8
-        .byte   $A5,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $A6,$03
+        .byte   $00,$F8,$C3,$03,$08
+boss_intro_frame_15:  ; $8C5C  ← boss_intro_sprite[$15]
+        .byte   $0D,$E8,$B8,$02,$F0,$E8,$B9,$02
+        .byte   $F8,$E8,$BA,$02,$00,$E8,$BB,$02
+        .byte   $08,$ED,$F4,$01,$FD,$F0,$BC,$02
+        .byte   $F0,$F0,$BD,$03,$F8,$F0,$BE,$03
+        .byte   $00,$F0,$BF,$02,$08,$F8,$C0,$02
+        .byte   $F0,$F8,$C8,$02,$F8,$F8,$C9,$03
+        .byte   $00,$F8,$C3,$02,$08
+boss_intro_frame_16:  ; $8C91  ← boss_intro_sprite[$16]
+        .byte   $0E,$E0,$AC,$03,$F1,$E0,$A0,$03
+        .byte   $FE,$E8,$AD,$03,$F0,$E8,$AE,$03
+        .byte   $F8,$E8,$AF,$03,$00,$E8,$B0,$03
+        .byte   $08,$EB,$F4,$01,$FD,$F0,$D6,$03
+        .byte   $F8,$F0,$D7,$03,$00,$F0,$D8,$03
+        .byte   $08,$F8,$D9,$03,$F8,$F8,$DA,$03
+        .byte   $00,$00,$DB,$03,$F8,$00,$DC,$03
         .byte   $00
-        .byte   $E8,$A7,$03,$08,$F0,$A8
-        .byte   $03,$F0,$F0,$A9,$03,$F8,$F0,$AA
-        .byte   $03,$00,$F0
-        .byte   $AB,$03,$08,$F8,$AC,$03
-        .byte   $F0,$F8
-        .byte   $AD,$03,$F8
-        .byte   $F8
-        .byte   $AE,$03,$00
-        .byte   $F8
-        .byte   $AF,$03,$08,$E2,$DE
-        .byte   $01,$FB
-        .byte   $12
-        .byte   $E0,$B0
-        .byte   $03,$F6,$E0,$B1,$03,$FE,$E0,$B2
-        .byte   $03,$06,$E0,$B3,$03,$0E
-        .byte   $E8
-        .byte   $B4,$03
-        .byte   $F0,$E8
-        .byte   $B5,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $B6,$03
-        .byte   $00
-        .byte   $E8,$B7,$03,$08,$E8,$B8,$03,$10
-        .byte   $F0,$B9,$03,$F0,$F0,$BA,$03,$F8
-        .byte   $F0,$BB,$03,$00,$F0
-        .byte   $BC,$03,$08
-        .byte   $F8
-        .byte   $BD,$03,$F0
-        .byte   $F8
-        .byte   $BE,$03,$F8
-        .byte   $F8
-        .byte   $BF,$03,$00,$F8,$C0,$03,$08,$E4
-        .byte   $DE
-        .byte   $01,$FB
-        .byte   $12,$E0,$B0,$03,$F6,$E0
-        .byte   $B1,$03
-        .byte   $FE,$E0,$B2
-        .byte   $03,$06,$E0,$B3,$03,$0E,$E8,$B4
-        .byte   $03,$F0,$E8
-        .byte   $C1,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $C2,$03,$00,$E8,$B7,$03,$08,$E8
-        .byte   $B8,$03,$10,$F0,$B9,$03,$F0,$F0
-        .byte   $C3,$03,$F8,$F0,$C4,$03,$00,$F0
-        .byte   $BC,$03,$08,$F8,$BD,$03,$F0,$F8
-        .byte   $BE,$03,$F8,$F8,$BF,$03,$00,$F8
-        .byte   $C0,$03
-        .byte   $08
-        .byte   $E4,$DE
-        .byte   $01,$FB
-        .byte   $13,$E0,$B0,$03
-        .byte   $F6,$E0
-        .byte   $B1,$03
-        .byte   $FE,$E0,$B2
-        .byte   $03,$06,$E0,$B3,$03,$0A,$E8,$B4
-        .byte   $03,$F0,$E8
-        .byte   $B5,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $B6,$03
-        .byte   $00
-        .byte   $E8,$B7,$03,$08,$E8,$B8,$03,$10
-        .byte   $F0,$C5,$03,$F0,$F0,$C6,$03,$F8
-        .byte   $F0,$C7,$03,$00,$F0,$C8,$03,$08
-        .byte   $F8,$C9,$03,$F5,$F8,$CA,$03,$FD
-        .byte   $F8,$CB,$03
-        .byte   $05,$00
-        .byte   $CC,$03,$F5
-        .byte   $00
-        .byte   $CD,$03,$05,$E4
-        .byte   $DE,$01,$FB
+boss_intro_frame_17:  ; $8CCA  ← boss_intro_sprite[$17]
+        .byte   $09,$E8,$A1,$03,$F8,$E8,$A2,$03
+        .byte   $00,$E9,$A0,$01,$F9,$F0,$A3,$03
+        .byte   $F4,$F0,$A4,$03,$FC,$F0,$A5,$03
+        .byte   $04,$F8,$A6,$03,$F4,$F8,$A7,$03
+        .byte   $FC,$F8,$A8,$03,$04
+boss_intro_frame_18:  ; $8CEF  ← boss_intro_sprite[$18]
+        .byte   $0B,$E8,$A9,$03,$F4,$E8,$AA,$03
+        .byte   $FC,$E8,$AB,$03,$04,$EA,$A0,$01
+        .byte   $F6,$F0,$AC,$03,$F1,$F0,$AD,$03
+        .byte   $F9,$F0,$AE,$03,$01,$F8,$AF,$03
+        .byte   $EC,$F8,$B0,$03,$F4,$F8,$B1,$03
+        .byte   $FC,$F8,$B2,$03,$04
+boss_intro_frame_19:  ; $8D1C  ← boss_intro_sprite[$19]
+        .byte   $09,$E8,$B3,$03,$F4,$E8,$B4,$03
+        .byte   $FC,$E8,$B5,$03,$04,$E9,$A0,$01
+        .byte   $FC,$F0,$B6,$03,$F9,$F0,$B7,$03
+        .byte   $01,$F8,$B8,$03,$F4,$F8,$B9,$03
+        .byte   $FC,$F8,$BA,$03,$04
+boss_intro_frame_1A:  ; $8D41  ← boss_intro_sprite[$1A]
+        .byte   $0A,$E8,$A1,$03,$F8,$E8,$BB,$03
+        .byte   $00,$E9,$A0,$01,$F9,$F0,$BC,$03
+        .byte   $F4,$F0,$BD,$03,$FC,$F0,$BE,$03
+        .byte   $04,$F8,$BF,$03,$F4,$F8,$C0,$03
+        .byte   $FC,$F8,$C1,$03,$04,$00,$C2,$03
+        .byte   $FA
+boss_intro_frame_1B:  ; $8D6A  ← boss_intro_sprite[$1B]
+        .byte   $11,$E0,$A0,$03,$F0,$E0,$A1,$03
+        .byte   $F8,$E0,$A2,$03,$00,$E0,$A3,$03
+        .byte   $08,$E8,$A4,$03,$F0,$E8,$A5,$03
+        .byte   $F8,$E8,$A6,$03,$00,$E8,$A7,$03
+        .byte   $08,$F0,$A8,$03,$F0,$F0,$A9,$03
+        .byte   $F8,$F0,$AA,$03,$00,$F0,$AB,$03
+        .byte   $08,$F8,$AC,$03,$F0,$F8,$AD,$03
+        .byte   $F8,$F8,$AE,$03,$00,$F8,$AF,$03
+        .byte   $08,$E2,$DE,$01,$FB
+boss_intro_frame_1C:  ; $8DAF  ← boss_intro_sprite[$1C]
+        .byte   $12,$E0,$B0,$03,$F6,$E0,$B1,$03
+        .byte   $FE,$E0,$B2,$03,$06,$E0,$B3,$03
+        .byte   $0E,$E8,$B4,$03,$F0,$E8,$B5,$03
+        .byte   $F8,$E8,$B6,$03,$00,$E8,$B7,$03
+        .byte   $08,$E8,$B8,$03,$10,$F0,$B9,$03
+        .byte   $F0,$F0,$BA,$03,$F8,$F0,$BB,$03
+        .byte   $00,$F0,$BC,$03,$08,$F8,$BD,$03
+        .byte   $F0,$F8,$BE,$03,$F8,$F8,$BF,$03
+        .byte   $00,$F8,$C0,$03,$08,$E4,$DE,$01
+        .byte   $FB
+boss_intro_frame_1D:  ; $8DF8  ← boss_intro_sprite[$1D]
+        .byte   $12,$E0,$B0,$03,$F6,$E0,$B1,$03
+        .byte   $FE,$E0,$B2,$03,$06,$E0,$B3,$03
+        .byte   $0E,$E8,$B4,$03,$F0,$E8,$C1,$03
+        .byte   $F8,$E8,$C2,$03,$00,$E8,$B7,$03
+        .byte   $08,$E8,$B8,$03,$10,$F0,$B9,$03
+        .byte   $F0,$F0,$C3,$03,$F8,$F0,$C4,$03
+        .byte   $00,$F0,$BC,$03,$08,$F8,$BD,$03
+        .byte   $F0,$F8,$BE,$03,$F8,$F8,$BF,$03
+        .byte   $00,$F8,$C0,$03,$08,$E4,$DE,$01
+        .byte   $FB
+boss_intro_frame_1E:  ; $8E41  ← boss_intro_sprite[$1E]
+        .byte   $13,$E0,$B0,$03,$F6,$E0,$B1,$03
+        .byte   $FE,$E0,$B2,$03,$06,$E0,$B3,$03
+        .byte   $0A,$E8,$B4,$03,$F0,$E8,$B5,$03
+        .byte   $F8,$E8,$B6,$03,$00,$E8,$B7,$03
+        .byte   $08,$E8,$B8,$03,$10,$F0,$C5,$03
+        .byte   $F0,$F0,$C6,$03,$F8,$F0,$C7,$03
+        .byte   $00,$F0,$C8,$03,$08,$F8,$C9,$03
+        .byte   $F5,$F8,$CA,$03,$FD,$F8,$CB,$03
+        .byte   $05,$00,$CC,$03,$F5,$00,$CD,$03
+        .byte   $05,$E4,$DE,$01,$FB
+boss_intro_frame_1F:  ; $8E8E  ← boss_intro_sprite[$1F]
         .byte   $0B,$E8,$A0,$03,$F8,$E8,$A1,$03
         .byte   $00,$F0,$A2,$03,$F0,$F0,$A3,$03
-        .byte   $F8,$F0,$A4,$03,$00,$F0
-        .byte   $A5,$03
-        .byte   $08
-        .byte   $F8
-        .byte   $A6,$03
-        .byte   $F0,$F8
-        .byte   $A7,$03,$F8,$F8,$A8,$03,$00,$F8
-        .byte   $A9,$03,$08,$ED,$F3,$01,$FA,$0D
-        .byte   $E0
-        .byte   $AA,$03,$F0,$E0,$AB,$03,$F8,$E8
-        .byte   $AC,$03,$F0
-        .byte   $E8
-        .byte   $AD,$03,$F8
-        .byte   $E8
-        .byte   $AE,$03,$00
-        .byte   $F0,$AF
-        .byte   $03,$F0,$F0,$B0,$03,$F8,$F0
-        .byte   $B1,$03
-        .byte   $00
-        .byte   $F8,$B2
-        .byte   $03,$F0,$F8,$B3,$03,$F8,$F8,$B4
-        .byte   $03,$00,$F8,$B5,$03,$08,$ED,$F3
-        .byte   $01,$F9,$0D,$E8
-        .byte   $B6,$03
-        .byte   $F0,$E8
-        .byte   $B7,$03,$F8,$E8,$B8,$03,$00,$E8
-        .byte   $B9,$03,$08
-        .byte   $F0,$BA
-        .byte   $03,$F0,$F0,$BB,$03,$F8,$F0,$BC
-        .byte   $03,$00,$F0,$BD,$03,$08,$F8,$BE
-        .byte   $03,$F0,$F8,$BF,$03,$F8,$F8,$C0
-        .byte   $03,$00,$F8,$C1,$03,$08,$ED,$F3
-        .byte   $01,$FC,$0E,$E8,$B6,$03,$EE,$E8
-        .byte   $B7,$03,$F6
-        .byte   $E8
-        .byte   $B8
-        .byte   $03,$FE,$E8
-        .byte   $B9,$03,$06
-        .byte   $F0,$BA
-        .byte   $03,$EE,$F0,$BB,$03,$F6,$F0,$BC
-        .byte   $03,$FE,$F0,$BD,$03,$06,$F8,$C2
-        .byte   $03,$F8,$F8,$C3,$03,$00,$F8,$C4
-        .byte   $03,$08,$00,$C5,$03,$F8,$00,$C6
-        .byte   $03,$00,$ED,$F3,$01,$FB,$10,$E0
-        .byte   $A0,$03,$F8,$E0,$A1,$03,$00,$E0
-        .byte   $A2,$03,$08,$E8,$A3,$03,$F0,$E8
-        .byte   $A4,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $A5,$03
-        .byte   $00
-        .byte   $E8,$A6,$03,$08,$F0,$A7,$03,$F0
-        .byte   $F0,$A8,$03,$F8,$F0,$A9,$03,$00
-        .byte   $F0,$AA,$03,$08,$F8,$AB,$03,$F0
-        .byte   $F8
-        .byte   $AC,$03,$F8
-        .byte   $F8
-        .byte   $AC,$43,$00
-        .byte   $F8
-        .byte   $AD,$03,$08
-        .byte   $E7,$F4,$02,$FA,$0F,$E0,$AE,$03
-        .byte   $F8,$E0,$AF,$03,$00,$E0,$B0,$03
-        .byte   $08,$E8,$B1,$03,$F0,$E8,$B2,$03
-        .byte   $F8,$E8,$B3,$03,$00,$E8,$B4,$03
-        .byte   $08
-        .byte   $F0,$B5
-        .byte   $03,$F5,$F0,$B6,$03,$FD,$F0
-        .byte   $B7,$03,$05,$F8,$B8,$03,$F0,$F8
-        .byte   $B9,$03,$F8,$F8,$BA,$03,$00,$F8
-        .byte   $BB,$03,$08,$E8,$F4,$02,$FA,$10
-        .byte   $E0,$AE,$03,$F8,$E0,$AF,$03,$00
-        .byte   $E0,$B0,$03,$08,$E8,$BC,$03,$F0
-        .byte   $E8
-        .byte   $BD,$03,$F8
-        .byte   $E8
-        .byte   $BE,$03,$00
-        .byte   $E8
-        .byte   $BF,$03,$08,$F0,$C0,$03,$F0,$F0
-        .byte   $C1,$03,$F8
-        .byte   $F0,$C2
-        .byte   $03,$00,$F0
-        .byte   $C3,$03
-        .byte   $08
-        .byte   $F8
-        .byte   $B8
-        .byte   $03
-        .byte   $F0,$F8
-        .byte   $B9,$03,$F8
-        .byte   $F8
-        .byte   $BA
-        .byte   $03,$00,$F8,$BB,$03
-        .byte   $08
-        .byte   $E8
-        .byte   $F4,$02,$FA,$11,$E0,$A0,$03,$F8
-        .byte   $E0,$A1,$03,$00,$E0,$CC,$03,$08
-        .byte   $E8,$CD,$03,$F0,$E8
-        .byte   $CE,$03,$F8
-        .byte   $E8
-        .byte   $A5
-        .byte   $03
-        .byte   $00
-        .byte   $E8,$CF,$03,$08,$F0,$D0,$03,$F0
-        .byte   $F0,$D1,$03,$F8,$F0,$D2,$03,$00
-        .byte   $F0
-        .byte   $D3
-        .byte   $03,$08,$F8,$D4,$03
-        .byte   $F0,$F8
-        .byte   $D5,$03
-        .byte   $F8
-        .byte   $F8
-        .byte   $D5,$03
-        .byte   $00
-        .byte   $F8,$D6,$03,$08,$E7,$F4,$02,$FA
-        .byte   $E0,$CB
-        .byte   $03,$F0,$11,$E0,$C1,$03
-        .byte   $F0,$E0
-        .byte   $C2,$03,$F8,$E0,$C3,$03,$00,$E0
-        .byte   $C4,$03,$08,$E8
-        .byte   $C5,$03
-        .byte   $F0,$E8
-        .byte   $A2,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $C6,$03
-        .byte   $00
-        .byte   $E8,$C7,$03,$08,$F0,$C8,$03,$F0
-        .byte   $F0
-        .byte   $A6,$03
-        .byte   $F8
-        .byte   $F0,$A7
-        .byte   $03,$00,$F0
-        .byte   $C9,$03
-        .byte   $08
-        .byte   $F0
-        .byte   $C0,$01
+        .byte   $F8,$F0,$A4,$03,$00,$F0,$A5,$03
+        .byte   $08,$F8,$A6,$03,$F0,$F8,$A7,$03
+        .byte   $F8,$F8,$A8,$03,$00,$F8,$A9,$03
+        .byte   $08,$ED,$F3,$01,$FA
+boss_intro_frame_20:  ; $8EBB  ← boss_intro_sprite[$20]
+        .byte   $0D,$E0,$AA,$03,$F0,$E0,$AB,$03
+        .byte   $F8,$E8,$AC,$03,$F0,$E8,$AD,$03
+        .byte   $F8,$E8,$AE,$03,$00,$F0,$AF,$03
+        .byte   $F0,$F0,$B0,$03,$F8,$F0,$B1,$03
+        .byte   $00,$F8,$B2,$03,$F0,$F8,$B3,$03
+        .byte   $F8,$F8,$B4,$03,$00,$F8,$B5,$03
+        .byte   $08,$ED,$F3,$01,$F9
+boss_intro_frame_21:  ; $8EF0  ← boss_intro_sprite[$21]
+        .byte   $0D,$E8,$B6,$03,$F0,$E8,$B7,$03
+        .byte   $F8,$E8,$B8,$03,$00,$E8,$B9,$03
+        .byte   $08,$F0,$BA,$03,$F0,$F0,$BB,$03
+        .byte   $F8,$F0,$BC,$03,$00,$F0,$BD,$03
+        .byte   $08,$F8,$BE,$03,$F0,$F8,$BF,$03
+        .byte   $F8,$F8,$C0,$03,$00,$F8,$C1,$03
+        .byte   $08,$ED,$F3,$01,$FC
+boss_intro_frame_22:  ; $8F25  ← boss_intro_sprite[$22]
+        .byte   $0E,$E8,$B6,$03,$EE,$E8,$B7,$03
+        .byte   $F6,$E8,$B8,$03,$FE,$E8,$B9,$03
+        .byte   $06,$F0,$BA,$03,$EE,$F0,$BB,$03
+        .byte   $F6,$F0,$BC,$03,$FE,$F0,$BD,$03
+        .byte   $06,$F8,$C2,$03,$F8,$F8,$C3,$03
+        .byte   $00,$F8,$C4,$03,$08,$00,$C5,$03
+        .byte   $F8,$00,$C6,$03,$00,$ED,$F3,$01
+        .byte   $FB
+boss_intro_frame_23:  ; $8F5E  ← boss_intro_sprite[$23]
+        .byte   $10,$E0,$A0,$03,$F8,$E0,$A1,$03
+        .byte   $00,$E0,$A2,$03,$08,$E8,$A3,$03
+        .byte   $F0,$E8,$A4,$03,$F8,$E8,$A5,$03
+        .byte   $00,$E8,$A6,$03,$08,$F0,$A7,$03
+        .byte   $F0,$F0,$A8,$03,$F8,$F0,$A9,$03
+        .byte   $00,$F0,$AA,$03,$08,$F8,$AB,$03
+        .byte   $F0,$F8,$AC,$03,$F8,$F8,$AC,$43
+        .byte   $00,$F8,$AD,$03,$08,$E7,$F4,$02
         .byte   $FA
-        .byte   $F8
-        .byte   $CA
-        .byte   $03
-        .byte   $F0,$F8
-        .byte   $CB,$03,$F8
-        .byte   $F8
-        .byte   $CC,$03,$00
-        .byte   $F8
-        .byte   $CD,$03,$08
-        .byte   $11,$E0
-        .byte   $CE,$03,$F0
-        .byte   $E0,$CF
-        .byte   $03,$F8,$E0,$D0,$03,$00,$E0,$D1
-        .byte   $03,$08,$E8,$D2,$03,$F0,$E8
-        .byte   $A2,$03
-        .byte   $F8
-        .byte   $E8
-        .byte   $D3,$03,$00,$E8,$D4,$03,$08,$F0
-        .byte   $D5,$03,$F0,$F0,$A6,$03,$F8,$F0
-        .byte   $A7,$03,$00,$F0,$C9,$03,$08,$F0
-        .byte   $C0,$01
-        .byte   $FA,$F8,$CA,$03,$F0,$F8,$CB,$03
-        .byte   $F8,$F8,$CC,$03,$00,$F8,$CD,$03
-        .byte   $08
+boss_intro_frame_24:  ; $8F9F  ← boss_intro_sprite[$24]
+        .byte   $0F,$E0,$AE,$03,$F8,$E0,$AF,$03
+        .byte   $00,$E0,$B0,$03,$08,$E8,$B1,$03
+        .byte   $F0,$E8,$B2,$03,$F8,$E8,$B3,$03
+        .byte   $00,$E8,$B4,$03,$08,$F0,$B5,$03
+        .byte   $F5,$F0,$B6,$03,$FD,$F0,$B7,$03
+        .byte   $05,$F8,$B8,$03,$F0,$F8,$B9,$03
+        .byte   $F8,$F8,$BA,$03,$00,$F8,$BB,$03
+        .byte   $08,$E8,$F4,$02,$FA
+boss_intro_frame_25:  ; $8FDC  ← boss_intro_sprite[$25]
+        .byte   $10,$E0,$AE,$03,$F8,$E0,$AF,$03
+        .byte   $00,$E0,$B0,$03,$08,$E8,$BC,$03
+        .byte   $F0,$E8,$BD,$03,$F8,$E8,$BE,$03
+        .byte   $00,$E8,$BF,$03,$08,$F0,$C0,$03
+        .byte   $F0,$F0,$C1,$03,$F8,$F0,$C2,$03
+        .byte   $00,$F0,$C3,$03,$08,$F8,$B8,$03
+        .byte   $F0,$F8,$B9,$03,$F8,$F8,$BA,$03
+        .byte   $00,$F8,$BB,$03,$08,$E8,$F4,$02
+        .byte   $FA
+boss_intro_frame_26:  ; $901D  ← boss_intro_sprite[$26]
+        .byte   $11,$E0,$A0,$03,$F8,$E0,$A1,$03
+        .byte   $00,$E0,$CC,$03,$08,$E8,$CD,$03
+        .byte   $F0,$E8,$CE,$03,$F8,$E8,$A5,$03
+        .byte   $00,$E8,$CF,$03,$08,$F0,$D0,$03
+        .byte   $F0,$F0,$D1,$03,$F8,$F0,$D2,$03
+        .byte   $00,$F0,$D3,$03,$08,$F8,$D4,$03
+        .byte   $F0,$F8,$D5,$03,$F8,$F8,$D5,$03
+        .byte   $00,$F8,$D6,$03,$08,$E7,$F4,$02
+        .byte   $FA,$E0,$CB,$03,$F0
+boss_intro_frame_27:  ; $9062  ← boss_intro_sprite[$27]
+        .byte   $11,$E0,$C1,$03,$F0,$E0,$C2,$03
+        .byte   $F8,$E0,$C3,$03,$00,$E0,$C4,$03
+        .byte   $08,$E8,$C5,$03,$F0,$E8,$A2,$03
+        .byte   $F8,$E8,$C6,$03,$00,$E8,$C7,$03
+        .byte   $08,$F0,$C8,$03,$F0,$F0,$A6,$03
+        .byte   $F8,$F0,$A7,$03,$00,$F0,$C9,$03
+        .byte   $08,$F0,$C0,$01,$FA,$F8,$CA,$03
+        .byte   $F0,$F8,$CB,$03,$F8,$F8,$CC,$03
+        .byte   $00,$F8,$CD,$03,$08
+boss_intro_frame_28:  ; $90A7  ← boss_intro_sprite[$28]
+        .byte   $11,$E0,$CE,$03,$F0,$E0,$CF,$03
+        .byte   $F8,$E0,$D0,$03,$00,$E0,$D1,$03
+        .byte   $08,$E8,$D2,$03,$F0,$E8,$A2,$03
+        .byte   $F8,$E8,$D3,$03,$00,$E8,$D4,$03
+        .byte   $08,$F0,$D5,$03,$F0,$F0,$A6,$03
+        .byte   $F8,$F0,$A7,$03,$00,$F0,$C9,$03
+        .byte   $08,$F0,$C0,$01,$FA,$F8,$CA,$03
+        .byte   $F0,$F8,$CB,$03,$F8,$F8,$CC,$03
+        .byte   $00,$F8,$CD,$03,$08
 ; ─── weapon select screen render ───
 weapon_menu_screen:
         jsr     clear_oam_buffer_fixed
@@ -2845,87 +2686,79 @@ wily_map_flash_palette_data:  .byte   $0F,$11,$11,$11,$0F,$11,$11,$11
 ; =============================================================================
 ; Entity Sprite Pointer Tables — lo/hi pointers for get screen sprites
 ; =============================================================================
-entity_sprite_ptr_lo:  .byte   $E9,$2A,$5B,$8C
-        .byte   $BD,$E6,$0F
-        .byte   $0F,$50,$61,$6A
-entity_sprite_ptr_hi:  .byte   $9B,$9C,$9C,$9C,$9C,$9C,$9D,$9D
-        .byte   $9D,$9D,$9D,$10,$00,$48,$03,$08
-        .byte   $00,$49,$03,$10,$00
-        .byte   $49,$43
-        .byte   $18
-        .byte   $00
-        .byte   $48,$43,$20,$08,$4A,$03,$00,$08
-        .byte   $4B,$03,$08,$08
-        .byte   $4C,$03,$10
+entity_sprite_ptr_lo:  .byte   <map_entity_sprite_00,<map_entity_sprite_01,<map_entity_sprite_02,<map_entity_sprite_03,<map_entity_sprite_04,<map_entity_sprite_05,<map_entity_sprite_06,<map_entity_sprite_06 ; $00-$07
+        .byte   <map_entity_sprite_08,<map_entity_sprite_09,<map_entity_sprite_0A ; $08-$0A
+entity_sprite_ptr_hi:  .byte   >map_entity_sprite_00,>map_entity_sprite_01,>map_entity_sprite_02,>map_entity_sprite_03,>map_entity_sprite_04,>map_entity_sprite_05,>map_entity_sprite_06,>map_entity_sprite_06 ; $00-$07
+        .byte   >map_entity_sprite_08,>map_entity_sprite_09,>map_entity_sprite_0A ; $08-$0A
 
-        .byte   $08,$4C,$43,$18,$08,$4B,$43,$20
-        .byte   $08,$4A,$43,$28,$10,$4D,$03,$00
-        .byte   $10,$4E,$03,$08,$10,$4F,$03,$10
-        .byte   $10,$4F,$43,$18,$10,$4E,$43,$20
-        .byte   $10,$4D,$43,$28,$0C,$00,$50,$02
-        .byte   $00
-        .byte   $00
-        .byte   $51,$02
-        .byte   $08
-        .byte   $00
-        .byte   $52,$02,$10,$00,$52,$42,$18,$00
-        .byte   $51,$42
-        .byte   $20,$00,$50
-        .byte   $42,$28,$08,$53,$02,$00,$08,$54
-        .byte   $02,$08,$08,$55,$02,$10,$08,$55
-        .byte   $42,$18,$08,$54,$42,$20,$08,$53
-        .byte   $42,$28,$0C,$00,$56,$02,$00,$00
-        .byte   $57,$02,$08,$00,$58,$02,$10,$00
-        .byte   $59,$02,$18
-        .byte   $00
-        .byte   $5A,$02,$20,$00,$5B,$02,$28,$08
-        .byte   $53,$02,$00,$08,$54,$02,$08,$08
-        .byte   $55,$02,$10,$08,$55,$42,$18,$08
-        .byte   $54,$42,$20,$08,$53,$42,$28,$0C
-        .byte   $00,$5B,$42,$00,$00,$5A,$42,$08
-        .byte   $00,$59,$42,$10,$00,$58,$42
-        .byte   $18
-        .byte   $00
-        .byte   $57,$42,$20,$00,$56,$42,$28,$08
-        .byte   $53,$02,$00,$08,$54,$02,$08,$08
-        .byte   $55,$02,$10,$08,$55,$42,$18,$08
-        .byte   $54,$42,$20,$08,$53,$42,$28,$0A
-        .byte   $00,$69,$03,$00,$00,$40,$01,$08
-        .byte   $00,$41,$01,$10,$00,$42,$01,$18
-        .byte   $00,$69,$43,$20,$08,$6A,$03,$00
-        .byte   $08,$43,$01,$08,$08,$44,$01,$10
-        .byte   $08,$45,$01,$18,$08,$6A,$43,$20
+; ─── Wily map / stage select entity sprite frames (OAM lists) ───
+map_entity_sprite_00:  ; $9BE9  ← entity_sprite[$00]
+        .byte   $10,$00,$48,$03,$08,$00,$49,$03
+        .byte   $10,$00,$49,$43,$18,$00,$48,$43
+        .byte   $20,$08,$4A,$03,$00,$08,$4B,$03
+        .byte   $08,$08,$4C,$03,$10,$08,$4C,$43
+        .byte   $18,$08,$4B,$43,$20,$08,$4A,$43
+        .byte   $28,$10,$4D,$03,$00,$10,$4E,$03
+        .byte   $08,$10,$4F,$03,$10,$10,$4F,$43
+        .byte   $18,$10,$4E,$43,$20,$10,$4D,$43
+        .byte   $28
+map_entity_sprite_01:  ; $9C2A  ← entity_sprite[$01]
+        .byte   $0C,$00,$50,$02,$00,$00,$51,$02
+        .byte   $08,$00,$52,$02,$10,$00,$52,$42
+        .byte   $18,$00,$51,$42,$20,$00,$50,$42
+        .byte   $28,$08,$53,$02,$00,$08,$54,$02
+        .byte   $08,$08,$55,$02,$10,$08,$55,$42
+        .byte   $18,$08,$54,$42,$20,$08,$53,$42
+        .byte   $28
+map_entity_sprite_02:  ; $9C5B  ← entity_sprite[$02]
+        .byte   $0C,$00,$56,$02,$00,$00,$57,$02
+        .byte   $08,$00,$58,$02,$10,$00,$59,$02
+        .byte   $18,$00,$5A,$02,$20,$00,$5B,$02
+        .byte   $28,$08,$53,$02,$00,$08,$54,$02
+        .byte   $08,$08,$55,$02,$10,$08,$55,$42
+        .byte   $18,$08,$54,$42,$20,$08,$53,$42
+        .byte   $28
+map_entity_sprite_03:  ; $9C8C  ← entity_sprite[$03]
+        .byte   $0C,$00,$5B,$42,$00,$00,$5A,$42
+        .byte   $08,$00,$59,$42,$10,$00,$58,$42
+        .byte   $18,$00,$57,$42,$20,$00,$56,$42
+        .byte   $28,$08,$53,$02,$00,$08,$54,$02
+        .byte   $08,$08,$55,$02,$10,$08,$55,$42
+        .byte   $18,$08,$54,$42,$20,$08,$53,$42
+        .byte   $28
+map_entity_sprite_04:  ; $9CBD  ← entity_sprite[$04]
+        .byte   $0A,$00,$69,$03,$00,$00,$40,$01
+        .byte   $08,$00,$41,$01,$10,$00,$42,$01
+        .byte   $18,$00,$69,$43,$20,$08,$6A,$03
+        .byte   $00,$08,$43,$01,$08,$08,$44,$01
+        .byte   $10,$08,$45,$01,$18,$08,$6A,$43
+        .byte   $20
+map_entity_sprite_05:  ; $9CE6  ← entity_sprite[$05]
         .byte   $0A,$00,$69,$03,$00,$00,$46,$01
         .byte   $08,$00,$47,$01,$10,$00,$42,$01
         .byte   $18,$00,$69,$43,$20,$08,$6A,$03
-        .byte   $00,$08,$43,$01
-        .byte   $08
-        .byte   $08
-        .byte   $44,$01,$10,$08,$45,$01,$18,$08
-        .byte   $6A,$43,$20
-        .byte   $10,$08
-        .byte   $5C,$03,$08,$08,$5D,$03,$10
-        .byte   $08
-        .byte   $5D,$43,$18
-        .byte   $08
-        .byte   $5C,$43
-        .byte   $20,$10,$5E
-        .byte   $03,$08,$10,$5F,$03,$10,$10,$5F
-        .byte   $43,$18,$10,$5E,$43,$20,$18,$60
-        .byte   $02,$08,$18,$61,$02,$10,$18
-        .byte   $61,$42
+        .byte   $00,$08,$43,$01,$08,$08,$44,$01
+        .byte   $10,$08,$45,$01,$18,$08,$6A,$43
+        .byte   $20
+map_entity_sprite_06:  ; $9D0F  ← entity_sprite[$06], entity_sprite[$07]
+        .byte   $10,$08,$5C,$03,$08,$08,$5D,$03
+        .byte   $10,$08,$5D,$43,$18,$08,$5C,$43
+        .byte   $20,$10,$5E,$03,$08,$10,$5F,$03
+        .byte   $10,$10,$5F,$43,$18,$10,$5E,$43
+        .byte   $20,$18,$60,$02,$08,$18,$61,$02
+        .byte   $10,$18,$61,$42,$18,$18,$60,$42
+        .byte   $20,$20,$62,$02,$08,$20,$63,$02
+        .byte   $10,$20,$63,$42,$18,$20,$62,$42
+        .byte   $20
+map_entity_sprite_08:  ; $9D50  ← entity_sprite[$08]
+        .byte   $04,$10,$64,$03,$10,$10,$64,$43
+        .byte   $18,$18,$65,$02,$10,$18,$65,$42
         .byte   $18
-        .byte   $18
-        .byte   $60
-
-        .byte   $42,$20,$20,$62,$02,$08,$20,$63
-        .byte   $02,$10,$20,$63,$42,$18,$20,$62
-        .byte   $42,$20,$04
-        .byte   $10,$64
-        .byte   $03,$10,$10,$64,$43,$18,$18,$65
-        .byte   $02,$10,$18,$65,$42,$18,$02,$10
-        .byte   $66,$03,$14,$18,$67,$02,$14,$01
-        .byte   $14,$68,$03,$14
+map_entity_sprite_09:  ; $9D61  ← entity_sprite[$09]
+        .byte   $02,$10,$66,$03,$14,$18,$67,$02
+        .byte   $14
+map_entity_sprite_0A:  ; $9D6A  ← entity_sprite[$0A]
+        .byte   $01,$14,$68,$03,$14
 star_y_offset:  .byte   $00
 star_tile_1:  .byte   $6B
 star_attr:  .byte   $00
@@ -4605,168 +4438,101 @@ title_bird_x_offset:  .byte   $C0,$00
 ; =============================================================================
 ; Boss Sprite Definition Pointers — lo/hi for Wily machine frames
 ; =============================================================================
-title_megaman_def_ptr_lo:  .byte   $3D,$6A,$97,$C8,$F9,$2E
-        .byte   $57,$80,$A9,$D2,$FB,$0C,$35
-title_megaman_def_ptr_hi:  .byte   $AB,$AB,$AB,$AB,$AB,$AC,$AC,$AC
-        .byte   $AC,$AC,$AC,$AD,$AD,$0B,$00,$00
-        .byte   $01
-        .byte   $C8
-        .byte   $00
-        .byte   $01,$01,$D0,$00,$02,$01,$D8,$08
-        .byte   $03,$00,$C8,$08,$04,$00,$D0,$08
-        .byte   $05,$00,$D8,$08,$1F,$01,$C8,$08
-        .byte   $20,$01,$D0
-        .byte   $10,$06
-        .byte   $00
-        .byte   $C8,$10,$07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$0B,$00,$09,$01,$C8,$00
-        .byte   $0A
-        .byte   $01,$D0
-        .byte   $00
-        .byte   $0B,$01,$D8,$08,$03,$00,$C8,$08
-        .byte   $04,$00,$D0,$08,$05,$00,$D8,$08
-        .byte   $1F,$01,$C8,$08
-        .byte   $20,$01,$D0
-        .byte   $10,$06
-        .byte   $00
-        .byte   $C8,$10,$07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$0C,$00,$0C,$01,$C8,$00
-        .byte   $0D,$01,$D0
-        .byte   $00
-        .byte   $02,$01,$D8,$00,$21,$00,$D0,$08
-        .byte   $03
-        .byte   $00
-        .byte   $C8
-        .byte   $08
-        .byte   $04,$00,$D0,$08
-        .byte   $05,$00
-        .byte   $D8
-        .byte   $08
-        .byte   $23,$01,$C8,$08
-        .byte   $24,$01
-        .byte   $D0,$10
-        .byte   $06,$00
-        .byte   $C8
-        .byte   $10,$07
-        .byte   $00
-        .byte   $D0,$10,$08,$00,$D8,$0C
-        .byte   $00,$0C,$01,$C8
-        .byte   $00,$0E,$01,$D0,$00,$02,$01,$D8
-        .byte   $00,$22,$00,$D0,$08,$03,$00,$C8
-        .byte   $08,$04,$00,$D0,$08
-        .byte   $05,$00
-        .byte   $D8
-        .byte   $08
-        .byte   $23,$01,$C8,$08
-        .byte   $24,$01
-        .byte   $D0,$10
-        .byte   $06,$00
-        .byte   $C8
-        .byte   $10,$07
-        .byte   $00
-        .byte   $D0,$10,$08,$00,$D8,$0D
-        .byte   $00,$0F,$01,$C8
-        .byte   $00,$10,$01,$D0
-        .byte   $00
-        .byte   $11,$01
-        .byte   $D8
-        .byte   $00
-        .byte   $25,$00,$C8,$00,$26,$00,$D0,$08
-        .byte   $03,$00,$C8,$08,$04,$00,$D0,$08
-        .byte   $05,$00
-        .byte   $D8
-        .byte   $08
-        .byte   $1F,$01,$C8,$08
-        .byte   $20,$01,$D0
-        .byte   $10,$06
-        .byte   $00
-        .byte   $C8,$10,$07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$0A,$00,$12,$00,$C8,$00
-        .byte   $13,$00,$D0,$00,$14,$00,$D8,$08
-        .byte   $03,$00,$C8,$08,$15,$00,$D0,$08
-        .byte   $05,$00,$D8,$10,$06,$00,$C8,$10
-        .byte   $07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$06,$27,$01,$CF,$0A,$00
-        .byte   $12,$00,$C8,$00,$16,$00,$D0,$00
-        .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
-        .byte   $18,$00,$D0,$08,$19,$00,$D8,$10
-        .byte   $06,$00,$C8,$10,$07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$06
-        .byte   $28
-        .byte   $01,$CF
-        .byte   $0A
-        .byte   $00
-        .byte   $12,$00,$C8,$00,$1A,$00,$D0,$00
-        .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
-        .byte   $1B,$00,$D0,$08,$05,$00,$D8,$10
-        .byte   $06,$00,$C8,$10,$07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$06
-        .byte   $28
-        .byte   $01,$CF
-        .byte   $0A
-        .byte   $00
-        .byte   $1C,$00,$C8,$00,$1D,$00,$D0,$00
-        .byte   $17,$00,$D8,$08,$03,$00,$C8,$08
-        .byte   $18,$00,$D0,$08,$05,$00,$D8,$10
-        .byte   $06,$00,$C8,$10,$07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$06
-        .byte   $28
-        .byte   $01,$CF
-        .byte   $0A
-        .byte   $00
-        .byte   $1C,$00,$C8,$00,$1E,$00,$D0,$00
-        .byte   $17,$00,$D8,$08
+title_megaman_def_ptr_lo:  .byte   <title_megaman_frame_00,<title_megaman_frame_01,<title_megaman_frame_02,<title_megaman_frame_03,<title_megaman_frame_04,<title_megaman_frame_05,<title_megaman_frame_06,<title_megaman_frame_07 ; $00-$07
+        .byte   <title_megaman_frame_08,<title_megaman_frame_09,<title_megaman_frame_0A,<title_megaman_frame_0B,<title_megaman_frame_0C ; $08-$0C
+title_megaman_def_ptr_hi:  .byte   >title_megaman_frame_00,>title_megaman_frame_01,>title_megaman_frame_02,>title_megaman_frame_03,>title_megaman_frame_04,>title_megaman_frame_05,>title_megaman_frame_06,>title_megaman_frame_07 ; $00-$07
+        .byte   >title_megaman_frame_08,>title_megaman_frame_09,>title_megaman_frame_0A,>title_megaman_frame_0B,>title_megaman_frame_0C ; $08-$0C
 
-; =============================================================================
-; Boss Sprite Data — raw OAM for each Wily machine animation frame
-; =============================================================================
-        .byte   $03,$00,$C8,$08,$18,$00,$D0,$08
-        .byte   $05,$00,$D8,$10,$06,$00,$C8,$10
-        .byte   $07,$00,$D0
-        .byte   $10,$08
-        .byte   $00
-        .byte   $D8,$06
-        .byte   $28
-        .byte   $01,$CF
-        .byte   $04,$F8
-        .byte   $2A
-        .byte   $00
+; ─── Title screen Mega Man sprite frames (OAM lists) ───
+title_megaman_frame_00:  ; $AB3D  ← title_megaman_def[$00]
+        .byte   $0B,$00,$00,$01,$C8,$00,$01,$01
+        .byte   $D0,$00,$02,$01,$D8,$08,$03,$00
+        .byte   $C8,$08,$04,$00,$D0,$08,$05,$00
+        .byte   $D8,$08,$1F,$01,$C8,$08,$20,$01
+        .byte   $D0,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8
+title_megaman_frame_01:  ; $AB6A  ← title_megaman_def[$01]
+        .byte   $0B,$00,$09,$01,$C8,$00,$0A,$01
+        .byte   $D0,$00,$0B,$01,$D8,$08,$03,$00
+        .byte   $C8,$08,$04,$00,$D0,$08,$05,$00
+        .byte   $D8,$08,$1F,$01,$C8,$08,$20,$01
+        .byte   $D0,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8
+title_megaman_frame_02:  ; $AB97  ← title_megaman_def[$02]
+        .byte   $0C,$00,$0C,$01,$C8,$00,$0D,$01
+        .byte   $D0,$00,$02,$01,$D8,$00,$21,$00
+        .byte   $D0,$08,$03,$00,$C8,$08,$04,$00
+        .byte   $D0,$08,$05,$00,$D8,$08,$23,$01
+        .byte   $C8,$08,$24,$01,$D0,$10,$06,$00
+        .byte   $C8,$10,$07,$00,$D0,$10,$08,$00
+        .byte   $D8
+title_megaman_frame_03:  ; $ABC8  ← title_megaman_def[$03]
+        .byte   $0C,$00,$0C,$01,$C8,$00,$0E,$01
+        .byte   $D0,$00,$02,$01,$D8,$00,$22,$00
+        .byte   $D0,$08,$03,$00,$C8,$08,$04,$00
+        .byte   $D0,$08,$05,$00,$D8,$08,$23,$01
+        .byte   $C8,$08,$24,$01,$D0,$10,$06,$00
+        .byte   $C8,$10,$07,$00,$D0,$10,$08,$00
+        .byte   $D8
+title_megaman_frame_04:  ; $ABF9  ← title_megaman_def[$04]
+        .byte   $0D,$00,$0F,$01,$C8,$00,$10,$01
+        .byte   $D0,$00,$11,$01,$D8,$00,$25,$00
+        .byte   $C8,$00,$26,$00,$D0,$08,$03,$00
+        .byte   $C8,$08,$04,$00,$D0,$08,$05,$00
+        .byte   $D8,$08,$1F,$01,$C8,$08,$20,$01
+        .byte   $D0,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8
+title_megaman_frame_05:  ; $AC2E  ← title_megaman_def[$05]
+        .byte   $0A,$00,$12,$00,$C8,$00,$13,$00
+        .byte   $D0,$00,$14,$00,$D8,$08,$03,$00
+        .byte   $C8,$08,$15,$00,$D0,$08,$05,$00
+        .byte   $D8,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8,$06,$27,$01
+        .byte   $CF
+title_megaman_frame_06:  ; $AC57  ← title_megaman_def[$06]
+        .byte   $0A,$00,$12,$00,$C8,$00,$16,$00
+        .byte   $D0,$00,$17,$00,$D8,$08,$03,$00
+        .byte   $C8,$08,$18,$00,$D0,$08,$19,$00
+        .byte   $D8,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8,$06,$28,$01
+        .byte   $CF
+title_megaman_frame_07:  ; $AC80  ← title_megaman_def[$07]
+        .byte   $0A,$00,$12,$00,$C8,$00,$1A,$00
+        .byte   $D0,$00,$17,$00,$D8,$08,$03,$00
+        .byte   $C8,$08,$1B,$00,$D0,$08,$05,$00
+        .byte   $D8,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8,$06,$28,$01
+        .byte   $CF
+title_megaman_frame_08:  ; $ACA9  ← title_megaman_def[$08]
+        .byte   $0A,$00,$1C,$00,$C8,$00,$1D,$00
+        .byte   $D0,$00,$17,$00,$D8,$08,$03,$00
+        .byte   $C8,$08,$18,$00,$D0,$08,$05,$00
+        .byte   $D8,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8,$06,$28,$01
+        .byte   $CF
+title_megaman_frame_09:  ; $ACD2  ← title_megaman_def[$09]
+        .byte   $0A,$00,$1C,$00,$C8,$00,$1E,$00
+        .byte   $D0,$00,$17,$00,$D8,$08,$03,$00
+        .byte   $C8,$08,$18,$00,$D0,$08,$05,$00
+        .byte   $D8,$10,$06,$00,$C8,$10,$07,$00
+        .byte   $D0,$10,$08,$00,$D8,$06,$28,$01
+        .byte   $CF
+title_megaman_frame_0A:  ; $ACFB  ← title_megaman_def[$0A]
+        .byte   $04,$F8,$2A,$00,$D0,$00,$2A,$00
+        .byte   $D0,$08,$2A,$00,$D0,$10,$2A,$00
         .byte   $D0
-        .byte   $00
-        .byte   $2A
-        .byte   $00
-        .byte   $D0
-        .byte   $08
-        .byte   $2A
-        .byte   $00
-        .byte   $D0,$10,$2A,$00,$D0,$0A,$F8,$2F
-        .byte   $00,$D0,$00
-        .byte   $2C,$00,$C8
-        .byte   $00
-        .byte   $2D,$00,$D0,$00,$2C,$40,$D8,$08
-        .byte   $2C,$00,$C8,$08,$2D,$00,$D0,$08
-        .byte   $2C,$40,$D8,$10,$2B,$00,$C8,$10
-        .byte   $2E,$00,$D0,$10,$2B,$40,$D8,$04
-        .byte   $08,$2F,$00,$D0,$10,$2B,$00,$C8
-        .byte   $10,$2E,$00,$D0
-        .byte   $10,$2B
-        .byte   $40
-
-        .byte   $D8,$00,$00,$00,$C9,$CE,$00,$D4
+title_megaman_frame_0B:  ; $AD0C  ← title_megaman_def[$0B]
+        .byte   $0A,$F8,$2F,$00,$D0,$00,$2C,$00
+        .byte   $C8,$00,$2D,$00,$D0,$00,$2C,$40
+        .byte   $D8,$08,$2C,$00,$C8,$08,$2D,$00
+        .byte   $D0,$08,$2C,$40,$D8,$10,$2B,$00
+        .byte   $C8,$10,$2E,$00,$D0,$10,$2B,$40
+        .byte   $D8
+title_megaman_frame_0C:  ; $AD35  ← title_megaman_def[$0C]
+        .byte   $04,$08,$2F,$00,$D0,$10,$2B,$00
+        .byte   $C8,$10,$2E,$00,$D0,$10,$2B,$40
+        .byte   $D8
+        .byte   $00,$00,$00,$C9,$CE,$00,$D4
         .byte   $C8,$C5,$00,$D9,$C5,$C1,$D2,$00
         .byte   $CF
         .byte   $C6,$00
