@@ -59,7 +59,8 @@ MMC1 bank switching requires 5 serial writes (bit 0 of each byte) to any address
 | $0100-$017F | 128 B | Entity arrays (page $01) — collision guards, parent refs, platform data |
 | $0180-$01FF | 128 B | Hardware stack (very shallow — typically 6-8 bytes deep) |
 | $0200-$02FF | 256 B | OAM shadow buffer (64 sprites × 4 bytes, DMA'd to PPU each NMI) |
-| $0300-$0355 | 86 B | PPU write buffer (queued nametable/attribute updates) |
+| $0300-$0353 | 84 B | PPU write buffer (queued nametable/attribute updates) |
+| $0354-$0355 | 2 B | Palette animation target / counter |
 | $0356-$0375 | 32 B | Palette mirror (uploaded to PPU $3F00 every NMI) |
 | $0376-$03FF | 138 B | Column/attribute update buffers, palette animation frames |
 | $0400-$06FF | 768 B | Entity arrays (main) — type, position, velocity, AI state, HP |
@@ -126,7 +127,7 @@ main_game_loop:
   8. wait_for_vblank          — Spin on vblank_done flag until NMI fires
 ```
 
-Note that physics (step 3) runs **before** AI (step 6), so AI handlers see the entity's updated position. Controller hardware is read inside `wait_for_vblank` (via `read_controllers`), and the results (`p1_new_presses`) are consumed by `entity_update_dispatch`. `wait_for_vblank` at step 8 blocks until the NMI handler sets `vblank_done`. This synchronizes gameplay to 60 Hz (NTSC). All PPU writes happen inside NMI; the main loop only prepares data.
+Before step 1 the loop also handles a pending item pickup (`item_collection_handler`) and START (`open_weapon_menu`); after step 7 it runs `check_screen_transition` when `transition_type` is set and applies the frame-skip throttle (`frame_skip_lo/hi`). Note that physics (step 3) runs **before** AI (step 6), so AI handlers see the entity's updated position. Controller hardware is read inside `wait_for_vblank` (via `read_controllers`), and the results (`p1_new_presses`) are consumed by `entity_update_dispatch`. `wait_for_vblank` at step 8 blocks until the NMI handler sets `vblank_done`. This synchronizes gameplay to 60 Hz (NTSC). All PPU writes happen inside NMI; the main loop only prepares data.
 
 ---
 
@@ -293,7 +294,7 @@ Some enemies are too large to render as sprites (NES: max 8 sprites per scanline
 |-------|-----------|-------|-------------|-------|-------|
 | Friender | $1C | $A0 | $19 | $83 | BG fire dog, child is invisible hitbox |
 | Mole | $47 | $A0 | $48/$49 | $83 | Controller spawns copies + shot children |
-| Goblin | $40/$41 | $A0 | $44 (horn) | $83 | Indestructible body, horn deals contact damage |
+| Goblin | $40/$41 | $A0 | $44 (horn) | $8B | Indestructible body, horn deals contact damage (bit 3 = deflects Buster) |
 
 The Friender's controller ($1C) has `weapon_dmg_buster_tbl[$1C] = $00` (immune), while the hitbox child ($19) has `weapon_dmg_buster_tbl[$19] = $01`. With `apply_difficulty_modifier` doubling damage on Normal, this gives `ceil(20 / (1×2))` = 10 buster hits on Normal — matching the expected value.
 
@@ -337,11 +338,11 @@ The `game_mode` variable ($AA) controls how dispatch works:
 | game_mode | Behavior |
 |-----------|----------|
 | 0 or 4 | **Normal** — Index into ptr_lo/ptr_hi, call in bank $0E. Bank field ignored. |
-| Other | **Special** — If entity's bank field ≠ 0, use alternate pointer in bank $0F |
+| Other | **Special** — bank field 0: normal table as above; bank field 1–8: `entity_special_ai_ptr[bank−1]` (handlers in bank $0F) |
 
 In special mode the bank field is not a bank number but an index: entries 1–8 select `entity_special_ai_ptr_lo/hi` (bank0E:2724, 8 live entries at bank−1, the rest is padding) → `apply_entity_physics_alt`, `apply_simple_physics`, `platform_ai_h14`, `platform_ai_h18_a`, `platform_ai_h18_b`, `goblin_special_ai` (×2, bank0F:5620), `changkey_special_ai` (bank0F:5667). Entities whose bank field is 0 use the normal table even in special mode.
 
-In normal gameplay (game_mode = 0), all 128 entity AI handlers live in bank $0E and the bank field is completely ignored. Special mode is used for cross-bank handlers during unusual game states.
+In normal gameplay (game_mode = 0), all 128 entity AI handlers live in bank $0E and the bank field is completely ignored. Special mode (boss-rematch / cutscene-style game states) swaps a handful of types — platforms, Goblin, Changkey, and anything whose normal AI is pure physics — for the fixed-bank handlers above, so they keep working while bank $0E is not the one mapped.
 
 ### Dispatch Algorithm
 
@@ -369,18 +370,26 @@ Several entity types point to a minimal stub (`kerog_physics_rts` — calls `app
 
 **File:** `bank0F_fixed.asm`
 
-Two physics routines exist:
+The movement code is one routine, `entity_physics_core` ($EEEF), reached through four collision-gated entry points (all in `bank0F_fixed.asm`):
 
-### apply_entity_physics (basic movement)
+| Entry | Address | death_context | What it does |
+|-------|---------|---------------|--------------|
+| `entity_physics_core` | $EEEF | — | Pure movement: velocity, gravity, bounds check. No collision. |
+| `apply_entity_physics` | $EEBA | 0 | Collision gate (bits 0-1) → kill handling → **then** `entity_physics_core` |
+| `apply_simple_collision` | $EEB6 | 1 | Same as above for secondary (child) entities |
+| `apply_entity_physics_alt` | $EFB3 | 0 | Collision gate → kill handling → off-screen check. **No movement** — carry set = destroyed |
+| `apply_simple_physics` | $EFAF | 1 | Same as `_alt` for secondary entities |
+| `apply_collision_physics` | $EEDA | — | Kill entry: convert to `ENTITY_DEATH_EXPLODE`, clear anim, despawn check |
 
-Moves the entity by its velocity without collision checks. Used by projectiles and simple moving objects.
+### entity_physics_core (movement)
 
 ```
 Y movement:
   position.y = position.y - velocity.y    (subtract! positive Y_vel = upward)
-  velocity.y = velocity.y - gravity        (gravity pulls velocity downward)
+  if position.y >= $F0 → despawn (fell off the bottom)
+  if ent_flags bit 2 set: velocity.y = velocity.y - gravity   (gravity pulls velocity downward)
 
-X movement:
+X movement (ent_flags bit 6 = facing):
   if facing_left:  position.x = position.x - velocity.x
   if facing_right: position.x = position.x + velocity.x
 
@@ -388,18 +397,17 @@ Bounds check:
   if screen-relative X < $08 or >= $F8 → despawn (8px margin)
 ```
 
-Key detail: Y velocity is **subtracted** from Y position. This is because NES screen coordinates increase downward, so a positive Y velocity means upward movement. Gravity decreases Y velocity each frame, eventually making it negative (downward).
+Key detail: Y velocity is **subtracted** from Y position. This is because NES screen coordinates increase downward, so a positive Y velocity means upward movement. Gravity decreases Y velocity each frame, eventually making it negative (downward). Gravity only applies when `ent_flags` bit 2 is set.
 
 Sub-pixel accumulators provide smooth fractional movement. The carry/borrow from sub-pixel arithmetic propagates into the pixel byte.
 
-### apply_entity_physics_alt (with collision)
+### apply_entity_physics (collision + movement)
 
-Same movement as above, plus:
-1. **Player contact collision** — bounding box test against player
-2. **Weapon collision** — scan weapon slots for hits
-3. **Offscreen despawn** — remove if scrolled out of view
+The common per-frame call for enemies that move by velocity: it tests contact and weapon collision according to `ent_flags` bits 0-1 (see §10), converts the entity to a death explosion on a weapon kill, and otherwise falls into `entity_physics_core`. The NULL AI stub `kerog_physics_rts` is just `jsr apply_entity_physics / rts`. `update_entity_positions` (main loop step 3) uses `entity_physics_core` directly for the player/weapon slots whose flags bit 1 is clear.
 
-Most enemy AI handlers call this variant. It's the standard "physics + collision" package.
+### apply_entity_physics_alt (collision only)
+
+Same gating and kill handling, but it never moves the entity — AI handlers that position the entity themselves (or that are stationary) call this and then test the carry: set means the entity was destroyed or scrolled off (`offscreen_flag`). Despite the name it is the lighter of the two.
 
 ---
 
@@ -429,21 +437,22 @@ ora (other bits)  ; merge back
 
 ### Collision Gating (ent_flags bits 0-1)
 
-Before running any collision checks, `apply_entity_physics_alt` ($EFB3, bank0F) tests the low 2 bits of `ent_flags`:
+Before running any collision checks, `apply_entity_physics_alt` ($EFB3, bank0F) — and identically `apply_entity_physics` ($EEBA) before it moves the entity — tests the low 2 bits of `ent_flags`:
 
 ```asm
 lda  ent_flags,x
 and  #$03
-beq  apply_entity_physics    ; both clear → skip all collision
+beq  physics_alt_check_offscreen   ; both clear → skip all collision
 pha
 and  #$01
-beq  @skip_contact           ; bit 0 clear → skip player contact
+beq  physics_alt_check_contact     ; bit 0 clear → skip player contact
 jsr  check_player_collision
-@skip_contact:
+physics_alt_check_contact:
 pla
 and  #$02
-beq  apply_entity_physics    ; bit 1 clear → skip weapon collision
+beq  physics_alt_check_offscreen   ; bit 1 clear → skip weapon collision
 jsr  check_weapon_collision
+bcc  physics_alt_check_offscreen   ; carry set = killed → death explosion
 ```
 
 | Bit | When set | Effect |
@@ -482,15 +491,15 @@ On a confirmed hit, `weapon_collision_dispatch` (bank0F:4984) reads `current_wea
 
 | Weapon ID | Weapon | Handler | Damage Sub-Table |
 |-----------|--------|---------|-----------------|
-| $00 | Mega Buster | bank0F:4995 | `weapon_dmg_buster_tbl` |
-| $01 | Atomic Fire | bank0F:5042 | `weapon_dmg_buster_tbl` (uncharged) / `weapon_dmg_atomic_tbl` (full charge) |
-| $02 | Air Shooter | bank0F:5099 | `weapon_dmg_air_tbl` |
-| $03 | Leaf Shield | bank0F:5146 | `weapon_dmg_leaf_tbl` |
-| $04 | Bubble Lead | bank0F:5201 | `weapon_dmg_bubble_tbl` |
-| $05 | Quick Boomerang | bank0F:5247 | `weapon_dmg_quick_tbl` |
-| $06 | Time Stopper | — | Handled separately (continuous damage, no dispatch) |
-| $07 | Metal Blade | bank0F:5360 | `weapon_dmg_metal_tbl` |
-| $08 | Crash Bomber | bank0F:5309 | `weapon_dmg_crash_tbl` |
+| $00 | Mega Buster | `weapon_hit_buster` (bank0F:4996) | `weapon_dmg_buster_tbl` |
+| $01 | Atomic Fire | `weapon_hit_atomic` (bank0F:5043) | `weapon_dmg_buster_tbl` (uncharged) / `weapon_dmg_atomic_tbl` (full charge) |
+| $02 | Air Shooter | `weapon_hit_air` (bank0F:5100) | `weapon_dmg_air_tbl` |
+| $03 | Leaf Shield | `weapon_hit_leaf` (bank0F:5147) | `weapon_dmg_leaf_tbl` |
+| $04 | Bubble Lead | `weapon_hit_bubble` (bank0F:5202) | `weapon_dmg_bubble_tbl` |
+| $05 | Quick Boomerang | `weapon_hit_quick` (bank0F:5248) | `weapon_dmg_quick_tbl` |
+| $06 | Time Stopper | `apply_difficulty_modifier` (no-op entry) | Handled separately (continuous drain, no per-hit damage) |
+| $07 | Metal Blade | `weapon_hit_metal` (bank0F:5361) | `weapon_dmg_metal_tbl` |
+| $08 | Crash Bomber | `weapon_hit_crash` (bank0F:5310) | `weapon_dmg_crash_tbl` |
 
 Each sub-table has one entry per entity type (124 entries for Buster/contact, 120 for the rest — high types are never checked). The handler reads `damage_table[entity_type]` into `temp_00`. A value of $00 means immune. The handler then calls `apply_difficulty_modifier`, which doubles `temp_00` on Normal difficulty (ASL). The resulting damage is subtracted from `ent_hp`.
 
@@ -510,17 +519,17 @@ Pixel position
   → Metatile map (8×8 grid of 32×32 metatiles per screen)
   → Metatile ID
   → Quadrant (which 16×16 sub-tile within the 32×32 metatile)
-  → Collision type (2-bit value from tile's attribute byte)
+  → Collision class (top 2 bits of the quadrant byte)
 ```
 
 ### Algorithm Detail
 
 1. **Row/column extraction** — bit shifts extract the 3-bit row and 3-bit column from the pixel Y and X positions
 2. **Map index** — `column × 8 + row` (column-major layout, 64 entries per screen)
-3. **Metatile pointer** — base address from screen number × 64
-4. **Metatile ID** → data address at `$2000 + ID × 4` (each metatile = 4 bytes for 2×2 sub-tiles)
+3. **Metatile pointer** — `$8500 + screen × 64` into the stage bank's screen layouts
+4. **Metatile ID** → definition at `$8000 + ID × 4` (each metatile = 4 quadrant bytes)
 5. **Quadrant select** — bit 4 of X and Y selects which of the 4 sub-tiles in the metatile
-6. **Collision bits** — top 2 bits of the sub-tile byte encode collision type:
+6. **Collision bits** — top 2 bits of the quadrant byte encode the collision class:
    - 0 = empty (passable)
    - 1 = solid
    - 2-3 = stage-specific (look up in `stage_collision_table`, 2 bytes per stage)
@@ -551,7 +560,7 @@ Each sprite occupies 4 bytes in the OAM buffer ($0200):
 1. Clear OAM buffer (all sprites hidden)
 2. For each active entity slot:
    - Look up sprite definition for `ent_type[x]` and `ent_anim_frame[x]`
-   - Sprite definitions live in the fixed bank ($F900+); frame + OAM layout data in bank $0A
+   - Pointer tables at $F900-$FAFF and the definitions themselves (`sprdef_*`, $FB00-$FF87) live in the fixed bank; frame + OAM layout data in bank $0A
    - Write 1-N sprite entries to OAM buffer
    - Apply facing direction flip (horizontal mirror via attribute bit 6)
    - Offset sprites relative to camera scroll position
@@ -674,11 +683,12 @@ enemy_ai_dispatch:
 
 Every boss uses `boss_phase` ($B1) as its primary state machine:
 
-| Phase | Typical meaning |
+| boss_phase | Meaning |
 |-------|----------------|
-| 0 | Entrance / idle animation |
-| 1+ | Active attack patterns |
-| N | Death sequence |
+| 0 | No boss fight (cleared outside fights; item drops are suppressed while non-zero) |
+| 1 | Entrance — `boss_entrance_ai` for Robot Masters (each dispatcher does `dex`, so phase *n* is table entry *n*−1) |
+| 2+ | Attack patterns (`<boss>_phase<n>_ai`) |
+| $FE | Death animation (`boss_defeated_sequence`); fortress defeat sequences set $FF |
 
 Phase transitions are triggered by timers, HP thresholds, or position checks. Each phase typically:
 1. Decrements `boss_action_timer`
@@ -701,7 +711,7 @@ Boss attacks fall into several patterns:
 
 | Routine | Purpose |
 |---------|---------|
-| `calc_player_boss_distance` | Returns \|boss_x - player_x\| with sign. Uses self-modifying code (`.byte $AD,$61,$04` = runtime `LDA boss_x_px`) |
+| `calc_player_boss_distance` | `temp_00` = \|boss_x − player_x\|; sets `boss_flags` bit 6 when the player is to the right of the boss |
 | `divide_16bit` | Binary long division. Input: temp_0A:0B ÷ temp_0C:0D → temp_0E:0F (quotient) |
 | `weapon_difficulty_scale` | Doubles weapon damage on Normal difficulty (ASL temp_00) |
 | `tile_lookup` | Floor collision for grounded bosses |
@@ -808,7 +818,7 @@ The password does **not** encode difficulty. Difficulty (`$CB`) persists only in
 
 ## 20. Difficulty System
 
-RAM address `difficulty` ($CB): 0 = Normal, 1 = Difficult. Set on the ending screen after completing the game. Not stored in passwords.
+RAM address `difficulty` ($CB): 0 = Normal, 1 = Difficult. Chosen with the NORMAL/DIFFICULT cursor on the title screen (bank0D `title_menu_loop`); defaults to Normal on power-up. Not stored in passwords.
 
 Three systems check difficulty:
 
@@ -823,38 +833,25 @@ Drop rate comparison:
 | Item | Normal | Difficult |
 |------|--------|-----------|
 | Total drop rate | 71% | 50% |
-| Small health | 30% | 5% |
-| Small weapon | 20% | 4% |
-| Large health | 10% | 15% |
-| Large weapon | 10% | 25% |
+| Small weapon energy | 10% | 25% |
+| Small health | 10% | 15% |
+| Large weapon energy | 30% | 5% |
+| Large health | 20% | 4% |
 | Extra life | 1% | 1% |
+
+(`rng_seed MOD 100` against fixed thresholds — see DATA_REFERENCE §9 for the exact bands.)
 
 ---
 
 ## 21. 6502 Tricks
 
-### Self-Modifying Code
+### Dummy ROM Write to Reset the MMC1
 
-`calc_player_boss_distance` in bank $0B patches its own instruction at runtime:
+The reset vector's second instruction is `inc reset_mmc1_shift` — an INC on its **own ROM address**. ROM ignores the write, but the 6502's read-modify-write cycle still puts the opcode byte ($EE, bit 7 set) on the bus, and any write with bit 7 set resets the MMC1 shift register. One instruction replaces a dedicated reset routine. The sound and bank code use the same idea: `mmc1_scratch` ($FFF0) and `mmc1_shift_register` (a bank $0E ROM byte) are just convenient addresses inside the register windows.
 
-```asm
-.byte $AD, $61, $04    ; encodes: LDA $0461 (boss_x_px)
-```
+### Byte Overlap
 
-By storing the raw bytes of an `LDA absolute` instruction as data, the routine can change which address it reads by modifying byte 2. This saves the overhead of an indirect pointer load.
-
-### Skip-Byte Tricks
-
-The engine places opcodes so their operand bytes overlap the next instruction, creating two execution paths:
-
-```asm
-.byte $A0       ; LDY #imm — the $A0 "eats" the next byte as its operand
-some_label:
-ASL A           ; $0A — this byte is LDY's operand when falling through,
-                ;        but a real ASL when jumped to directly
-```
-
-Falling through executes `LDY #$0A`. Jumping to `some_label` executes `ASL A`. This saves one byte versus a branch instruction.
+`wily_gate_overlay_tbl` (bank $0E) starts on the `rts` that ends the previous routine: the $60 byte is both the return instruction and the table's unused entry 0. The engine has no genuine skip-byte (`BIT`-operand) tricks — every single-byte `.byte $24`/`$2C` in the source is table data.
 
 ### Soft-Interrupt Dispatch
 

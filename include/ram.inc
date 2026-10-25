@@ -19,7 +19,7 @@ ent_plat_type       = $0170  ; platform type reference ($0170,x)
 ; ─── Entity Arrays (page $04+) ─────────────────────────────────────────────
 ent_type            = $0400  ; entity type ID ($0400,x)
 ent_spawn_type      = $0410  ; spawn type from stage data ($0410,x)
-ent_flags           = $0420  ; entity flags ($0420,x) — bit 7=active, 6=facing, 5=priority
+ent_flags           = $0420  ; entity flags ($0420,x) — bit 7=active, 6=facing right, 5=hidden, 3=shield, 2=gravity, 1=weapon-collidable, 0=contact
 ent_spawn_flags     = $0430  ; secondary spawn flags ($0430,x)
 ent_x_screen        = $0440  ; X position screen/page ($0440,x)
 ent_x_spawn_scr     = $0450  ; X screen from spawn data ($0450,x)

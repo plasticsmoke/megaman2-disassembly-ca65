@@ -48,10 +48,12 @@ MAX_HP              = $1C       ; 28 — max player/boss HP and weapon energy
 
 ; ─── Entity flag bitmasks ($0420,x / $0430,x) ─────────────────────────────
 ENT_FLAG_ACTIVE     = $80       ; bit 7: entity is alive/spawned
-ENT_FLAG_FLIP_H     = $40       ; bit 6: facing left (horizontally flipped)
-ENT_FLAG_NO_COLLIDE = $20       ; bit 5: skip collision checks
-ENT_FLAG_WEAPON_HIT = $02       ; bit 1: was hit by weapon this frame
-ENT_FLAG_CONTACT_DMG = $01      ; bit 0: deals contact damage
+ENT_FLAG_FACING_R   = $40       ; bit 6: facing/moving right (sprite drawn H-flipped)
+ENT_FLAG_HIDDEN     = $20       ; bit 5: no sprite drawn (controllers, invisible hitboxes)
+ENT_FLAG_SHIELD     = $08       ; bit 3: deflects the Buster without damage (Neo Metall)
+ENT_FLAG_GRAVITY    = $04       ; bit 2: entity_physics_core applies gravity
+ENT_FLAG_WEAPON_COLL = $02      ; bit 1: can be hit by weapons (weapon slots: special position path)
+ENT_FLAG_CONTACT    = $01       ; bit 0: deals contact damage to the player
 
 ; ─── Stage thresholds ──────────────────────────────────────────────────────
 WILY_STAGE_START    = $08       ; stages $08+ are Wily fortress
